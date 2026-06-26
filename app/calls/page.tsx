@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
@@ -49,6 +49,7 @@ export default function CallsPage() {
   const [logOpen, setLogOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
+  const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
 
   const loadQueue = useCallback(async () => {
     setLoadingQueue(true)
@@ -83,6 +84,12 @@ export default function CallsPage() {
 
   useEffect(() => { loadQueue() }, [loadQueue])
   useEffect(() => { if (tab === 'log') loadLog() }, [tab, loadLog])
+
+  async function deleteLog(id: string) {
+    await fetch(`/api/communication-logs/${id}`, { method: 'DELETE' })
+    setLogs(prev => prev.filter(l => l.id !== id))
+    if (expandedLog === id) setExpandedLog(null)
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -218,14 +225,32 @@ export default function CallsPage() {
                         <span className="text-xs text-muted-foreground">
                           Logged by {log.created_by ?? 'Diego'} · {new Date(log.created_at).toLocaleString()}
                         </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-xs gap-1 text-muted-foreground"
-                          onClick={() => router.push(`/clients/${log.client_id}`)}
-                        >
-                          <ExternalLink className="w-3 h-3" /> View Client
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs gap-1 text-muted-foreground"
+                            onClick={() => router.push(`/clients/${log.client_id}`)}
+                          >
+                            <ExternalLink className="w-3 h-3" /> View Client
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                            onClick={(e) => { e.stopPropagation(); setEditingLog(log) }}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+                            onClick={(e) => { e.stopPropagation(); deleteLog(log.id) }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -240,6 +265,12 @@ export default function CallsPage() {
         open={logOpen}
         onClose={() => setLogOpen(false)}
         onLogged={() => { loadQueue(); if (tab === 'log') loadLog() }}
+      />
+      <LogCallDialog
+        open={!!editingLog}
+        onClose={() => setEditingLog(null)}
+        editLog={editingLog ?? undefined}
+        onLogged={() => { setEditingLog(null); loadLog() }}
       />
       <ScheduleCallDialog
         open={scheduleOpen}

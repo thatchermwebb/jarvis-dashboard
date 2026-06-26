@@ -40,14 +40,29 @@ const SENTIMENT_LABELS: Record<string, string> = {
   close_ready: '🎯 Close-Ready',
 }
 
+interface EditableLog {
+  id: string
+  log_type: string
+  outcome: string
+  summary?: string
+  sentiment?: string
+  promises_made?: string
+  next_step?: string
+  followup_date?: string
+  created_by?: string
+  client_id: string
+  client?: { id: string; name: string; business_name?: string }
+}
+
 interface Props {
   open: boolean
   onClose: () => void
   client?: Client
+  editLog?: EditableLog
   onLogged?: () => void
 }
 
-export function LogCallDialog({ open, onClose, client: preselectedClient, onLogged }: Props) {
+export function LogCallDialog({ open, onClose, client: preselectedClient, editLog, onLogged }: Props) {
   const [clients, setClients] = useState<Client[]>([])
   const [search, setSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
@@ -66,14 +81,26 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, onLogg
   })
 
   useEffect(() => {
-    if (open && !preselectedClient) {
+    if (open && editLog) {
+      setForm({
+        log_type: (editLog.log_type as LogType) ?? 'call',
+        outcome: (editLog.outcome as LogOutcome) ?? 'answered',
+        summary: editLog.summary ?? '',
+        sentiment: (editLog.sentiment as ClientSentiment) ?? '',
+        promises_made: editLog.promises_made ?? '',
+        next_step: editLog.next_step ?? '',
+        followup_date: editLog.followup_date ?? '',
+        created_by: editLog.created_by ?? 'Diego',
+      })
+    }
+    if (open && !preselectedClient && !editLog) {
       fetch('/api/clients').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : [])).catch(() => {})
     }
     if (open) {
       setSelectedClient(preselectedClient ?? null)
       setSearch('')
     }
-  }, [open, preselectedClient])
+  }, [open, preselectedClient, editLog])
 
   // Reset form on close
   useEffect(() => {
@@ -95,18 +122,28 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, onLogg
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const clientId = selectedClient?.id ?? preselectedClient?.id
+    const clientId = editLog?.client_id ?? selectedClient?.id ?? preselectedClient?.id
     if (!clientId) return toast.error('Select a client')
     setLoading(true)
     try {
       const payload = { ...form, client_id: clientId, sentiment: form.sentiment || undefined }
-      const res = await fetch('/api/communication-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('Failed to log')
-      toast.success('Call logged')
+      if (editLog) {
+        const res = await fetch(`/api/communication-logs/${editLog.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error('Failed to update')
+        toast.success('Entry updated')
+      } else {
+        const res = await fetch('/api/communication-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error('Failed to log')
+        toast.success('Call logged')
+      }
       onLogged?.()
       onClose()
     } catch (err) {
@@ -116,21 +153,23 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, onLogg
     }
   }
 
-  const displayName = preselectedClient?.name ?? selectedClient?.name
+  const displayName = editLog?.client?.name ?? preselectedClient?.name ?? selectedClient?.name
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="w-[640px] max-w-[95vw] max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-xl">Log Call / Contact</DialogTitle>
+          <DialogTitle className="text-xl">{editLog ? 'Edit Entry' : 'Log Call / Contact'}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 mt-3">
           {/* Client selector */}
-          {preselectedClient ? (
+          {(preselectedClient || editLog) ? (
             <div className="bg-secondary/40 rounded-lg px-4 py-3 text-sm">
-              Logging for <span className="font-semibold text-foreground">{preselectedClient.name}</span>
-              {preselectedClient.business_name && <span className="text-muted-foreground"> · {preselectedClient.business_name}</span>}
+              {editLog ? 'Editing entry for' : 'Logging for'} <span className="font-semibold text-foreground">{displayName}</span>
+              {(preselectedClient?.business_name || editLog?.client?.business_name) && (
+                <span className="text-muted-foreground"> · {preselectedClient?.business_name ?? editLog?.client?.business_name}</span>
+              )}
             </div>
           ) : (
             <div className="space-y-1.5">

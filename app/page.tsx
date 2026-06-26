@@ -88,6 +88,12 @@ export default async function CommandCenter() {
           href="/clients?filter=free_trials"
         />
         <StatCard
+          label="Close-Ready"
+          value={stats.close_ready_trials}
+          color="amber"
+          href={stats.close_ready_trials > 0 ? '/clients?filter=close_ready' : undefined}
+        />
+        <StatCard
           label="Ending Today"
           value={stats.trials_ending_today}
           color={stats.trials_ending_today > 0 ? 'red' : 'default'}
@@ -98,12 +104,6 @@ export default async function CommandCenter() {
           value={stats.payment_issues}
           color={stats.payment_issues > 0 ? 'red' : 'default'}
           href={stats.payment_issues > 0 ? '/clients?filter=payment_issues' : undefined}
-        />
-        <StatCard
-          label="Close-Ready"
-          value={stats.close_ready_trials}
-          color="amber"
-          href={stats.close_ready_trials > 0 ? '/clients?filter=close_ready' : undefined}
         />
         <StatCard
           label="Total Managed"
