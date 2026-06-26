@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   ArrowLeft, ArrowRight, Edit, Phone, ExternalLink, Star, Wrench, CreditCard,
   AlertTriangle, TrendingDown, CheckCircle, Bot, Plus, Clock,
-  MessageSquare, Calendar, ChevronDown, Trash2
+  MessageSquare, Calendar, ChevronDown, Trash2, Pencil, Clapperboard
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
+import { AdSetupDialog } from '@/components/ad-production/AdSetupDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
@@ -70,6 +71,8 @@ export default function ClientWarRoom() {
   const [updating, setUpdating] = useState(false)
   const [stagePickerOpen, setStagePickerOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
+  const [adSetupOpen, setAdSetupOpen] = useState(false)
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -94,6 +97,11 @@ export default function ClientWarRoom() {
   }, [id, router])
 
   useEffect(() => { load() }, [load])
+
+  async function deleteLog(logId: string) {
+    await fetch(`/api/communication-logs/${logId}`, { method: 'DELETE' })
+    setLogs(prev => prev.filter(l => l.id !== logId))
+  }
 
   async function quickUpdate(field: Partial<Client>) {
     if (!client) return
@@ -222,6 +230,11 @@ export default function ClientWarRoom() {
             {(client.stage === 'free_trial' || client.stage === 'trial_ending_soon') && (
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-violet-500/30 text-violet-300 hover:bg-violet-500/10" onClick={() => setBriefOpen(true)}>
                 <Star className="w-3 h-3" /> Close Brief
+              </Button>
+            )}
+            {client.stage === 'onboarding' && (
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-blue-500/30 text-blue-300 hover:bg-blue-500/10" onClick={() => setAdSetupOpen(true)}>
+                <Clapperboard className="w-3 h-3" /> Set Up Ads
               </Button>
             )}
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setEditOpen(true)}>
@@ -472,14 +485,22 @@ export default function ClientWarRoom() {
             {/* Tabs */}
             <Tabs defaultValue="history">
               <TabsList className="bg-secondary/50 border border-border h-11 gap-1 px-1">
-                <TabsTrigger value="history" className="text-sm px-5 h-9">Call History</TabsTrigger>
+                <TabsTrigger value="history" className="text-sm px-5 h-9">History</TabsTrigger>
                 <TabsTrigger value="payments" className="text-sm px-5 h-9">Payments</TabsTrigger>
                 <TabsTrigger value="risk" className="text-sm px-5 h-9">Risk & Scores</TabsTrigger>
               </TabsList>
 
               <TabsContent value="history" className="mt-3 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">{logs.length} entries</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">{logs.length} entries</span>
+                    <a
+                      href={`/calls?client_id=${client?.id}`}
+                      className="text-xs text-muted-foreground/50 hover:text-primary transition-colors flex items-center gap-1"
+                    >
+                      View all <ArrowRight className="w-3 h-3" />
+                    </a>
+                  </div>
                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setLogOpen(true)}>
                     <Plus className="w-3 h-3" /> Log
                   </Button>
@@ -491,7 +512,7 @@ export default function ClientWarRoom() {
                 ) : (
                   <div className="space-y-2">
                     {logs.map((log) => (
-                      <div key={log.id} className="bg-card border border-border rounded-xl px-4 py-3">
+                      <div key={log.id} className="bg-card border border-border rounded-xl px-4 py-3 group">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             {LOG_TYPE_ICON[log.log_type as keyof typeof LOG_TYPE_ICON]}
@@ -510,6 +531,18 @@ export default function ClientWarRoom() {
                               </span>
                             )}
                             <span className="text-[10px] text-muted-foreground">{timeAgo(log.created_at)}</span>
+                            <button
+                              onClick={() => setEditingLog(log)}
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-foreground transition-all"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => deleteLog(log.id)}
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-400 transition-all"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
                         </div>
                         {log.summary && (
@@ -562,6 +595,8 @@ export default function ClientWarRoom() {
 
       <ClientForm open={editOpen} onClose={() => setEditOpen(false)} client={client} onSaved={(updated) => setClient(updated)} />
       <LogCallDialog open={logOpen} onClose={() => setLogOpen(false)} client={client} onLogged={load} />
+      <LogCallDialog open={!!editingLog} onClose={() => setEditingLog(null)} editLog={editingLog ? { ...editingLog, log_type: editingLog.log_type ?? 'call', outcome: editingLog.outcome ?? 'answered' } : undefined} onLogged={() => { setEditingLog(null); load() }} />
+      <AdSetupDialog open={adSetupOpen} onClose={() => setAdSetupOpen(false)} clientId={client.id} clientName={client.name} businessName={client.business_name} onSaved={load} />
       <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} client={client} onSaved={load} />
       <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />
       <BriefGenerator open={briefOpen} onClose={() => setBriefOpen(false)} client={client} />

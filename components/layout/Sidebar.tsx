@@ -12,12 +12,16 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Clapperboard,
+  CalendarDays,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
+  { href: '/ad-production', label: 'Ad Production', icon: Clapperboard },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },

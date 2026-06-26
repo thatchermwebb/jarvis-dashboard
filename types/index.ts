@@ -162,6 +162,8 @@ export interface CommunicationLog {
   next_step?: string
   followup_date?: string
   created_by?: string
+  ad_creative?: string
+  trial_notes?: string
 }
 
 export interface Task {
@@ -208,6 +210,39 @@ export interface CloseBrief {
     objection_notes?: string
     call_script?: string
   }
+}
+
+export type AdProductionStatus = 'not_started' | 'in_progress' | 'review' | 'done'
+export type AdProductionPriority = 'low' | 'med' | 'high' | 'urgent'
+
+export interface AdProduction {
+  id: string
+  created_at: string
+  client_id: string
+  ad_name: string
+  due_date?: string
+  status: AdProductionStatus
+  assigned_to?: string
+  priority: AdProductionPriority
+  notes?: string
+  format?: string
+  slack_sent?: boolean
+  slack_sent_at?: string
+  client?: Pick<Client, 'id' | 'name' | 'business_name'>
+}
+
+export interface GHLAppointment {
+  id: string
+  title: string
+  startTime: string
+  endTime: string
+  status: string
+  calendarId?: string
+  locationId?: string
+  contactId?: string
+  assignedUserId?: string
+  notes?: string
+  contact?: { name?: string; email?: string; phone?: string }
 }
 
 export type PaymentEntryStatus = 'pending' | 'paid' | 'paid_late' | 'overdue' | 'waived' | 'voided'

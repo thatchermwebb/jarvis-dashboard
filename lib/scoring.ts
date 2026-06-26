@@ -15,34 +15,51 @@ export function calculatePriorityScore(client: Client): number {
   const isActivePaying = client.stage === 'active_client' || client.stage === 'won_back'
   const isTrial = client.stage === 'free_trial' || client.stage === 'trial_ending_soon'
   const sentiment = client.last_client_sentiment
+  const todayStr = today.toISOString().slice(0, 10)
 
   // --- Tier 1: About to pay or end trial (highest urgency) ---
-  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 0) score += 80   // trial ended — must act now
-  if (daysUntilTrialEnd === 1) score += 70                                  // ends tomorrow
-  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 3) score += 50   // ending very soon
+  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 0) score += 80
+  if (daysUntilTrialEnd === 1) score += 70
+  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 3) score += 50
 
   // Close-ready trials
   if (isTrial && client.trial_health_score && client.trial_health_score >= 80) score += 60
   if (isTrial && sentiment === 'close_ready') score += 55
 
-  // --- Tier 2: Payment issues (active clients, card failed = urgent) ---
-  if (client.payment_issue) score += 65                                     // raised from 50 → needs immediate attention
-  if (client.stage === 'payment_issue') score += 20                        // extra bump for stage
+  // --- Tier 2: Payment issues ---
+  if (client.payment_issue) score += 65
+  if (client.stage === 'payment_issue') score += 20
   if (client.payment_status === 'failed') score += 30
 
-  // --- Tier 3: Churn risk on active paying clients ---
-  if (isActivePaying && (sentiment === 'angry' || sentiment === 'frustrated')) score += 55
-  if (isActivePaying && sentiment === 'ghosting') score += 45
+  // --- Tier 3: Active client sentiment (nuanced — happy ≠ urgent) ---
+  if (isActivePaying) {
+    if (sentiment === 'angry') score += 60
+    else if (sentiment === 'frustrated') score += 50
+    else if (sentiment === 'ghosting') score += 45
+    else if (sentiment === 'concerned') score += 35
+    else if (sentiment === 'confused') score += 20
+    else if (sentiment === 'neutral') score += 5
+    // happy = 0 (no urgency boost — they're fine)
+  }
+
+  // Churn risk on active clients
   if (isActivePaying && (client.stage === 'churn_risk' || (client.churn_risk_score && client.churn_risk_score >= 70))) score += 50
 
-  // --- Tier 4: General sentiment signals ---
+  // --- Tier 4: General signals ---
   if (!isActivePaying && (sentiment === 'angry' || sentiment === 'frustrated')) score += 35
   if (sentiment === 'ghosting' && !isActivePaying) score += 25
   if (client.thatcher_needed) score += 40
 
-  // --- Tier 5: Activity & engagement signals ---
+  // --- Tier 5: Follow-up due date (primary queue driver) ---
+  if (client.next_followup_date) {
+    if (client.next_followup_date < todayStr) score += 40         // overdue
+    else if (client.next_followup_date === todayStr) score += 35  // due today
+    else {
+      const daysUntil = differenceInDays(new Date(client.next_followup_date + 'T00:00:00'), today)
+      if (daysUntil <= 2) score += 15                             // due in 1-2 days
+    }
+  }
   if (daysSinceContact >= 2) score += 20
-  if (client.next_followup_date && new Date(client.next_followup_date) < today) score += 30
   if (client.urgency_level === 'critical') score += 30
   if (client.urgency_level === 'high') score += 15
 
