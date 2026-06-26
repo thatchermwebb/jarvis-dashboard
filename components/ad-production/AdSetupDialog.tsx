@@ -14,6 +14,12 @@ interface AdRow {
   assigned_to: string
   priority: AdProductionPriority
   notes: string
+  // name builder fields
+  biz_short: string
+  offer: string
+  location_short: string
+  human_hook: boolean
+  name_overridden: boolean // true if user manually edited ad_name
 }
 
 interface Props {
@@ -22,18 +28,34 @@ interface Props {
   clientId: string
   clientName: string
   businessName?: string
+  marketLocation?: string
   onSaved?: () => void
 }
 
 const AD_FORMATS = ['V300', 'V500', 'Square', 'Story', 'Reel', 'Banner', 'Other']
 const ASSIGNEES = ['Thatcher', 'Diego', 'Trepp', 'VA']
 
-function blankRow(): AdRow {
+function truncate(s?: string): string {
+  if (!s) return ''
+  return s.trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '')
+}
+
+function buildName(row: AdRow): string {
+  const parts = [row.biz_short, row.offer, row.format, row.location_short].filter(Boolean)
+  return parts.join('_') + (row.human_hook ? '_HH' : '')
+}
+
+function blankRow(businessName?: string, marketLocation?: string): AdRow {
   const d = new Date(); d.setDate(d.getDate() + 3)
-  return {
+  const biz_short = truncate(businessName)
+  const location_short = truncate(marketLocation)
+  const row: AdRow = {
     ad_name: '', format: 'V300', due_date: d.toISOString().slice(0, 10),
     assigned_to: 'Thatcher', priority: 'med', notes: '',
+    biz_short, offer: '', location_short, human_hook: false, name_overridden: false,
   }
+  row.ad_name = buildName(row)
+  return row
 }
 
 function buildSlackMessage(clientName: string, businessName: string | undefined, ads: AdRow[]): string {
@@ -48,33 +70,42 @@ function buildSlackMessage(clientName: string, businessName: string | undefined,
   return lines.join('\n')
 }
 
-export function AdSetupDialog({ open, onClose, clientId, clientName, businessName, onSaved }: Props) {
-  const [ads, setAds] = useState<AdRow[]>([blankRow()])
+export function AdSetupDialog({ open, onClose, clientId, clientName, businessName, marketLocation, onSaved }: Props) {
+  const [ads, setAds] = useState<AdRow[]>([blankRow(businessName, marketLocation)])
   const [slackMsg, setSlackMsg] = useState('')
   const [slackExpanded, setSlackExpanded] = useState(true)
   const [scheduledFor, setScheduledFor] = useState('')
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
+  const [msgEdited, setMsgEdited] = useState(false)
 
   useEffect(() => {
     if (open) {
-      const rows = [blankRow()]
+      const rows = [blankRow(businessName, marketLocation)]
       setAds(rows)
       setSlackMsg(buildSlackMessage(clientName, businessName, rows))
       setScheduledFor('')
+      setMsgEdited(false)
     }
-  }, [open, clientName, businessName])
+  }, [open, clientName, businessName, marketLocation])
 
-  // Keep Slack message in sync unless user has manually edited it
-  const [msgEdited, setMsgEdited] = useState(false)
   useEffect(() => {
     if (!msgEdited) setSlackMsg(buildSlackMessage(clientName, businessName, ads))
   }, [ads, clientName, businessName, msgEdited])
 
-  function updateAd(idx: number, field: keyof AdRow, value: string) {
-    setAds(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a))
+  function updateAd(idx: number, field: keyof AdRow, value: string | boolean) {
+    setAds(prev => prev.map((a, i) => {
+      if (i !== idx) return a
+      const updated = { ...a, [field]: value }
+      // If updating the name directly, mark as overridden
+      if (field === 'ad_name') return { ...updated, name_overridden: true }
+      // Otherwise auto-rebuild unless user overrode
+      if (!updated.name_overridden) updated.ad_name = buildName(updated)
+      return updated
+    }))
   }
-  function addRow() { setAds(prev => [...prev, blankRow()]) }
+
+  function addRow() { setAds(prev => [...prev, blankRow(businessName, marketLocation)]) }
   function removeRow(idx: number) { setAds(prev => prev.filter((_, i) => i !== idx)) }
 
   async function saveAds(): Promise<boolean> {
@@ -86,7 +117,11 @@ export function AdSetupDialog({ open, onClose, clientId, clientName, businessNam
         fetch('/api/ad-productions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...a, client_id: clientId, status: 'not_started' }),
+          body: JSON.stringify({
+            ad_name: a.ad_name, format: a.format, due_date: a.due_date,
+            assigned_to: a.assigned_to, priority: a.priority, notes: a.notes,
+            client_id: clientId, status: 'not_started',
+          }),
         })
       ))
       return true
@@ -157,27 +192,83 @@ export function AdSetupDialog({ open, onClose, clientId, clientName, businessNam
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ads to Produce</div>
             {ads.map((ad, idx) => (
               <div key={idx} className="bg-secondary/30 border border-border/40 rounded-xl p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    value={ad.ad_name}
-                    onChange={e => updateAd(idx, 'ad_name', e.target.value)}
-                    placeholder="Ad name (e.g. HMB_199_V300_HalfMoonBay)"
-                    className="flex-1 bg-secondary/50 border border-border rounded-lg px-3 h-9 text-sm outline-none focus:border-primary/50 font-mono"
-                  />
-                  {ads.length > 1 && (
-                    <button onClick={() => removeRow(idx)} className="text-muted-foreground/50 hover:text-red-400 transition-colors flex-shrink-0">
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  <div>
-                    <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block mb-1">Format</label>
+
+                {/* Name builder row */}
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div className="space-y-1 w-24">
+                    <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block">Biz</label>
+                    <input
+                      value={ad.biz_short}
+                      onChange={e => updateAd(idx, 'biz_short', e.target.value)}
+                      placeholder="HMB"
+                      className="w-full bg-secondary/50 border border-border rounded-lg px-2 h-8 text-xs outline-none focus:border-primary/50 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1 w-24">
+                    <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block">Offer</label>
+                    <input
+                      value={ad.offer}
+                      onChange={e => updateAd(idx, 'offer', e.target.value)}
+                      placeholder="199"
+                      className="w-full bg-secondary/50 border border-border rounded-lg px-2 h-8 text-xs outline-none focus:border-primary/50 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1 w-24">
+                    <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block">Format</label>
                     <select value={ad.format} onChange={e => updateAd(idx, 'format', e.target.value)}
                       className="w-full bg-secondary/50 border border-border rounded-lg px-2 h-8 text-xs outline-none">
                       {AD_FORMATS.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
                   </div>
+                  <div className="space-y-1 w-28">
+                    <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block">Location</label>
+                    <input
+                      value={ad.location_short}
+                      onChange={e => updateAd(idx, 'location_short', e.target.value)}
+                      placeholder="Austin"
+                      className="w-full bg-secondary/50 border border-border rounded-lg px-2 h-8 text-xs outline-none focus:border-primary/50 font-mono"
+                    />
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer pb-1">
+                    <input
+                      type="checkbox"
+                      checked={ad.human_hook}
+                      onChange={e => updateAd(idx, 'human_hook', e.target.checked)}
+                      className="rounded accent-primary w-3.5 h-3.5"
+                    />
+                    <span className="text-xs text-muted-foreground font-mono">HH</span>
+                  </label>
+                  {ads.length > 1 && (
+                    <button onClick={() => removeRow(idx)} className="text-muted-foreground/40 hover:text-red-400 transition-colors pb-1 ml-auto">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Generated name — editable override */}
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block">
+                    Ad Name {ad.name_overridden && <span className="text-primary/50 normal-case tracking-normal">(manually edited)</span>}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={ad.ad_name}
+                      onChange={e => updateAd(idx, 'ad_name', e.target.value)}
+                      className="flex-1 bg-secondary/50 border border-border rounded-lg px-3 h-9 text-sm outline-none focus:border-primary/50 font-mono"
+                    />
+                    {ad.name_overridden && (
+                      <button
+                        onClick={() => setAds(prev => prev.map((a, i) => i === idx ? { ...a, name_overridden: false, ad_name: buildName(a) } : a))}
+                        className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground whitespace-nowrap transition-colors"
+                      >
+                        ↺ reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Secondary fields */}
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block mb-1">Due Date</label>
                     <input type="date" value={ad.due_date} onChange={e => updateAd(idx, 'due_date', e.target.value)}
@@ -190,6 +281,8 @@ export function AdSetupDialog({ open, onClose, clientId, clientName, businessNam
                       {ASSIGNEES.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block mb-1">Priority</label>
                     <select value={ad.priority} onChange={e => updateAd(idx, 'priority', e.target.value as AdProductionPriority)}
@@ -200,13 +293,16 @@ export function AdSetupDialog({ open, onClose, clientId, clientName, businessNam
                       <option value="urgent">Urgent</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider block mb-1">Notes</label>
+                    <input
+                      value={ad.notes}
+                      onChange={e => updateAd(idx, 'notes', e.target.value)}
+                      placeholder="Creative direction (optional)"
+                      className="w-full bg-secondary/50 border border-border rounded-lg px-2 h-8 text-xs outline-none focus:border-primary/50"
+                    />
+                  </div>
                 </div>
-                <input
-                  value={ad.notes}
-                  onChange={e => updateAd(idx, 'notes', e.target.value)}
-                  placeholder="Notes / creative direction (optional)"
-                  className="w-full bg-secondary/50 border border-border rounded-lg px-3 h-8 text-xs outline-none focus:border-primary/50"
-                />
               </div>
             ))}
             <button onClick={addRow} className="flex items-center gap-2 text-sm text-primary/70 hover:text-primary transition-colors">
@@ -241,8 +337,6 @@ export function AdSetupDialog({ open, onClose, clientId, clientName, businessNam
                 >
                   ↺ Reset to auto-generated
                 </button>
-
-                {/* Schedule */}
                 <div className="flex items-center gap-3">
                   <Clock className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
                   <input

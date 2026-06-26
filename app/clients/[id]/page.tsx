@@ -596,7 +596,7 @@ export default function ClientWarRoom() {
       <ClientForm open={editOpen} onClose={() => setEditOpen(false)} client={client} onSaved={(updated) => setClient(updated)} />
       <LogCallDialog open={logOpen} onClose={() => setLogOpen(false)} client={client} onLogged={load} />
       <LogCallDialog open={!!editingLog} onClose={() => setEditingLog(null)} editLog={editingLog ? { ...editingLog, log_type: editingLog.log_type ?? 'call', outcome: editingLog.outcome ?? 'answered' } : undefined} onLogged={() => { setEditingLog(null); load() }} />
-      <AdSetupDialog open={adSetupOpen} onClose={() => setAdSetupOpen(false)} clientId={client.id} clientName={client.name} businessName={client.business_name} onSaved={load} />
+      <AdSetupDialog open={adSetupOpen} onClose={() => setAdSetupOpen(false)} clientId={client.id} clientName={client.name} businessName={client.business_name} marketLocation={client.market_location} onSaved={load} />
       <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} client={client} onSaved={load} />
       <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />
       <BriefGenerator open={briefOpen} onClose={() => setBriefOpen(false)} client={client} />
