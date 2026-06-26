@@ -102,7 +102,7 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
           <DialogTitle>{client ? 'Edit Client' : 'Add New Client'}</DialogTitle>
         </DialogHeader>
@@ -178,26 +178,6 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
             <div className="space-y-1.5">
               <Label>Trial End</Label>
               <Input value={form.trial_end} onChange={(e) => set('trial_end', e.target.value)} type="date" className="bg-secondary/50" />
-            </div>
-          </div>
-
-          {/* Links */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>GHL Location Link</Label>
-              <Input value={form.ghl_location_link} onChange={(e) => set('ghl_location_link', e.target.value)} placeholder="https://..." className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Ad Account Link</Label>
-              <Input value={form.ad_account_link} onChange={(e) => set('ad_account_link', e.target.value)} placeholder="https://..." className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Assigned VA</Label>
-              <Input value={form.assigned_va} onChange={(e) => set('assigned_va', e.target.value)} placeholder="VA Name" className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Slack Thread</Label>
-              <Input value={form.slack_thread} onChange={(e) => set('slack_thread', e.target.value)} placeholder="Slack link or channel" className="bg-secondary/50" />
             </div>
           </div>
 
