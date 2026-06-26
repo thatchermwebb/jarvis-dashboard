@@ -102,46 +102,54 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border">
+      <DialogContent className="w-[760px] max-w-[95vw] max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
-          <DialogTitle>{client ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+          <DialogTitle className="text-xl">{client ? 'Edit Client' : 'Add New Client'}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
-          {/* Core info */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Client Name *</Label>
-              <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="John Hudayberdiyev" className="bg-secondary/50" />
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+          {/* Row 1: Name + Business */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Client Name *</Label>
+              <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="John Smith" className="bg-secondary/50 h-11 text-base" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Business Name</Label>
-              <Input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} placeholder="Pro Shine Detailing" className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(555) 123-4567" className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="john@example.com" className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Market / Location</Label>
-              <Input value={form.market_location} onChange={(e) => set('market_location', e.target.value)} placeholder="Houston, TX" className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Timezone</Label>
-              <Input value={form.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="CST" className="bg-secondary/50" />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Business Name</Label>
+              <Input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} placeholder="Pro Shine Detailing" className="bg-secondary/50 h-11 text-base" />
             </div>
           </div>
 
-          {/* Stage + deal */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label>Stage</Label>
+          {/* Row 2: Phone + Email */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Phone</Label>
+              <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(555) 123-4567" className="bg-secondary/50 h-11 text-base" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email</Label>
+              <Input value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="john@example.com" className="bg-secondary/50 h-11 text-base" />
+            </div>
+          </div>
+
+          {/* Row 3: Location + Timezone */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Market / Location</Label>
+              <Input value={form.market_location} onChange={(e) => set('market_location', e.target.value)} placeholder="Houston, TX" className="bg-secondary/50 h-11 text-base" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Timezone</Label>
+              <Input value={form.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="CST" className="bg-secondary/50 h-11 text-base" />
+            </div>
+          </div>
+
+          {/* Row 4: Stage + Retainer + Frequency */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Stage</Label>
               <Select value={form.stage} onValueChange={(v) => v && set('stage', v)}>
-                <SelectTrigger className="bg-secondary/50">
+                <SelectTrigger className="bg-secondary/50 h-11 text-base">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -151,14 +159,14 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Monthly Retainer ($)</Label>
-              <Input value={form.monthly_retainer} onChange={(e) => set('monthly_retainer', e.target.value)} placeholder="1000" type="number" className="bg-secondary/50" />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Monthly Retainer ($)</Label>
+              <Input value={form.monthly_retainer} onChange={(e) => set('monthly_retainer', e.target.value)} placeholder="1000" type="number" className="bg-secondary/50 h-11 text-base" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Payment Frequency</Label>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Payment Frequency</Label>
               <Select value={form.payment_frequency} onValueChange={(v) => v && set('payment_frequency', v)}>
-                <SelectTrigger className="bg-secondary/50">
+                <SelectTrigger className="bg-secondary/50 h-11 text-base">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -169,26 +177,27 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
             </div>
           </div>
 
-          {/* Trial dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Trial Start</Label>
-              <Input value={form.trial_start} onChange={(e) => set('trial_start', e.target.value)} type="date" className="bg-secondary/50" />
+          {/* Row 5: Trial dates */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Trial Start</Label>
+              <Input value={form.trial_start} onChange={(e) => set('trial_start', e.target.value)} type="date" className="bg-secondary/50 h-11 text-base" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Trial End</Label>
-              <Input value={form.trial_end} onChange={(e) => set('trial_end', e.target.value)} type="date" className="bg-secondary/50" />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Trial End</Label>
+              <Input value={form.trial_end} onChange={(e) => set('trial_end', e.target.value)} type="date" className="bg-secondary/50 h-11 text-base" />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Deal Notes</Label>
-            <Textarea value={form.deal_notes} onChange={(e) => set('deal_notes', e.target.value)} placeholder="Special pricing, discounts, custom deal notes..." className="bg-secondary/50 h-20" />
+          {/* Deal Notes */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Deal Notes</Label>
+            <Textarea value={form.deal_notes} onChange={(e) => set('deal_notes', e.target.value)} placeholder="Special pricing, discounts, custom deal notes..." className="bg-secondary/50 h-24 text-base" />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={loading}>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="outline" size="lg" onClick={onClose}>Cancel</Button>
+            <Button type="submit" size="lg" disabled={loading}>
               {loading ? 'Saving...' : client ? 'Save Changes' : 'Add Client'}
             </Button>
           </div>
