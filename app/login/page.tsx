@@ -22,15 +22,19 @@ export default function LoginPage() {
     setError('')
   }
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    const user = USERS.find(u => u.id === selected)
-    if (!user) return
-    if (password !== user.password) {
+    if (!selected) return
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: selected, password }),
+    })
+    if (!res.ok) {
       setError('Incorrect password')
       return
     }
-    login(user.id)
+    login(selected)
     router.replace('/')
   }
 

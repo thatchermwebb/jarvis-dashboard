@@ -234,7 +234,7 @@ export function ImportClientsDialog({ open, onClose, onImported }: {
                     <div className="text-xs text-muted-foreground truncate">{rows[0]?.[headers.indexOf(header)] ?? ''}</div>
                   </div>
                   <div className="text-muted-foreground text-xs">→</div>
-                  <Select value={mapping[header] ?? 'skip'} onValueChange={v => setMapping(m => ({ ...m, [header]: v }))}>
+                  <Select value={mapping[header] ?? 'skip'} onValueChange={v => setMapping(m => ({ ...m, [header]: v }) as Record<string, string>)}>
                     <SelectTrigger className="bg-secondary/50 h-8 text-xs flex-1">
                       <SelectValue />
                     </SelectTrigger>
