@@ -18,6 +18,8 @@ export default async function CommandCenter() {
 
   const allClients = (clients ?? []) as Client[]
   const today = startOfDay(new Date())
+  // todayStr: YYYY-MM-DD in UTC (Vercel runs UTC; compare date strings to avoid tz shift)
+  const todayStr = today.toISOString().slice(0, 10)
   const in48h  = addDays(today, 2)
   const in7d   = addDays(today, 7)
 
@@ -27,21 +29,17 @@ export default async function CommandCenter() {
   const stats: DashboardStats = {
     active_clients: allClients.filter(c => c.stage === 'active_client' || c.stage === 'won_back').length,
     free_trials: trialClients.length,
-    trials_ending_today: trialClients.filter(c => {
-      if (!c.trial_end) return false
-      return startOfDay(new Date(c.trial_end)).getTime() === today.getTime()
-    }).length,
+    trials_ending_today: trialClients.filter(c => c.trial_end === todayStr).length,
     trials_ending_this_week: trialClients.filter(c => {
       if (!c.trial_end) return false
-      const end = new Date(c.trial_end)
-      return isAfter(end, today) && isBefore(end, in7d)
+      return c.trial_end > todayStr && c.trial_end <= in7d.toISOString().slice(0, 10)
     }).length,
     payment_issues: allClients.filter(c => c.payment_issue || c.stage === 'overdue' || c.stage === 'payment_issue').length,
     at_risk_clients: allClients.filter(c => c.stage === 'overdue' || c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60).length,
     close_ready_trials: trialClients.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready').length,
     thatcher_needed: allClients.filter(c => c.thatcher_needed).length,
     va_tasks_open: tasks?.length ?? 0,
-    overdue_followups: allClients.filter(c => c.next_followup_date && isBefore(new Date(c.next_followup_date), today)).length,
+    overdue_followups: allClients.filter(c => c.next_followup_date && c.next_followup_date < todayStr).length,
     monthly_recurring_revenue: allClients
       .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer)
       .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0),
@@ -61,11 +59,12 @@ export default async function CommandCenter() {
     .filter(c => !['churned', 'free_trial_lost', 'trial_concluded'].includes(c.stage))
     .slice(0, 5)
 
-  const trialsEndingSoon     = trialClients.filter(c => c.trial_end && isBefore(new Date(c.trial_end), in48h))
-  const trialsEndingToday    = trialClients.filter(c => c.trial_end && startOfDay(new Date(c.trial_end)).getTime() === today.getTime())
+  const in48hStr = in48h.toISOString().slice(0, 10)
+  const trialsEndingSoon     = trialClients.filter(c => c.trial_end && c.trial_end <= in48hStr)
+  const trialsEndingToday    = trialClients.filter(c => c.trial_end === todayStr)
   const paymentIssueClients  = allClients.filter(c => c.payment_issue || c.stage === 'overdue' || c.stage === 'payment_issue')
   const atRiskClients        = allClients.filter(c => c.stage === 'overdue' || c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60)
-  const overdueClients       = allClients.filter(c => c.next_followup_date && isBefore(new Date(c.next_followup_date), today))
+  const overdueClients       = allClients.filter(c => c.next_followup_date && c.next_followup_date < todayStr)
   const thatcherClients      = allClients.filter(c => c.thatcher_needed)
   const closeReadyClients    = trialClients.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready')
 
