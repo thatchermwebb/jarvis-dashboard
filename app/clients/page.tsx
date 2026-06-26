@@ -404,15 +404,15 @@ function ClientsContent() {
                 {!collapsed && (
                   <div className={cn('bg-card border border-border rounded-xl overflow-hidden border-l-2', group.border)}>
                     <div className="overflow-x-auto">
-                      <table className="text-sm" style={{ minWidth: 580 }}>
+                      <table className="w-full text-sm" style={{ minWidth: 560 }}>
                         <colgroup>
-                          <col style={{ width: 170 }} />
-                          <col style={{ width: 110 }} />
-                          <col style={{ width: 100 }} />
-                          <col style={{ width: 100 }} />
-                          <col style={{ width: 90 }} />
-                          <col style={{ width: 48 }} />
-                          <col style={{ width: 36 }} />
+                          <col style={{ width: '28%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '15%' }} />
+                          <col style={{ width: '15%' }} />
+                          <col style={{ width: '13%' }} />
+                          <col style={{ width: '7%' }} />
+                          <col style={{ width: '4%' }} />
                         </colgroup>
                         <thead>
                           <tr className="border-b border-border">
