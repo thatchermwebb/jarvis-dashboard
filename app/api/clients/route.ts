@@ -57,11 +57,20 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const raw = await req.json()
 
+  // import_mode: true allows setting created_at to backdate the client
+  const isImport = raw.import_mode === true
+  const clientSince: string | undefined = typeof raw.client_since === 'string' && raw.client_since ? raw.client_since : undefined
+
   // Only pass known fields; convert empty strings to null
   const body: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(raw)) {
     if (!CLIENT_FIELDS.has(k)) continue
     body[k] = (typeof v === 'string' && v.trim() === '') ? null : v
+  }
+
+  // Backdate created_at for imported existing clients
+  if (isImport && clientSince) {
+    body.created_at = new Date(clientSince + 'T00:00:00').toISOString()
   }
 
   const { data, error } = await supabase
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
   await supabase.from('timeline_events').insert({
     client_id: data.id,
     event_type: 'created',
-    description: 'Client added to JARVIS',
+    description: isImport ? 'Client imported (existing)' : 'Client added to JARVIS',
     created_by: 'Diego',
   })
 

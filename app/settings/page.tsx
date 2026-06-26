@@ -1,6 +1,8 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
+import { ChevronRight } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 
 const ACCENT_PRESETS = [
@@ -136,6 +138,190 @@ function ColorSection({
   )
 }
 
+const STAGE_OPTIONS = [
+  { value: 'active_client',      label: 'Active Client' },
+  { value: 'onboarding',         label: 'Onboarding' },
+  { value: 'free_trial',         label: 'Free Trial (Active)' },
+  { value: 'free_trial_pending', label: 'Free Trial (Pending)' },
+  { value: 'trial_concluded',    label: 'Free Trial (Complete)' },
+  { value: 'paused',             label: 'Paused' },
+  { value: 'churned',            label: 'Churned' },
+]
+
+const FREQ_OPTIONS = [
+  { value: 'monthly',   label: 'Monthly' },
+  { value: 'bi_weekly', label: 'Bi-Weekly' },
+  { value: 'weekly',    label: 'Weekly' },
+  { value: 'one_time',  label: 'One-Time' },
+]
+
+function ImportExistingClients() {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [imported, setImported] = useState(0)
+  const blankForm = () => ({
+    name: '', business_name: '', phone: '', email: '',
+    market_location: '', timezone: '', stage: 'active_client',
+    monthly_retainer: '', payment_frequency: 'monthly', client_since: '',
+    deal_notes: '',
+  })
+  const [form, setForm] = useState(blankForm())
+
+  function set(field: string, value: string) {
+    setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.name.trim()) return toast.error('Client name is required')
+    if (!form.client_since) return toast.error('Client Since date is required — this prevents them appearing as a new deal')
+    setSaving(true)
+    try {
+      const payload: Record<string, unknown> = {
+        import_mode: true,
+        client_since: form.client_since,
+        name: form.name.trim(),
+        stage: form.stage,
+      }
+      if (form.business_name.trim()) payload.business_name = form.business_name.trim()
+      if (form.phone.trim())         payload.phone = form.phone.trim()
+      if (form.email.trim())         payload.email = form.email.trim()
+      if (form.market_location.trim()) payload.market_location = form.market_location.trim()
+      if (form.timezone.trim())      payload.timezone = form.timezone.trim()
+      if (form.monthly_retainer)     payload.monthly_retainer = Number(form.monthly_retainer)
+      if (form.payment_frequency)    payload.payment_frequency = form.payment_frequency
+      if (form.deal_notes.trim())    payload.deal_notes = form.deal_notes.trim()
+
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error ?? 'Failed')
+      }
+      toast.success(`${form.name} imported`)
+      setImported(n => n + 1)
+      setForm(blankForm())
+    } catch (err) {
+      toast.error(String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      {/* Header — click to expand */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/3 transition-colors"
+      >
+        <div className="text-left">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Import Existing Clients</div>
+          <div className="text-xs text-muted-foreground/60 mt-0.5">Add clients that were already active — won&apos;t count as new deals in reports</div>
+        </div>
+        <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="px-6 pb-6 border-t border-border/40">
+          {imported > 0 && (
+            <div className="mt-4 mb-5 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+              {imported} client{imported !== 1 ? 's' : ''} imported this session
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground mt-4 mb-5 leading-relaxed">
+            Set <span className="text-foreground font-medium">Client Since</span> to the actual date they became a client.
+            This backdates the record so they don&apos;t show up in your &ldquo;Clients Signed&rdquo; chart for the current period.
+          </p>
+
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Client Name *</label>
+                <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="John Smith"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Business Name</label>
+                <input value={form.business_name} onChange={e => set('business_name', e.target.value)} placeholder="Pro Shine Detailing"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</label>
+                <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(555) 123-4567"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Email</label>
+                <input value={form.email} onChange={e => set('email', e.target.value)} placeholder="john@example.com"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stage</label>
+                <select value={form.stage} onChange={e => set('stage', e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground outline-none focus:border-primary/50">
+                  {STAGE_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monthly Retainer ($)</label>
+                <input value={form.monthly_retainer} onChange={e => set('monthly_retainer', e.target.value)} placeholder="1000" type="number"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Frequency</label>
+                <select value={form.payment_frequency} onChange={e => set('payment_frequency', e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground outline-none focus:border-primary/50">
+                  {FREQ_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Market / Location</label>
+                <input value={form.market_location} onChange={e => set('market_location', e.target.value)} placeholder="Houston, TX"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-primary uppercase tracking-wide">Client Since *</label>
+                <input value={form.client_since} onChange={e => set('client_since', e.target.value)} type="date"
+                  className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-primary/40 text-sm text-foreground outline-none focus:border-primary/70" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deal Notes</label>
+              <textarea value={form.deal_notes} onChange={e => set('deal_notes', e.target.value)}
+                placeholder="Special pricing, context on the deal..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none" />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-[11px] text-muted-foreground/50">Submit another form to import more clients one by one.</p>
+              <button type="submit" disabled={saving}
+                className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
+                {saving ? 'Importing...' : 'Import Client'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { user, accentColor, bgColor, setAccentColor, setBgColor } = useAuth()
 
@@ -220,6 +406,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Import Existing Clients */}
+      <ImportExistingClients />
 
       {/* Phase 2 */}
       <div className="bg-card border border-border rounded-2xl p-6">
