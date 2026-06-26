@@ -133,7 +133,7 @@ export function DailyBriefing({ stats, clientLists }: Props) {
         )}
       </div>
 
-      <div className="mt-6 pt-5 border-t border-border grid grid-cols-4 gap-4 text-center">
+      <div className="mt-6 pt-5 border-t border-border grid grid-cols-3 gap-4 text-center">
         <div>
           <div className="text-2xl font-bold text-violet-400">{stats.free_trials}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Active Trials</div>
@@ -141,10 +141,6 @@ export function DailyBriefing({ stats, clientLists }: Props) {
         <div>
           <div className="text-2xl font-bold text-amber-400">{stats.trials_ending_this_week}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Ending This Week</div>
-        </div>
-        <div>
-          <div className="text-2xl font-bold text-blue-400">{stats.va_tasks_open}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">VA Tasks Open</div>
         </div>
         <div>
           <div className="text-2xl font-bold text-foreground">{stats.active_clients + stats.free_trials}</div>

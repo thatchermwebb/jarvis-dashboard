@@ -9,7 +9,6 @@ import {
   Phone,
   Users,
   CreditCard,
-  CheckSquare,
   BarChart3,
   Settings,
   LogOut,
@@ -20,7 +19,6 @@ const navItems = [
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/payments', label: 'Payments', icon: CreditCard },
-  { href: '/va-tasks', label: 'VA Tasks', icon: CheckSquare },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -66,13 +64,13 @@ export function Sidebar() {
                 <Link
                   href={href}
                   className={cn(
-                    'flex items-center gap-3 px-2 py-2.5 rounded-md text-[13px] transition-all',
+                    'flex items-center gap-3 px-2 py-2.5 rounded-md text-[15px] transition-all',
                     active
                       ? 'text-primary font-medium'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <Icon className={cn('w-[15px] h-[15px] flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground/60')} />
+                  <Icon className={cn('w-[17px] h-[17px] flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground/60')} />
                   {label}
                 </Link>
               </div>

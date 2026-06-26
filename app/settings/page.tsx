@@ -1,23 +1,143 @@
 'use client'
 
-import { useRef } from 'react'
-import Image from 'next/image'
+import { useRef, useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
-const PRESET_COLORS = [
+const ACCENT_PRESETS = [
   { name: 'Gold',    hex: '#c9a84c' },
+  { name: 'Mint',    hex: '#00f4a1' },
   { name: 'Violet',  hex: '#7c3aed' },
   { name: 'Ocean',   hex: '#2563eb' },
   { name: 'Emerald', hex: '#059669' },
   { name: 'Crimson', hex: '#dc2626' },
   { name: 'Rose',    hex: '#e11d48' },
   { name: 'Cyan',    hex: '#0891b2' },
-  { name: 'Slate',   hex: '#64748b' },
 ]
 
-export default function SettingsPage() {
-  const { user, accentColor, setAccentColor } = useAuth()
+const BG_PRESETS = [
+  { name: 'Void',       hex: '#0a0a0f' },
+  { name: 'Dark Slate', hex: '#111116' },
+  { name: 'Navy',       hex: '#0d1117' },
+  { name: 'Deep Plum',  hex: '#120d1a' },
+  { name: 'Forest',     hex: '#0d1410' },
+  { name: 'Obsidian',   hex: '#13111a' },
+  { name: 'Charcoal',   hex: '#171717' },
+  { name: 'Midnight',   hex: '#0f1520' },
+]
+
+function ColorSection({
+  title,
+  description,
+  presets,
+  currentHex,
+  onSelect,
+}: {
+  title: string
+  description: string
+  presets: { name: string; hex: string }[]
+  currentHex: string
+  onSelect: (hex: string) => void
+}) {
   const pickerRef = useRef<HTMLInputElement>(null)
+  const [inputVal, setInputVal] = useState(currentHex.toUpperCase())
+
+  // keep input in sync when currentHex changes from outside
+  useEffect(() => {
+    setInputVal(currentHex.toUpperCase())
+  }, [currentHex])
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value
+    setInputVal(raw)
+    // apply immediately when valid 6-char hex (with or without #)
+    const normalized = raw.startsWith('#') ? raw : `#${raw}`
+    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+      onSelect(normalized)
+    }
+  }
+
+  function handleInputBlur() {
+    // on blur try to apply even partial input
+    const normalized = inputVal.startsWith('#') ? inputVal : `#${inputVal}`
+    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+      onSelect(normalized)
+    } else {
+      // reset to valid value
+      setInputVal(currentHex.toUpperCase())
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').trim()
+    const normalized = pasted.startsWith('#') ? pasted : `#${pasted}`
+    setInputVal(normalized.toUpperCase())
+    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+      onSelect(normalized)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="text-sm font-semibold text-foreground">{title}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{description}</div>
+      </div>
+
+      {/* Presets */}
+      <div className="flex flex-wrap gap-2">
+        {presets.map(({ name, hex }) => (
+          <button
+            key={hex}
+            title={name}
+            onClick={() => onSelect(hex)}
+            className="relative w-8 h-8 rounded-full border-2 transition-all hover:scale-110"
+            style={{
+              backgroundColor: hex,
+              borderColor: currentHex.toLowerCase() === hex.toLowerCase() ? hex : 'transparent',
+              boxShadow: currentHex.toLowerCase() === hex.toLowerCase()
+                ? `0 0 0 2px #0a0a0f, 0 0 0 4px ${hex}`
+                : 'none',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Custom picker row */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => pickerRef.current?.click()}
+          className="w-11 h-11 rounded-xl border-2 border-white/10 transition-all hover:scale-105 hover:border-white/20 shadow-lg flex-shrink-0"
+          style={{ backgroundColor: currentHex }}
+          title="Click to open color picker"
+        />
+        <input
+          ref={pickerRef}
+          type="color"
+          value={currentHex}
+          onChange={e => onSelect(e.target.value)}
+          className="sr-only"
+        />
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">Custom hex</div>
+          <input
+            type="text"
+            value={inputVal}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            onPaste={handlePaste}
+            maxLength={7}
+            placeholder="#000000"
+            className="w-28 h-8 rounded-lg border border-border bg-secondary/50 px-3 text-sm font-mono text-foreground outline-none focus:border-primary/50"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function SettingsPage() {
+  const { user, accentColor, bgColor, setAccentColor, setBgColor } = useAuth()
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -45,68 +165,37 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Accent color */}
-      <div className="bg-card border border-border rounded-2xl p-6">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Accent Color</h2>
-        <p className="text-xs text-muted-foreground mb-5">
-          Pick any color — it applies to buttons, highlights, and active states. Saved to your profile.
-        </p>
-
-        {/* Presets row */}
-        <div className="flex flex-wrap gap-2 mb-5">
-          {PRESET_COLORS.map(({ name, hex }) => (
-            <button
-              key={hex}
-              title={name}
-              onClick={() => setAccentColor(hex)}
-              className="relative w-8 h-8 rounded-full border-2 transition-all hover:scale-110"
-              style={{
-                backgroundColor: hex,
-                borderColor: accentColor === hex ? hex : 'transparent',
-                boxShadow: accentColor === hex ? `0 0 0 2px #0a0a0f, 0 0 0 4px ${hex}` : 'none',
-              }}
-            />
-          ))}
+      {/* Theme Colors */}
+      <div className="bg-card border border-border rounded-2xl p-6 space-y-6">
+        <div>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Theme Colors</h2>
+          <p className="text-xs text-muted-foreground">
+            Customize both your background and accent color. Saved to your profile per-user.
+          </p>
         </div>
 
-        {/* Custom picker */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            {/* Color swatch — click to open native picker */}
-            <button
-              onClick={() => pickerRef.current?.click()}
-              className="w-12 h-12 rounded-xl border-2 border-white/10 transition-all hover:scale-105 hover:border-white/20 shadow-lg"
-              style={{ backgroundColor: accentColor }}
-              title="Click to open color picker"
-            />
-            <input
-              ref={pickerRef}
-              type="color"
-              value={accentColor}
-              onChange={e => setAccentColor(e.target.value)}
-              className="sr-only"
-            />
-          </div>
-          <div className="flex-1">
-            <div className="text-sm font-medium text-foreground mb-0.5">Custom color</div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={accentColor.toUpperCase()}
-                onChange={e => {
-                  const val = e.target.value
-                  if (/^#[0-9a-fA-F]{6}$/.test(val)) setAccentColor(val)
-                }}
-                maxLength={7}
-                className="w-28 h-8 rounded-lg border border-border bg-secondary/50 px-3 text-sm font-mono text-foreground outline-none focus:border-primary/50"
-              />
-              <span className="text-xs text-muted-foreground">Click the swatch or type a hex code</span>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 gap-6">
+          <ColorSection
+            title="Accent Color"
+            description="Applied to buttons, highlights, active states, and badges."
+            presets={ACCENT_PRESETS}
+            currentHex={accentColor}
+            onSelect={setAccentColor}
+          />
+
+          <div className="border-t border-border/40" />
+
+          <ColorSection
+            title="Background Color"
+            description="The base background of the entire app. Darker = more dramatic."
+            presets={BG_PRESETS}
+            currentHex={bgColor}
+            onSelect={setBgColor}
+          />
         </div>
 
         {/* Live preview */}
-        <div className="mt-5 p-4 rounded-xl border border-border/50 bg-secondary/20 space-y-3">
+        <div className="mt-2 p-4 rounded-xl border border-border/50 space-y-3" style={{ backgroundColor: bgColor }}>
           <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Preview</div>
           <div className="flex items-center gap-2 flex-wrap">
             <button

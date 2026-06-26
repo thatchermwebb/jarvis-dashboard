@@ -106,8 +106,8 @@ export default async function CommandCenter() {
           href={stats.close_ready_trials > 0 ? '/clients?filter=close_ready' : undefined}
         />
         <StatCard
-          label="VA Tasks Open"
-          value={stats.va_tasks_open}
+          label="Total Managed"
+          value={allClients.length}
         />
       </div>
 

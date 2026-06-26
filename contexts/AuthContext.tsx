@@ -2,33 +2,45 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { USERS, getUserById } from '@/lib/auth'
-import { applyColor, getColorForUser, setColorForUser, DEFAULT_COLOR } from '@/lib/themes'
+import {
+  applyColor, applyBgColor,
+  getColorForUser, setColorForUser, DEFAULT_COLOR,
+  getBgColorForUser, setBgColorForUser, DEFAULT_BG,
+} from '@/lib/themes'
 import type { AppUser } from '@/lib/auth'
 
 interface AuthContextType {
   user: AppUser | null
   accentColor: string
+  bgColor: string
   login: (userId: string) => void
   logout: () => void
   setAccentColor: (hex: string) => void
+  setBgColor: (hex: string) => void
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   accentColor: DEFAULT_COLOR,
+  bgColor: DEFAULT_BG,
   login: () => {},
   logout: () => {},
   setAccentColor: () => {},
+  setBgColor: () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
   const [accentColor, setAccentColorState] = useState<string>(DEFAULT_COLOR)
+  const [bgColor, setBgColorState] = useState<string>(DEFAULT_BG)
 
-  const loadAndApplyColor = useCallback((userId: string) => {
+  const loadAndApplyColors = useCallback((userId: string) => {
     const color = getColorForUser(userId)
+    const bg = getBgColorForUser(userId)
     setAccentColorState(color)
+    setBgColorState(bg)
     applyColor(color)
+    applyBgColor(bg)
   }, [])
 
   useEffect(() => {
@@ -38,17 +50,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const u = getUserById(id)
       if (u) {
         setUser(u)
-        loadAndApplyColor(id)
+        loadAndApplyColors(id)
       }
     }
-  }, [loadAndApplyColor])
+  }, [loadAndApplyColors])
 
   function login(userId: string) {
     document.cookie = `cza_user=${userId}; path=/; max-age=${60 * 60 * 24 * 30}`
     const u = getUserById(userId)
     if (u) {
       setUser(u)
-      loadAndApplyColor(userId)
+      loadAndApplyColors(userId)
     }
   }
 
@@ -65,8 +77,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     applyColor(hex)
   }
 
+  function setBgColor(hex: string) {
+    if (!user) return
+    setBgColorState(hex)
+    setBgColorForUser(user.id, hex)
+    applyBgColor(hex)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, accentColor, login, logout, setAccentColor }}>
+    <AuthContext.Provider value={{ user, accentColor, bgColor, login, logout, setAccentColor, setBgColor }}>
       {children}
     </AuthContext.Provider>
   )
