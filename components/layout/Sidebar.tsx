@@ -16,7 +16,7 @@ import {
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/call-queue', label: "Today's Calls", icon: Phone },
+  { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/va-tasks', label: 'VA Tasks', icon: CheckSquare },

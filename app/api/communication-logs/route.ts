@@ -8,9 +8,9 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('communication_logs')
-    .select('*')
+    .select('*, client:clients(id, name, business_name)')
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(100)
 
   if (clientId) query = query.eq('client_id', clientId)
 
