@@ -305,10 +305,36 @@ export default function ClientWarRoom() {
                   <Field label="Payment Status" value={client.payment_status} />
                   <Field label="Assigned VA" value={client.assigned_va} />
                 </div>
+                {(client.ad_status || client.campaign_link || client.ad_account_link || client.budget != null || client.spend != null) && (
+                  <>
+                    <div className="border-t border-border my-2" />
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Ad Info</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Ad Status" value={client.ad_status} />
+                      <Field label="Budget" value={client.budget ? formatCurrency(client.budget) : null} />
+                      <Field label="Spend" value={client.spend ? formatCurrency(client.spend) : null} />
+                      <Field label="CPL" value={client.cpl ? `$${client.cpl}` : null} />
+                    </div>
+                    {client.campaign_link && (
+                      <a href={client.campaign_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1">
+                        <ExternalLink className="w-3 h-3" /> Campaign Link
+                      </a>
+                    )}
+                    {client.ad_account_link && (
+                      <a href={client.ad_account_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-0.5">
+                        <ExternalLink className="w-3 h-3" /> Ad Account
+                      </a>
+                    )}
+                  </>
+                )}
                 {client.deal_notes && (
-                  <div className="text-xs text-muted-foreground bg-secondary/30 rounded-md px-3 py-2 mt-2">
-                    {client.deal_notes}
-                  </div>
+                  <>
+                    <div className="border-t border-border my-2" />
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Deal Notes</div>
+                    <div className="text-xs text-muted-foreground bg-secondary/30 rounded-md px-3 py-2">
+                      {client.deal_notes}
+                    </div>
+                  </>
                 )}
               </Section>
 
@@ -325,7 +351,7 @@ export default function ClientWarRoom() {
                         'text-sm font-medium',
                         trialDaysLeft <= 0 ? 'text-red-400' : trialDaysLeft <= 2 ? 'text-orange-400' : 'text-muted-foreground'
                       )}>
-                        {trialDaysLeft <= 0 ? '🔥 Trial ended' : trialDaysLeft === 1 ? '⚡ Ends tomorrow' : `${trialDaysLeft} days left`}
+                        {trialDaysLeft <= 0 ? '🚨 Trial ended' : trialDaysLeft <= 2 ? `⏰ Ends ${trialDaysLeft === 1 ? 'tomorrow' : `in ${trialDaysLeft} days`}` : `${trialDaysLeft} days left`}
                       </div>
                     )}
                     {client.trial_health_score != null && (

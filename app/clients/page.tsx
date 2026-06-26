@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
 import { cn, sentimentEmoji, timeAgo, formatCurrency } from '@/lib/utils'
+import { getTrialDaysLeft } from '@/lib/scoring'
 import type { Client, ClientStage } from '@/types'
 
 const LIST_GROUPS = [
@@ -51,6 +52,16 @@ function isAtRisk(c: Client) {
   )
 }
 
+function TrialTag({ c }: { c: Client }) {
+  const isTrial = c.stage === 'free_trial' || c.stage === 'trial_ending_soon'
+  if (!isTrial || !c.trial_end) return null
+  const days = getTrialDaysLeft(c.trial_end)
+  if (days === null) return null
+  if (days <= 0) return <span className="text-[10px] leading-none px-1 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-800/40 flex-shrink-0">🚨 ended</span>
+  if (days <= 2) return <span className="text-[10px] leading-none px-1 py-0.5 rounded bg-amber-950/60 text-amber-400 border border-amber-800/40 flex-shrink-0">⏰ {days}d</span>
+  return null
+}
+
 function ClientRow({ c, onClick, onDelete }: { c: Client; onClick: () => void; onDelete: (id: string) => void }) {
   const [confirm, setConfirm] = useState(false)
   const atRisk = isAtRisk(c)
@@ -61,6 +72,7 @@ function ClientRow({ c, onClick, onDelete }: { c: Client; onClick: () => void; o
         <div className="flex items-center gap-1.5">
           <span className="font-medium truncate max-w-[130px]">{c.name}</span>
           {atRisk && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+          <TrialTag c={c} />
         </div>
         {c.business_name && <div className="text-xs text-muted-foreground truncate max-w-[130px]">{c.business_name}</div>}
       </td>
@@ -141,12 +153,14 @@ function KanbanColumn({
   onClientClick,
   onDragStart,
   onDrop,
+  onAddClient,
 }: {
   col: typeof KANBAN_COLUMNS[0]
   clients: Client[]
   onClientClick: (id: string) => void
   onDragStart: (e: React.DragEvent, id: string) => void
   onDrop: (stage: ClientStage) => void
+  onAddClient: () => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -197,6 +211,13 @@ function KanbanColumn({
               />
             ))
           )}
+          {/* Add new client in this column */}
+          <button
+            onClick={onAddClient}
+            className="w-full flex items-center gap-1.5 px-2 py-1.5 mt-1 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+          >
+            <Plus className="w-3 h-3" /> New client
+          </button>
         </div>
       )}
     </div>
@@ -212,6 +233,7 @@ function ClientsContent() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [formOpen, setFormOpen] = useState(false)
+  const [formDefaultStage, setFormDefaultStage] = useState<ClientStage | undefined>()
   const [importOpen, setImportOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [sortDir, setSortDir] = useState<SortDir>(null)
@@ -462,13 +484,14 @@ function ClientsContent() {
                 onClientClick={id => router.push(`/clients/${id}`)}
                 onDragStart={handleDragStart}
                 onDrop={handleDrop}
+                onAddClient={() => { setFormDefaultStage(col.stage); setFormOpen(true) }}
               />
             ))}
           </div>
         </div>
       )}
 
-      <ClientForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={load} />
+      <ClientForm open={formOpen} onClose={() => { setFormOpen(false); setFormDefaultStage(undefined) }} defaultStage={formDefaultStage} onSaved={load} />
       <ImportClientsDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={load} />
     </div>
   )

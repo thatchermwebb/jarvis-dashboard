@@ -20,6 +20,7 @@ interface Props {
   open: boolean
   onClose: () => void
   client?: Client
+  defaultStage?: ClientStage
   onSaved?: (client: Client) => void
 }
 
@@ -253,7 +254,7 @@ function DatePicker({ value, onChange, placeholder }: { value: string; onChange:
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
-export function ClientForm({ open, onClose, client, onSaved }: Props) {
+export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Props) {
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     name: client?.name ?? '',
@@ -263,7 +264,7 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
     email: client?.email ?? '',
     market_location: client?.market_location ?? '',
     timezone: client?.timezone ?? '',
-    stage: (client?.stage ?? 'onboarding') as ClientStage,
+    stage: (client?.stage ?? defaultStage ?? 'onboarding') as ClientStage,
     assigned_va: client?.assigned_va ?? '',
     monthly_retainer: client?.monthly_retainer?.toString() ?? '',
     payment_frequency: client?.payment_frequency ?? 'monthly',
@@ -275,6 +276,10 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
     google_drive_folder: client?.google_drive_folder ?? '',
     deal_notes: client?.deal_notes ?? '',
   })
+
+  useEffect(() => {
+    if (open && defaultStage && !client) setForm(f => ({ ...f, stage: defaultStage }))
+  }, [open, defaultStage, client])
 
   function set(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))

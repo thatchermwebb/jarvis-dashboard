@@ -104,7 +104,7 @@ export function CallQueueCard({ client, onUpdated }: Props) {
               'font-medium',
               daysLeft <= 0 ? 'text-red-400' : daysLeft <= 1 ? 'text-orange-400' : daysLeft <= 3 ? 'text-amber-400' : 'text-muted-foreground'
             )}>
-              {daysLeft <= 0 ? '🔥 Trial ended' : daysLeft === 1 ? '⚡ Trial ends tomorrow' : `Trial ends in ${daysLeft}d`}
+              {daysLeft <= 0 ? '🚨 Trial ended' : daysLeft === 1 ? '⏰ Ends tomorrow' : daysLeft <= 2 ? `⏰ Ends in ${daysLeft}d` : `Trial ends in ${daysLeft}d`}
             </span>
           )}
           {client.last_contact_date && (

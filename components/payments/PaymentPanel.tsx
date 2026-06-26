@@ -24,7 +24,7 @@ const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  pending:   { label: 'Pending',   color: 'text-yellow-400 border-yellow-800 bg-yellow-950/40' },
+  pending:   { label: 'Open',      color: 'text-yellow-400 border-yellow-800 bg-yellow-950/40' },
   paid:      { label: 'Paid',      color: 'text-emerald-400 border-emerald-800 bg-emerald-950/40' },
   paid_late: { label: 'Paid Late', color: 'text-blue-400 border-blue-800 bg-blue-950/40' },
   overdue:   { label: 'Overdue',   color: 'text-red-400 border-red-800 bg-red-950/40' },
@@ -95,7 +95,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
       {/* Summary + actions */}
       <div className="flex items-center justify-between">
         <div className="flex gap-4 text-xs text-muted-foreground">
-          {totalOwed > 0 && <span className="text-red-400 font-medium">{formatCurrency(totalOwed)} outstanding</span>}
+          {totalOwed > 0 && <span className="text-yellow-400 font-medium">{formatCurrency(totalOwed)} upcoming</span>}
           {totalPaid > 0 && <span className="text-emerald-400">{formatCurrency(totalPaid)} collected</span>}
         </div>
         <div className="flex gap-2">
@@ -200,11 +200,7 @@ function PaymentRow({ payment: p, onMark, onDelete, onEdit }: {
             <Check className="w-3 h-3" /> Paid
           </Button>
         )}
-        {!isPaid && (
-          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 gap-1" onClick={() => onMark('waived')}>
-            Waive
-          </Button>
-        )}
+
         <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={onEdit}>
           <Pencil className="w-3 h-3" />
         </Button>
@@ -327,7 +323,6 @@ function EditPaymentDialog({ payment, onClose, onSaved }: { payment: Payment; on
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="paid_late">Paid Late</SelectItem>
                 <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="waived">Waived</SelectItem>
               </SelectContent>
             </Select>
           </div>
