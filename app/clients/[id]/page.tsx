@@ -15,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
-import { TaskPanel } from '@/components/tasks/TaskPanel'
 import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
@@ -231,7 +230,7 @@ export default function ClientWarRoom() {
                 )}
               </Section>
 
-              {client.trial_start && (
+              {client.trial_start && ['free_trial','trial_ending_soon','onboarding'].includes(client.stage) && (
                 <>
                   <Separator className="bg-border" />
                   <Section title="Trial">
@@ -295,51 +294,6 @@ export default function ClientWarRoom() {
               </div>
             </div>
 
-            {/* Ad performance */}
-            <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-              <Section title="Ad Performance">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center">
-                    <div className={cn('text-xl font-bold', cplStatusColor(client.cpl))}>
-                      {client.cpl != null ? `$${client.cpl}` : '—'}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">CPL</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-foreground">{client.leads ?? '—'}</div>
-                    <div className="text-[10px] text-muted-foreground">Leads</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-foreground">{client.phone_numbers_collected ?? '—'}</div>
-                    <div className="text-[10px] text-muted-foreground">Phone #s</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-foreground">{client.bookings ?? '—'}</div>
-                    <div className="text-[10px] text-muted-foreground">Bookings</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-foreground">
-                      {client.spend != null ? `$${client.spend}` : '—'}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">Spend</div>
-                  </div>
-                  <div className="text-center">
-                    <div className={cn('text-lg font-bold', client.ad_status === 'live' ? 'text-emerald-400' : client.ad_status === 'off' ? 'text-red-400' : 'text-muted-foreground')}>
-                      {client.ad_status ?? '—'}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">Ad Status</div>
-                  </div>
-                </div>
-                {client.new_ads !== null && (
-                  <div className={cn('text-xs px-2 py-1 rounded-md w-fit', client.new_ads ? 'bg-emerald-500/10 text-emerald-300' : 'bg-secondary text-muted-foreground')}>
-                    {client.new_ads ? '✓ New ads running' : 'Old ads running'}
-                  </div>
-                )}
-                {client.location_targeting && (
-                  <Field label="Location Targeting" value={client.location_targeting} />
-                )}
-              </Section>
-            </div>
           </div>
 
           {/* Right column — communication + tabs */}
@@ -404,11 +358,10 @@ export default function ClientWarRoom() {
 
             {/* Tabs */}
             <Tabs defaultValue="history">
-              <TabsList className="bg-secondary/50 border border-border">
-                <TabsTrigger value="history" className="text-xs">Call History</TabsTrigger>
-                <TabsTrigger value="payments" className="text-xs">Payments</TabsTrigger>
-                <TabsTrigger value="tasks" className="text-xs">VA Tasks</TabsTrigger>
-                <TabsTrigger value="risk" className="text-xs">Risk & Scores</TabsTrigger>
+              <TabsList className="bg-secondary/50 border border-border h-11 gap-1 px-1">
+                <TabsTrigger value="history" className="text-sm px-5 h-9">Call History</TabsTrigger>
+                <TabsTrigger value="payments" className="text-sm px-5 h-9">Payments</TabsTrigger>
+                <TabsTrigger value="risk" className="text-sm px-5 h-9">Risk & Scores</TabsTrigger>
               </TabsList>
 
               <TabsContent value="history" className="mt-3 space-y-2">
@@ -456,10 +409,6 @@ export default function ClientWarRoom() {
 
               <TabsContent value="payments" className="mt-3">
                 <PaymentPanel clientId={client.id} clientName={client.name} />
-              </TabsContent>
-
-              <TabsContent value="tasks" className="mt-3">
-                <TaskPanel clientId={id} />
               </TabsContent>
 
               <TabsContent value="risk" className="mt-3">

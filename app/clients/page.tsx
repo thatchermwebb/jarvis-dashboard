@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Search, AlertTriangle } from 'lucide-react'
+import { Plus, Search, AlertTriangle, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
+import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
 import { cn, sentimentEmoji, timeAgo, formatCurrency } from '@/lib/utils'
 import type { Client } from '@/types'
 
@@ -121,6 +122,7 @@ function ClientsContent() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [formOpen, setFormOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,9 +148,14 @@ function ClientsContent() {
           <h1 className="text-lg font-semibold">All Clients</h1>
           <p className="text-xs text-muted-foreground">{clients.length} total</p>
         </div>
-        <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setFormOpen(true)}>
-          <Plus className="w-3.5 h-3.5" /> Add Client
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setImportOpen(true)}>
+            <Upload className="w-3.5 h-3.5" /> Import CSV
+          </Button>
+          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setFormOpen(true)}>
+            <Plus className="w-3.5 h-3.5" /> Add Client
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
@@ -206,6 +213,7 @@ function ClientsContent() {
       )}
 
       <ClientForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={load} />
+      <ImportClientsDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={load} />
     </div>
   )
 }
