@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
+import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
@@ -63,6 +64,7 @@ export default function ClientWarRoom() {
   const [logs, setLogs] = useState<CommunicationLog[]>([])
   const [editOpen, setEditOpen] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const [briefOpen, setBriefOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -210,6 +212,9 @@ export default function ClientWarRoom() {
           <div className="flex items-center gap-1.5 flex-wrap">
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setLogOpen(true)}>
               <Phone className="w-3 h-3" /> Log Call
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setScheduleOpen(true)}>
+              <Calendar className="w-3 h-3" /> Schedule Call
             </Button>
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setJarvisOpen(true)}>
               <Bot className="w-3 h-3" /> JARVIS
@@ -550,6 +555,7 @@ export default function ClientWarRoom() {
 
       <ClientForm open={editOpen} onClose={() => setEditOpen(false)} client={client} onSaved={(updated) => setClient(updated)} />
       <LogCallDialog open={logOpen} onClose={() => setLogOpen(false)} client={client} onLogged={load} />
+      <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} client={client} onSaved={load} />
       <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />
       <BriefGenerator open={briefOpen} onClose={() => setBriefOpen(false)} client={client} />
     </>

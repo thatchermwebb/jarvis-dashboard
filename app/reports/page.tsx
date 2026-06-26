@@ -141,6 +141,31 @@ export default function ReportsPage() {
     [clients]
   )
 
+  // ── Helpers to enumerate days/weeks in range ──────────────────────────────────
+
+  function getDaysInRange(start: Date, end: Date): string[] {
+    const days: string[] = []
+    const cur = new Date(start); cur.setHours(0,0,0,0)
+    const endDay = new Date(end); endDay.setHours(0,0,0,0)
+    while (cur <= endDay) {
+      days.push(cur.toISOString().slice(0, 10))
+      cur.setDate(cur.getDate() + 1)
+    }
+    return days
+  }
+
+  function getWeeksInRange(start: Date, end: Date): string[] {
+    const weeks: string[] = []
+    const cur = new Date(start); cur.setHours(0,0,0,0)
+    cur.setDate(cur.getDate() - cur.getDay()) // back to Sunday
+    const endDay = new Date(end); endDay.setHours(0,0,0,0)
+    while (cur <= endDay) {
+      weeks.push(cur.toISOString().slice(0, 10))
+      cur.setDate(cur.getDate() + 7)
+    }
+    return weeks
+  }
+
   // ── Daily cash collected chart ────────────────────────────────────────────────
 
   const dailyCashData = useMemo(() => {
@@ -150,10 +175,12 @@ export default function ReportsPage() {
       const day = p.paid_date.slice(0, 10)
       byDay[day] = (byDay[day] ?? 0) + p.amount
     }
-    return Object.entries(byDay)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, amount]) => ({ date, amount, label: fmtDay(date) }))
-  }, [paidInRange])
+    const start = rangeStart ?? new Date(Math.min(...paidInRange.map(p => new Date(p.paid_date!).getTime())))
+    if (!start || isNaN(start.getTime())) return []
+    return getDaysInRange(start, new Date()).map(date => ({
+      date, amount: byDay[date] ?? 0, label: fmtDay(date)
+    }))
+  }, [paidInRange, rangeStart])
 
   // ── Weekly cash collected chart ───────────────────────────────────────────────
 
@@ -162,16 +189,17 @@ export default function ReportsPage() {
     for (const p of paidInRange) {
       if (!p.paid_date) continue
       const d = new Date(p.paid_date)
-      // Round down to Sunday of that week
       const sun = new Date(d)
       sun.setDate(d.getDate() - d.getDay())
       const key = sun.toISOString().slice(0, 10)
       byWeek[key] = (byWeek[key] ?? 0) + p.amount
     }
-    return Object.entries(byWeek)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, amount]) => ({ date, amount, label: fmtWeek(date) }))
-  }, [paidInRange])
+    const start = rangeStart ?? new Date(Math.min(...paidInRange.map(p => new Date(p.paid_date!).getTime())))
+    if (!start || isNaN(start.getTime())) return []
+    return getWeeksInRange(start, new Date()).map(date => ({
+      date, amount: byWeek[date] ?? 0, label: fmtWeek(date)
+    }))
+  }, [paidInRange, rangeStart])
 
   // ── New clients over time (for deal flow chart) ────────────────────────────────
 
@@ -181,10 +209,14 @@ export default function ReportsPage() {
       const day = c.created_at.slice(0, 10)
       byDay[day] = (byDay[day] ?? 0) + 1
     }
-    return Object.entries(byDay)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, count]) => ({ date, count, label: fmtDay(date) }))
-  }, [newDeals])
+    const start = rangeStart ?? (newDeals.length > 0
+      ? new Date(Math.min(...newDeals.map(c => new Date(c.created_at).getTime())))
+      : null)
+    if (!start) return []
+    return getDaysInRange(start, new Date()).map(date => ({
+      date, count: byDay[date] ?? 0, label: fmtDay(date)
+    }))
+  }, [newDeals, rangeStart])
 
   // ── Churn over time ────────────────────────────────────────────────────────────
 
@@ -194,10 +226,42 @@ export default function ReportsPage() {
       const day = c.updated_at.slice(0, 10)
       byDay[day] = (byDay[day] ?? 0) + 1
     }
-    return Object.entries(byDay)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, count]) => ({ date, count, label: fmtDay(date) }))
-  }, [churned])
+    const start = rangeStart ?? (churned.length > 0
+      ? new Date(Math.min(...churned.map(c => new Date(c.updated_at).getTime())))
+      : null)
+    if (!start) return []
+    return getDaysInRange(start, new Date()).map(date => ({
+      date, count: byDay[date] ?? 0, label: fmtDay(date)
+    }))
+  }, [churned, rangeStart])
+
+  // ── MRR over time (weekly snapshots using created_at as active date) ───────────
+
+  const mrrOverTimeData = useMemo(() => {
+    const now = new Date()
+    const start = rangeStart ?? (clients.length > 0
+      ? new Date(Math.min(...clients.filter(c => c.stage === 'active_client').map(c => new Date(c.created_at).getTime())))
+      : null)
+    if (!start) return []
+    const weeks = getWeeksInRange(start, now)
+    return weeks.map(weekStart => {
+      const weekDate = new Date(weekStart + 'T00:00:00')
+      // Clients who were active at this week's start (created before this date, not churned before it)
+      const mrr = clients
+        .filter(c => {
+          if (!c.monthly_retainer) return false
+          const created = new Date(c.created_at)
+          if (created > weekDate) return false
+          // If churned, use updated_at as proxy for churn date
+          if (c.stage === 'churned' || c.stage === 'free_trial_lost') {
+            return new Date(c.updated_at) >= weekDate
+          }
+          return true
+        })
+        .reduce((s, c) => s + (c.monthly_retainer ?? 0), 0)
+      return { date: weekStart, mrr, label: fmtWeek(weekStart) }
+    })
+  }, [clients, rangeStart])
 
   // ── Pipeline breakdown ─────────────────────────────────────────────────────────
 
@@ -415,6 +479,28 @@ export default function ReportsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* MRR Over Time — big line graph */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">MRR Over Time</div>
+          <div className="text-xs text-muted-foreground">Weekly · {RANGE_OPTIONS.find(r => r.value === range)?.label}</div>
+        </div>
+        <div className="text-2xl font-bold text-emerald-400 mb-4">{formatCurrency(mrr)} current</div>
+        {mrrOverTimeData.length > 1 ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={mrrOverTimeData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+              <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<ChartTooltip isCurrency />} />
+              <Line type="monotone" dataKey="mrr" stroke="#34d399" strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Not enough data for this period</div>
+        )}
       </div>
 
       {/* Active client revenue table */}

@@ -85,9 +85,26 @@ export function CallQueueCard({ client, onUpdated }: Props) {
             )}
           </div>
 
-          {/* Center: stage text */}
+          {/* Center: stage badge */}
           <div className="flex-shrink-0 text-right hidden sm:block">
-            <div className="text-sm text-muted-foreground">{stagePlainText(client.stage)}</div>
+            <span className={cn(
+              'inline-block text-xs font-medium px-2.5 py-1 rounded-full border',
+              client.stage === 'active_client' || client.stage === 'won_back'
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                : client.stage === 'free_trial' || client.stage === 'trial_ending_soon'
+                ? 'bg-violet-500/10 text-violet-300 border-violet-500/20'
+                : client.stage === 'free_trial_pending'
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                : client.stage === 'trial_concluded'
+                ? 'bg-teal-500/10 text-teal-300 border-teal-500/20'
+                : client.stage === 'overdue' || client.stage === 'payment_issue' || client.stage === 'churn_risk'
+                ? 'bg-red-500/10 text-red-300 border-red-500/20'
+                : client.stage === 'paused'
+                ? 'bg-slate-500/10 text-slate-300 border-slate-500/20'
+                : 'bg-secondary/50 text-muted-foreground border-border'
+            )}>
+              {stagePlainText(client.stage)}
+            </span>
           </div>
 
           {/* Right: priority score — small, unobtrusive */}

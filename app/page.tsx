@@ -48,6 +48,15 @@ export default async function CommandCenter() {
     weekly_recurring_revenue: 0,
   }
 
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000)
+  // Clients active before 30 days ago (proxy for MRR 30d ago)
+  const mrrThirtyDaysAgo = allClients
+    .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer && new Date(c.created_at) < thirtyDaysAgo)
+    .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0)
+  const mrrChange = mrrThirtyDaysAgo > 0
+    ? Math.round(((stats.monthly_recurring_revenue - mrrThirtyDaysAgo) / mrrThirtyDaysAgo) * 100)
+    : null
+
   const prioritized = sortClientsByPriority(allClients)
     .filter(c => !['churned', 'free_trial_lost', 'trial_concluded'].includes(c.stage))
     .slice(0, 5)
@@ -71,7 +80,7 @@ export default async function CommandCenter() {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
-      <DailyBriefing stats={stats} clientLists={briefingLists} />
+      <DailyBriefing stats={stats} clientLists={briefingLists} mrrChange={mrrChange} />
 
       {/* Stat cards — clickable, bigger */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

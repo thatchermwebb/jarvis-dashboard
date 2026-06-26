@@ -13,6 +13,8 @@ import type { Payment, PaymentEntryStatus, PaymentType } from '@/types'
 import { PaymentDialog } from '@/components/payments/PaymentDialog'
 import { toast } from 'sonner'
 
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const TYPE_LABELS: Record<string, string> = {
@@ -136,7 +138,21 @@ export default function PaymentsPage() {
   })
   const collectedAmt = collectedThisMonth.reduce((s, p) => s + p.amount, 0)
 
-  const projected = payments.filter(p => p.status !== 'voided' && p.status !== 'waived')
+  // When in calendar view, scope projected to the viewed month; in table view use all time
+  const projectedMonthStart = view === 'calendar'
+    ? new Date(calMonth.year, calMonth.month, 1)
+    : null
+  const projectedMonthEnd = view === 'calendar'
+    ? new Date(calMonth.year, calMonth.month + 1, 0)
+    : null
+  const projected = payments.filter(p => {
+    if (p.status === 'voided' || p.status === 'waived') return false
+    if (projectedMonthStart && projectedMonthEnd && p.due_date) {
+      const d = new Date(p.due_date + 'T00:00:00')
+      return d >= projectedMonthStart && d <= projectedMonthEnd
+    }
+    return true
+  })
   const projectedAmt = projected.reduce((s, p) => s + p.amount, 0)
 
   const nwLabel = `${nwStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})}–${nwEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`
@@ -186,7 +202,9 @@ export default function PaymentsPage() {
         </div>
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
           <div className="text-2xl font-bold text-primary">{formatCurrency(projectedAmt)}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Projected Total</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {view === 'calendar' ? `${MONTH_NAMES[calMonth.month]} Projected` : 'Projected Total'}
+          </div>
         </div>
       </div>
 
@@ -212,6 +230,7 @@ export default function PaymentsPage() {
           onEdit={openEdit}
           onMarkPaid={markPaid}
           onDayClick={date => openAdd(date)}
+          onClientClick={id => router.push(`/clients/${id}`)}
         />
       )}
 
@@ -364,11 +383,10 @@ function PaymentRow({
 
 // ─── Calendar View ────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 function CalendarView({
-  payments, month, onMonthChange, onEdit, onMarkPaid, onDayClick,
+  payments, month, onMonthChange, onEdit, onMarkPaid, onDayClick, onClientClick,
 }: {
   payments: Payment[]
   month: { year: number; month: number }
@@ -376,6 +394,7 @@ function CalendarView({
   onEdit: (p: Payment) => void
   onMarkPaid: (p: Payment) => void
   onDayClick: (date: string) => void
+  onClientClick?: (id: string) => void
 }) {
   const { year, month: mo } = month
   const today = new Date(); today.setHours(0,0,0,0)
@@ -465,7 +484,16 @@ function CalendarView({
                     >
                       {/* Client + amount row */}
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-xs font-semibold text-foreground truncate">{clientName}</span>
+                        <button
+                          className="text-xs font-semibold text-foreground hover:text-primary transition-colors truncate text-left"
+                          onClick={e => {
+                            e.stopPropagation()
+                            const clientId = (p.client as any)?.id
+                            if (clientId && onClientClick) onClientClick(clientId)
+                          }}
+                        >
+                          {clientName}
+                        </button>
                         <span className="text-xs font-bold tabular-nums flex-shrink-0">{formatCurrency(p.amount)}</span>
                       </div>
                       {/* Type */}

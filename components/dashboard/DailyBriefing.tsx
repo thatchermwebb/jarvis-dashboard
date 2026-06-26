@@ -19,6 +19,7 @@ export interface BriefingClientLists {
 interface Props {
   stats: DashboardStats
   clientLists: BriefingClientLists
+  mrrChange?: number | null
 }
 
 function ExpandableRow({
@@ -69,7 +70,7 @@ function ExpandableRow({
   )
 }
 
-export function DailyBriefing({ stats, clientLists }: Props) {
+export function DailyBriefing({ stats, clientLists, mrrChange }: Props) {
   const today = format(new Date(), 'EEEE, MMMM d')
 
   const rows: { text: string; clients: Client[] }[] = []
@@ -119,7 +120,12 @@ export function DailyBriefing({ stats, clientLists }: Props) {
           <div className="text-4xl font-bold text-emerald-400 leading-none">
             {formatCurrency(stats.monthly_recurring_revenue)}
           </div>
-          <div className="text-sm text-muted-foreground mt-1.5">{stats.active_clients} active clients</div>
+          {mrrChange !== null && mrrChange !== undefined && (
+            <div className={cn('text-xs font-medium mt-1', mrrChange >= 0 ? 'text-emerald-400/70' : 'text-red-400/70')}>
+              {mrrChange >= 0 ? '+' : ''}{mrrChange}% last 30 days
+            </div>
+          )}
+          <div className="text-sm text-muted-foreground mt-1">{stats.active_clients} active clients</div>
         </div>
       </div>
 
