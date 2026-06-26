@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(extract-text \"/Users/thatcherwebb/Downloads/Detailing_Accelerator_JARVIS_Dashboard_Blueprint.docx\")",
+      "Bash(pandoc \"/Users/thatcherwebb/Downloads/Detailing_Accelerator_JARVIS_Dashboard_Blueprint.docx\" -t markdown)",
+      "Read(//Users/thatcherwebb/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/95dc4d00-91c6-4fb2-add1-2c781d7bbb7b/3b32e3e1-48d3-4b4c-925e-bb970a4fba57/skills/docx/**)",
+      "Bash(python scripts/office/unpack.py \"/Users/thatcherwebb/Downloads/Detailing_Accelerator_JARVIS_Dashboard_Blueprint.docx\" /tmp/jarvis_unpacked/)",
+      "Bash(python3 \"/Users/thatcherwebb/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/95dc4d00-91c6-4fb2-add1-2c781d7bbb7b/3b32e3e1-48d3-4b4c-925e-bb970a4fba57/skills/docx/scripts/office/unpack.py\" \"/Users/thatcherwebb/Downloads/Detailing_Accelerator_JARVIS_Dashboard_Blueprint.docx\" /tmp/jarvis_unpacked/)",
+      "Read(//private/tmp/**)",
+      "Bash(cp \"/Users/thatcherwebb/Downloads/Detailing_Accelerator_JARVIS_Dashboard_Blueprint.docx\" jarvis.zip)",
+      "Bash(unzip -o jarvis.zip -d jarvis_extracted/)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

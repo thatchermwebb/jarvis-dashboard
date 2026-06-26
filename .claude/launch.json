@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "jarvis",
+      "runtimeExecutable": "/Users/thatcherwebb/.nvm/versions/node/v22.23.1/bin/node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "port": 3001,
+      "autoPort": true
+    }
+  ]
+}

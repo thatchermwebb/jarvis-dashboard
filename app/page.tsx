@@ -1,103 +1,124 @@
-import Image from "next/image";
+import { createClient } from '@/lib/supabase/server'
+import { sortClientsByPriority } from '@/lib/scoring'
+import { DailyBriefing } from '@/components/dashboard/DailyBriefing'
+import { StatCard, AlertRow } from '@/components/dashboard/AlertPanel'
+import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
+import { isAfter, isBefore, addDays, startOfDay } from 'date-fns'
+import type { Client, DashboardStats } from '@/types'
 
-export default function Home() {
+export const dynamic = 'force-dynamic'
+
+export default async function CommandCenter() {
+  const supabase = await createClient()
+
+  const [{ data: clients }, { data: tasks }] = await Promise.all([
+    supabase.from('clients').select('*').not('stage', 'eq', 'churned'),
+    supabase.from('tasks').select('id').neq('status', 'done'),
+  ])
+
+  const allClients = (clients ?? []) as Client[]
+  const today = startOfDay(new Date())
+  const in48h = addDays(today, 2)
+  const in7d = addDays(today, 7)
+
+  const trialClients = allClients.filter(
+    (c) => c.stage === 'free_trial' || c.stage === 'trial_ending_soon'
+  )
+
+  const stats: DashboardStats = {
+    active_clients: allClients.filter((c) => c.stage === 'active_client').length,
+    free_trials: trialClients.length,
+    trials_ending_today: trialClients.filter((c) => {
+      if (!c.trial_end) return false
+      return startOfDay(new Date(c.trial_end)).getTime() === today.getTime()
+    }).length,
+    trials_ending_this_week: trialClients.filter((c) => {
+      if (!c.trial_end) return false
+      const end = new Date(c.trial_end)
+      return isAfter(end, today) && isBefore(end, in7d)
+    }).length,
+    payment_issues: allClients.filter((c) => c.payment_issue || c.stage === 'payment_issue').length,
+    at_risk_clients: allClients.filter(
+      (c) => c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60
+    ).length,
+    close_ready_trials: trialClients.filter(
+      (c) => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready'
+    ).length,
+    thatcher_needed: allClients.filter((c) => c.thatcher_needed).length,
+    va_tasks_open: tasks?.length ?? 0,
+    overdue_followups: allClients.filter(
+      (c) => c.next_followup_date && isBefore(new Date(c.next_followup_date), today)
+    ).length,
+    monthly_recurring_revenue: allClients
+      .filter((c) => c.stage === 'active_client' && c.monthly_retainer)
+      .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0),
+    weekly_recurring_revenue: 0,
+  }
+
+  const prioritized = sortClientsByPriority(allClients)
+    .filter((c) => !['churned', 'trial_concluded'].includes(c.stage))
+    .slice(0, 5)
+
+  const trialsEndingSoon = trialClients.filter((c) => {
+    if (!c.trial_end) return false
+    return isBefore(new Date(c.trial_end), in48h)
+  })
+  const paymentIssueClients = allClients.filter((c) => c.payment_issue || c.stage === 'payment_issue')
+  const atRiskClients = allClients.filter(
+    (c) => c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60
+  )
+  const overdueClients = allClients.filter(
+    (c) => c.next_followup_date && isBefore(new Date(c.next_followup_date), today)
+  )
+  const thatcherClients = allClients.filter((c) => c.thatcher_needed)
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <DailyBriefing stats={stats} />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatCard label="Active Clients" value={stats.active_clients} color="green" />
+        <StatCard label="Free Trials" value={stats.free_trials} color="violet" />
+        <StatCard label="Ending Today" value={stats.trials_ending_today} color={stats.trials_ending_today > 0 ? 'red' : 'default'} />
+        <StatCard label="Payment Issues" value={stats.payment_issues} color={stats.payment_issues > 0 ? 'red' : 'default'} />
+        <StatCard label="Close-Ready" value={stats.close_ready_trials} color="amber" />
+        <StatCard label="VA Tasks Open" value={stats.va_tasks_open} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Priority Call Queue</h2>
+            <a href="/call-queue" className="text-xs text-primary hover:underline">View all →</a>
+          </div>
+          {prioritized.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+              No active clients yet. Add your first client to get started.
+            </div>
+          ) : (
+            prioritized.map((c) => (
+              <CallQueueCard key={c.id} client={c} />
+            ))
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-foreground">Alerts</h2>
+          {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].every((a) => !a.length) ? (
+            <div className="bg-card border border-border rounded-xl p-6 text-center text-muted-foreground text-xs">
+              No urgent alerts right now.
+            </div>
+          ) : (
+            <>
+              <AlertRow clients={trialsEndingSoon} type="trials_ending" />
+              <AlertRow clients={paymentIssueClients} type="payment_issues" />
+              <AlertRow clients={thatcherClients} type="thatcher" />
+              <AlertRow clients={atRiskClients} type="at_risk" />
+              <AlertRow clients={overdueClients} type="overdue" />
+            </>
+          )}
+        </div>
+      </div>
     </div>
-  );
+  )
 }
