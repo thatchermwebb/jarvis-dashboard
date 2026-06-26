@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
@@ -253,7 +254,7 @@ interface CommunicationLog {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function CallsPage() {
+function CallsPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const filterClientId = searchParams.get('client_id')
@@ -649,5 +650,13 @@ export default function CallsPage() {
         onSaved={loadQueue}
       />
     </div>
+  )
+}
+
+export default function CallsPage() {
+  return (
+    <Suspense>
+      <CallsPageInner />
+    </Suspense>
   )
 }
