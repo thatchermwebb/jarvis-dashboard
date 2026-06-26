@@ -207,6 +207,46 @@ export interface CloseBrief {
   }
 }
 
+export type PaymentEntryStatus = 'pending' | 'paid' | 'paid_late' | 'overdue' | 'waived'
+export type PaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'one_time'
+export type PaymentType =
+  | 'retainer_monthly'
+  | 'retainer_biweekly'
+  | 'retainer_weekly'
+  | 'deposit'
+  | 'remaining_balance'
+  | 'one_time'
+
+export interface Payment {
+  id: string
+  created_at: string
+  updated_at: string
+  client_id: string
+  schedule_id?: string
+  payment_type: PaymentType
+  amount: number
+  due_date: string
+  paid_date?: string
+  status: PaymentEntryStatus
+  notes?: string
+  client?: Pick<Client, 'id' | 'name' | 'business_name'>
+}
+
+export interface PaymentSchedule {
+  id: string
+  created_at: string
+  client_id: string
+  label?: string
+  payment_type: PaymentType
+  amount: number
+  frequency: PaymentFrequency
+  start_date: string
+  end_date?: string
+  active: boolean
+  notes?: string
+  client?: Pick<Client, 'id' | 'name' | 'business_name'>
+}
+
 export interface DashboardStats {
   active_clients: number
   free_trials: number

@@ -100,7 +100,7 @@ export default function VATasksPage() {
         </div>
       ) : tasks.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
-          No tasks with status: {statusFilter}. Create tasks from a client's War Room.
+          No tasks with status: {statusFilter}. Create tasks from a client's Details page.
         </div>
       ) : (
         <div className="space-y-5">

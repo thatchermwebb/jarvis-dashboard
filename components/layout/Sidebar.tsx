@@ -6,28 +6,20 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
   Phone,
-  FlaskConical,
   Users,
-  AlertTriangle,
-  Target,
   CreditCard,
   CheckSquare,
-  Star,
   BarChart3,
   Settings,
   Zap,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/', label: 'Command Center', icon: LayoutDashboard },
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/call-queue', label: "Today's Calls", icon: Phone },
-  { href: '/trials', label: 'Free Trials', icon: FlaskConical },
-  { href: '/active', label: 'Active Clients', icon: Users },
-  { href: '/at-risk', label: 'At Risk', icon: AlertTriangle },
-  { href: '/thatcher', label: 'Close Ready', icon: Target },
+  { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/va-tasks', label: 'VA Tasks', icon: CheckSquare },
-  { href: '/clients', label: 'All Clients', icon: Star },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -44,8 +36,8 @@ export function Sidebar() {
             <Zap className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-foreground tracking-wide">JARVIS</div>
-            <div className="text-[10px] text-muted-foreground">Detailing Accelerator</div>
+            <div className="text-sm font-semibold text-foreground tracking-wide">CZA</div>
+            <div className="text-[10px] text-muted-foreground">Command Center</div>
           </div>
         </div>
       </div>

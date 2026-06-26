@@ -5,7 +5,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 function isConfigured() {
-  return SUPABASE_URL.startsWith('http') && SUPABASE_KEY.length > 10
+  return SUPABASE_URL.startsWith('http') && SUPABASE_KEY.length > 10 && SUPABASE_URL !== 'your_supabase_project_url'
 }
 
 // Stub client: returns empty results for any query chain when Supabase isn't configured

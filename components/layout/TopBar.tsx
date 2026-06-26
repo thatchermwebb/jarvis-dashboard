@@ -2,15 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Phone, Bot } from 'lucide-react'
+import { Search, Plus, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { JARVISPanel } from '@/components/assistant/JARVISPanel'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 
 export function TopBar() {
-  const [jarvisOpen, setJarvisOpen] = useState(false)
   const [clientFormOpen, setClientFormOpen] = useState(false)
   const [logCallOpen, setLogCallOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -60,18 +58,9 @@ export function TopBar() {
             Add Client
           </Button>
 
-          <Button
-            size="sm"
-            className="h-8 gap-1.5 text-xs bg-primary hover:bg-primary/90"
-            onClick={() => setJarvisOpen(true)}
-          >
-            <Bot className="w-3.5 h-3.5" />
-            Ask JARVIS
-          </Button>
         </div>
       </header>
 
-      <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} />
       <ClientForm open={clientFormOpen} onClose={() => setClientFormOpen(false)} />
       <LogCallDialog open={logCallOpen} onClose={() => setLogCallOpen(false)} />
     </>

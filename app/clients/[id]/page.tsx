@@ -16,6 +16,7 @@ import { Progress } from '@/components/ui/progress'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { TaskPanel } from '@/components/tasks/TaskPanel'
+import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
 import {
@@ -405,6 +406,7 @@ export default function ClientWarRoom() {
             <Tabs defaultValue="history">
               <TabsList className="bg-secondary/50 border border-border">
                 <TabsTrigger value="history" className="text-xs">Call History</TabsTrigger>
+                <TabsTrigger value="payments" className="text-xs">Payments</TabsTrigger>
                 <TabsTrigger value="tasks" className="text-xs">VA Tasks</TabsTrigger>
                 <TabsTrigger value="risk" className="text-xs">Risk & Scores</TabsTrigger>
               </TabsList>
@@ -450,6 +452,10 @@ export default function ClientWarRoom() {
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="payments" className="mt-3">
+                <PaymentPanel clientId={client.id} clientName={client.name} />
               </TabsContent>
 
               <TabsContent value="tasks" className="mt-3">

@@ -258,7 +258,7 @@ export function CallQueueCard({ client, onUpdated }: Props) {
             className="h-7 text-xs gap-1 ml-auto text-muted-foreground"
             onClick={() => router.push(`/clients/${client.id}`)}
           >
-            <ExternalLink className="w-3 h-3" /> War Room
+            <ExternalLink className="w-3 h-3" /> Details
           </Button>
         </div>
       </div>

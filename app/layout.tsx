@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { JARVISWidget } from '@/components/assistant/JARVISWidget'
 import { Toaster } from '@/components/ui/sonner'
 
 const geistSans = Geist({
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'JARVIS — Detailing Accelerator Command Center',
+  title: 'CZA Command Center',
   description: 'Client success command center for Detailing Accelerator',
 }
 
@@ -37,6 +38,7 @@ export default function RootLayout({
             </main>
           </div>
         </div>
+        <JARVISWidget />
         <Toaster theme="dark" />
       </body>
     </html>
