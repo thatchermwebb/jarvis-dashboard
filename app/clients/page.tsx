@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, ChevronLeft } from 'lucide-react'
+import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, ChevronLeft, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,11 +51,12 @@ function isAtRisk(c: Client) {
   )
 }
 
-function ClientRow({ c, onClick }: { c: Client; onClick: () => void }) {
+function ClientRow({ c, onClick, onDelete }: { c: Client; onClick: () => void; onDelete: (id: string) => void }) {
+  const [confirm, setConfirm] = useState(false)
   const atRisk = isAtRisk(c)
   const overdue = c.next_followup_date && new Date(c.next_followup_date) < new Date()
   return (
-    <tr onClick={onClick} className="hover:bg-secondary/30 cursor-pointer transition-colors">
+    <tr onClick={onClick} className="hover:bg-secondary/30 cursor-pointer transition-colors group">
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="font-medium">{c.name}</span>
@@ -72,6 +73,22 @@ function ClientRow({ c, onClick }: { c: Client; onClick: () => void }) {
       </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{c.monthly_retainer ? formatCurrency(c.monthly_retainer) : '—'}</td>
       <td className="px-4 py-3 text-base">{sentimentEmoji(c.last_client_sentiment)}</td>
+      <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+        {confirm ? (
+          <div className="flex items-center justify-end gap-1">
+            <span className="text-[10px] text-red-400">Sure?</span>
+            <button onClick={() => onDelete(c.id)} className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 px-2 py-0.5 rounded-md transition-all">Yes</button>
+            <button onClick={() => setConfirm(false)} className="text-[10px] text-muted-foreground hover:text-foreground px-1 py-0.5">No</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirm(true)}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-400 transition-all p-1 rounded hover:bg-red-950/20"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </td>
     </tr>
   )
 }
@@ -223,6 +240,17 @@ function ClientsContent() {
     e.dataTransfer.effectAllowed = 'move'
   }
 
+  async function handleDelete(id: string) {
+    try {
+      const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setClients(prev => prev.filter(c => c.id !== id))
+      toast.success('Client deleted')
+    } catch {
+      toast.error('Failed to delete client')
+    }
+  }
+
   async function handleDrop(targetStage: ClientStage) {
     const id = dragId.current
     dragId.current = null
@@ -347,10 +375,11 @@ function ClientsContent() {
                       <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-medium">Follow-Up</th>
                       <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-medium">Retainer</th>
                       <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-medium">Mood</th>
+                      <th className="px-4 py-2.5 w-10" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {group.clients.map(c => <ClientRow key={c.id} c={c} onClick={() => router.push(`/clients/${c.id}`)} />)}
+                    {group.clients.map(c => <ClientRow key={c.id} c={c} onClick={() => router.push(`/clients/${c.id}`)} onDelete={handleDelete} />)}
                   </tbody>
                 </table>
               </div>

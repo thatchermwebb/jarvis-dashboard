@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   ArrowLeft, ArrowRight, Edit, Phone, ExternalLink, Star, Wrench, CreditCard,
   AlertTriangle, TrendingDown, CheckCircle, Bot, Plus, Clock,
-  MessageSquare, Calendar, ChevronDown
+  MessageSquare, Calendar, ChevronDown, Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +67,7 @@ export default function ClientWarRoom() {
   const [briefOpen, setBriefOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [stagePickerOpen, setStagePickerOpen] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -221,6 +222,23 @@ export default function ClientWarRoom() {
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setEditOpen(true)}>
               <Edit className="w-3 h-3" /> Edit
             </Button>
+            {deleteConfirm ? (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-red-400">Delete client?</span>
+                <Button size="sm" variant="outline" className="h-8 text-xs border-red-500/40 text-red-400 hover:bg-red-950/30"
+                  onClick={async () => {
+                    await fetch(`/api/clients/${id}`, { method: 'DELETE' })
+                    router.push('/clients')
+                  }}>
+                  Yes, delete
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground/40 hover:text-red-400 hover:bg-red-950/20 gap-1" onClick={() => setDeleteConfirm(true)}>
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            )}
           </div>
         </div>
 
