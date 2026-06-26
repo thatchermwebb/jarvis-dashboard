@@ -254,8 +254,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   }
   function selectDay(day: number) {
     const ds = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-    onChange(ds)
-    setOpen(false)
+    onChange(ds); setOpen(false)
   }
 
   const displayValue = value
@@ -263,77 +262,66 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
     : undefined
 
   return (
-    <DropdownWrapper
-      open={open}
-      onClose={() => setOpen(false)}
-      trigger={
-        <button type="button" onClick={() => setOpen(o => !o)} className="w-full">
-          <DropdownTrigger label={displayValue} placeholder="Select date..." />
-        </button>
-      }
-    >
-      <div className="p-4 w-[280px]">
-        {/* Month nav */}
-        <div className="flex items-center justify-between mb-3">
-          <button type="button" onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="text-sm font-semibold">{CAL_MONTHS[viewMonth]} {viewYear}</span>
-          <button type="button" onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+    <div>
+      <button type="button" onClick={() => setOpen(o => !o)} className="w-full">
+        <DropdownTrigger label={displayValue} placeholder="Select date..." />
+      </button>
 
-        {/* Day headers */}
-        <div className="grid grid-cols-7 mb-1">
-          {CAL_DAYS.map((d, i) => (
-            <div key={i} className="text-center text-[10px] font-semibold text-muted-foreground/50 py-1">{d}</div>
-          ))}
-        </div>
+      {open && (
+        <div className="mt-2 bg-[#111116] border border-border/60 rounded-xl p-4">
+          {/* Month nav */}
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold">{CAL_MONTHS[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
 
-        {/* Day grid */}
-        <div className="grid grid-cols-7 gap-y-0.5">
-          {cells.map((day, i) => {
-            if (!day) return <div key={i} />
-            const cellDate = new Date(viewYear, viewMonth, day); cellDate.setHours(0,0,0,0)
-            const isToday = cellDate.getTime() === today.getTime()
-            const isSelected = selectedDate && cellDate.getTime() === selectedDate.getTime()
+          {/* Day headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {CAL_DAYS.map((d, i) => (
+              <div key={i} className="text-center text-[10px] font-semibold text-muted-foreground/50 py-1">{d}</div>
+            ))}
+          </div>
 
-            return (
-              <button
-                key={day}
-                type="button"
-                onClick={() => selectDay(day)}
-                className={cn(
-                  'w-8 h-8 mx-auto flex items-center justify-center rounded-full text-sm transition-all font-medium',
-                  isSelected
-                    ? 'bg-primary text-primary-foreground shadow-lg'
-                    : isToday
-                    ? 'border border-primary/50 text-primary'
+          {/* Day grid */}
+          <div className="grid grid-cols-7 gap-y-0.5">
+            {cells.map((day, i) => {
+              if (!day) return <div key={i} />
+              const cellDate = new Date(viewYear, viewMonth, day); cellDate.setHours(0,0,0,0)
+              const isToday = cellDate.getTime() === today.getTime()
+              const isSelected = selectedDate && cellDate.getTime() === selectedDate.getTime()
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => selectDay(day)}
+                  className={cn(
+                    'w-8 h-8 mx-auto flex items-center justify-center rounded-full text-sm transition-all font-medium',
+                    isSelected ? 'bg-primary text-primary-foreground shadow-lg'
+                    : isToday ? 'border border-primary/50 text-primary'
                     : 'text-foreground/80 hover:bg-white/10 hover:text-foreground'
-                )}
-              >
-                {day}
-              </button>
-            )
-          })}
-        </div>
+                  )}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
 
-        {/* Quick actions */}
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
-          <button
-            type="button"
-            onClick={() => { onChange(''); setOpen(false) }}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >Clear</button>
-          <button
-            type="button"
-            onClick={() => { onChange(today.toISOString().split('T')[0]); setOpen(false) }}
-            className="text-xs text-primary hover:text-primary/80 transition-colors font-medium"
-          >Today</button>
+          {/* Quick actions */}
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+            <button type="button" onClick={() => { onChange(''); setOpen(false) }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors">Clear</button>
+            <button type="button" onClick={() => { onChange(today.toISOString().split('T')[0]); setOpen(false) }}
+              className="text-xs text-primary hover:text-primary/80 transition-colors font-medium">Today</button>
+          </div>
         </div>
-      </div>
-    </DropdownWrapper>
+      )}
+    </div>
   )
 }
 
@@ -418,11 +406,11 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm bg-card border-border overflow-visible">
+      <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
           <DialogTitle>{payment ? 'Edit Payment' : 'Add Payment'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3 mt-2">
+        <form onSubmit={submit} className="space-y-4 mt-2">
           <div className="space-y-1.5">
             <Label>Client</Label>
             <ClientSelect value={form.client_id} clients={clients} onChange={id => set('client_id', id)} />
@@ -435,13 +423,24 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
 
           <div className="space-y-1.5">
             <Label>Custom Description <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-            <Input value={form.description} onChange={e => set('description', e.target.value)} placeholder='e.g. "Deposit (towards 2 weeks)"' className="bg-secondary/50" />
+            <input
+              value={form.description}
+              onChange={e => set('description', e.target.value)}
+              placeholder='e.g. "Deposit (towards 2 weeks)"'
+              className="w-full rounded-md border border-border bg-secondary/50 px-3 h-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Amount ($)</Label>
-              <Input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="500" className="bg-secondary/50" />
+              <input
+                type="number"
+                value={form.amount}
+                onChange={e => set('amount', e.target.value)}
+                placeholder="500"
+                className="w-full rounded-md border border-border bg-secondary/50 px-3 h-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Due Date</Label>
@@ -449,7 +448,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Status</Label>
               <StatusSelect value={form.status} onChange={v => set('status', v)} />
@@ -466,14 +465,14 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
               value={form.notes}
               onChange={e => set('notes', e.target.value)}
               placeholder="Optional notes..."
-              rows={2}
+              rows={3}
               className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none"
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={saving}>{saving ? 'Saving...' : payment ? 'Save Changes' : 'Add Payment'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saving...' : payment ? 'Save Changes' : 'Add Payment'}</Button>
           </div>
         </form>
       </DialogContent>
