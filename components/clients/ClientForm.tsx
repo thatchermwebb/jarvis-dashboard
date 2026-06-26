@@ -29,16 +29,15 @@ interface Props {
 }
 
 const STAGES: { value: ClientStage; label: string }[] = [
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'free_trial', label: 'Free Trial' },
-  { value: 'trial_ending_soon', label: 'Trial Ending Soon' },
-  { value: 'trial_concluded', label: 'Trial Concluded' },
-  { value: 'active_client', label: 'Active Client' },
-  { value: 'payment_issue', label: 'Payment Issue' },
-  { value: 'paused', label: 'Paused' },
-  { value: 'churn_risk', label: 'Churn Risk' },
-  { value: 'churned', label: 'Churned' },
-  { value: 'won_back', label: 'Won Back' },
+  { value: 'onboarding',        label: 'Onboarding' },
+  { value: 'free_trial_pending',label: 'Free Trial (Pending)' },
+  { value: 'free_trial',        label: 'Free Trial (Active)' },
+  { value: 'trial_concluded',   label: 'Free Trial (Complete)' },
+  { value: 'active_client',     label: 'Active' },
+  { value: 'overdue',           label: 'Overdue' },
+  { value: 'paused',            label: 'Paused' },
+  { value: 'churned',           label: 'Churned' },
+  { value: 'free_trial_lost',   label: 'Free Trial (Lost)' },
 ]
 
 export function ClientForm({ open, onClose, client, onSaved }: Props) {

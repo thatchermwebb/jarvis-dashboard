@@ -1,13 +1,16 @@
 export type ClientStage =
   | 'onboarding'
   | 'free_trial'
+  | 'free_trial_pending'
   | 'trial_ending_soon'
   | 'trial_concluded'
   | 'active_client'
+  | 'overdue'
   | 'payment_issue'
   | 'paused'
   | 'churn_risk'
   | 'churned'
+  | 'free_trial_lost'
   | 'won_back'
 
 export type ClientSentiment =

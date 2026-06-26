@@ -33,15 +33,18 @@ export function formatCurrency(amount?: number): string {
 export function stageLabel(stage: ClientStage): string {
   const labels: Record<ClientStage, string> = {
     onboarding: 'Onboarding',
-    free_trial: 'Free Trial',
-    trial_ending_soon: 'Trial Ending Soon',
-    trial_concluded: 'Trial Concluded',
-    active_client: 'Active Client',
-    payment_issue: 'Payment Issue',
+    free_trial: 'Free Trial (Active)',
+    free_trial_pending: 'Free Trial (Pending)',
+    trial_ending_soon: 'Free Trial (Active)',   // legacy — maps to same label
+    trial_concluded: 'Free Trial (Complete)',
+    active_client: 'Active',
+    overdue: 'Overdue',
+    payment_issue: 'Overdue',                   // legacy
     paused: 'Paused',
-    churn_risk: 'Churn Risk',
+    churn_risk: 'Overdue',                      // legacy
     churned: 'Churned',
-    won_back: 'Won Back',
+    free_trial_lost: 'Free Trial (Lost)',
+    won_back: 'Active',                         // legacy
   }
   return labels[stage] ?? stage
 }
@@ -50,14 +53,17 @@ export function stageColor(stage: ClientStage): string {
   const colors: Record<ClientStage, string> = {
     onboarding: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     free_trial: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
-    trial_ending_soon: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    trial_concluded: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+    free_trial_pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    trial_ending_soon: 'bg-violet-500/20 text-violet-300 border-violet-500/30',  // legacy
+    trial_concluded: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
     active_client: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    payment_issue: 'bg-red-500/20 text-red-300 border-red-500/30',
-    paused: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
-    churn_risk: 'bg-red-700/20 text-red-400 border-red-700/30',
+    overdue: 'bg-red-500/20 text-red-300 border-red-500/30',
+    payment_issue: 'bg-red-500/20 text-red-300 border-red-500/30',               // legacy
+    paused: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+    churn_risk: 'bg-red-500/20 text-red-300 border-red-500/30',                  // legacy
     churned: 'bg-slate-700/20 text-slate-400 border-slate-700/30',
-    won_back: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    free_trial_lost: 'bg-slate-700/20 text-slate-400 border-slate-700/30',
+    won_back: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',        // legacy
   }
   return colors[stage] ?? 'bg-slate-500/20 text-slate-300 border-slate-500/30'
 }

@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   Phone,
-  MessageSquare,
-  Voicemail,
-  Calendar,
   Star,
   Wrench,
   CreditCard,
@@ -89,18 +86,18 @@ export function CallQueueCard({ client, onUpdated }: Props) {
               >
                 {client.name}
               </button>
-              <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', stageColor(client.stage))}>
+              <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium', stageColor(client.stage))}>
                 {stageLabel(client.stage)}
-              </Badge>
+              </span>
               {client.payment_issue && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-300 border-red-500/30">
+                <span className="text-[11px] px-2 py-0.5 rounded-full border font-medium bg-red-500/20 text-red-300 border-red-500/30">
                   💳 Payment Issue
-                </Badge>
+                </span>
               )}
               {client.thatcher_needed && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-300 border-amber-500/30">
+                <span className="text-[11px] px-2 py-0.5 rounded-full border font-medium bg-amber-500/20 text-amber-300 border-amber-500/30">
                   ⭐ Needs Thatcher
-                </Badge>
+                </span>
               )}
             </div>
             {client.business_name && (
@@ -186,35 +183,10 @@ export function CallQueueCard({ client, onUpdated }: Props) {
         <div className="mt-3 flex items-center gap-1.5 flex-wrap">
           <Button
             size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+            className="h-8 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
             onClick={() => setLogOpen(true)}
           >
-            <Phone className="w-3 h-3" /> Answered
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1 border-border"
-            onClick={() => setLogOpen(true)}
-          >
-            <Voicemail className="w-3 h-3" /> Left VM
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1 border-border"
-            onClick={() => setLogOpen(true)}
-          >
-            <MessageSquare className="w-3 h-3" /> Texted
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1 border-border"
-            onClick={() => setLogOpen(true)}
-          >
-            <Calendar className="w-3 h-3" /> Booked
+            <Phone className="w-3.5 h-3.5" /> Log Call
           </Button>
           <Button
             size="sm"

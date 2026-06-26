@@ -58,7 +58,7 @@ export default function CallsPage() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const excluded = ['churned', 'trial_concluded', 'onboarding']
+    const excluded = ['churned', 'free_trial_lost', 'trial_concluded', 'onboarding']
     const queue = all.filter((c) => {
       if (excluded.includes(c.stage)) return false
       if (!c.next_followup_date && !c.last_contact_date) return true

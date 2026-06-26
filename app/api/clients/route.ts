@@ -9,6 +9,15 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const prioritized = searchParams.get('prioritized') === 'true'
 
+  // Auto-promote expired trials → trial_concluded (fire-and-forget, best effort)
+  const today = new Date().toISOString().slice(0, 10)
+  supabase
+    .from('clients')
+    .update({ stage: 'trial_concluded' })
+    .in('stage', ['free_trial', 'free_trial_pending', 'trial_ending_soon'])
+    .lt('trial_end', today)
+    .then(() => {})
+
   let query = supabase.from('clients').select('*').order('updated_at', { ascending: false })
 
   if (stage) query = query.eq('stage', stage)

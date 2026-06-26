@@ -2,17 +2,18 @@
 
 import { useRouter } from 'next/navigation'
 import { cn, stageLabel, formatDate } from '@/lib/utils'
-import type { Client, DashboardStats } from '@/types'
+import type { Client } from '@/types'
 
 interface StatCardProps {
   label: string
   value: number | string
   sub?: string
   color?: 'default' | 'red' | 'amber' | 'green' | 'violet'
-  onClick?: () => void
+  href?: string
 }
 
-export function StatCard({ label, value, sub, color = 'default', onClick }: StatCardProps) {
+export function StatCard({ label, value, sub, color = 'default', href }: StatCardProps) {
+  const router = useRouter()
   const colors = {
     default: 'border-border',
     red: 'border-red-500/30 bg-red-500/5',
@@ -30,15 +31,17 @@ export function StatCard({ label, value, sub, color = 'default', onClick }: Stat
 
   return (
     <button
-      onClick={onClick}
+      onClick={() => href && router.push(href)}
       className={cn(
-        'bg-card border rounded-xl px-4 py-3 text-left transition-all hover:scale-[1.01] active:scale-[0.99] w-full',
+        'bg-card border rounded-2xl px-5 py-4 text-left transition-all w-full',
+        href && 'hover:scale-[1.02] active:scale-[0.98] cursor-pointer hover:shadow-md',
+        !href && 'cursor-default',
         colors[color]
       )}
     >
-      <div className={cn('text-2xl font-bold tabular-nums', valueColors[color])}>{value}</div>
-      <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
-      {sub && <div className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</div>}
+      <div className={cn('text-3xl font-bold tabular-nums', valueColors[color])}>{value}</div>
+      <div className="text-sm text-muted-foreground mt-1">{label}</div>
+      {sub && <div className="text-xs text-muted-foreground/70 mt-0.5">{sub}</div>}
     </button>
   )
 }

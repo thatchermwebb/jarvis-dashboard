@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
-  ArrowLeft, Edit, Phone, ExternalLink, Star, Wrench, CreditCard,
+  ArrowLeft, ArrowRight, Edit, Phone, ExternalLink, Star, Wrench, CreditCard,
   AlertTriangle, TrendingDown, CheckCircle, Bot, Plus, Clock,
-  MessageSquare, Calendar
+  MessageSquare, Calendar, ChevronDown
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -44,6 +44,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; color: string; dot: string }[] = [
+  { value: 'active_client',      label: 'Active',                color: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20', dot: 'bg-emerald-400' },
+  { value: 'trial_concluded',    label: 'Free Trial (Complete)',  color: 'text-teal-300 bg-teal-500/10 border-teal-500/20 hover:bg-teal-500/20',           dot: 'bg-teal-400'    },
+  { value: 'free_trial',         label: 'Free Trial (Active)',    color: 'text-violet-300 bg-violet-500/10 border-violet-500/20 hover:bg-violet-500/20',   dot: 'bg-violet-400'  },
+  { value: 'free_trial_pending', label: 'Free Trial (Pending)',   color: 'text-amber-300 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20',       dot: 'bg-amber-400'   },
+  { value: 'onboarding',         label: 'Onboarding',             color: 'text-blue-300 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20',           dot: 'bg-blue-400'    },
+  { value: 'overdue',            label: 'Overdue',                color: 'text-red-300 bg-red-500/10 border-red-500/20 hover:bg-red-500/20',               dot: 'bg-red-400'     },
+  { value: 'paused',             label: 'Paused',                 color: 'text-slate-300 bg-slate-500/10 border-slate-500/20 hover:bg-slate-500/20',       dot: 'bg-slate-400'   },
+  { value: 'churned',            label: 'Churned',                color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
+  { value: 'free_trial_lost',    label: 'Free Trial (Lost)',      color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
+]
+
 export default function ClientWarRoom() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -54,6 +66,18 @@ export default function ClientWarRoom() {
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const [briefOpen, setBriefOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [stagePickerOpen, setStagePickerOpen] = useState(false)
+  const stagePickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (stagePickerRef.current && !stagePickerRef.current.contains(e.target as Node)) {
+        setStagePickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   const load = useCallback(async () => {
     const [clientRes, logsRes] = await Promise.all([
@@ -114,15 +138,55 @@ export default function ClientWarRoom() {
       <div className="max-w-6xl mx-auto space-y-5">
         {/* Header */}
         <div className="flex items-start gap-4">
-          <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-xs -ml-1" onClick={() => router.back()}>
-            <ArrowLeft className="w-3.5 h-3.5" /> Back
-          </Button>
+          {/* Back / Forward nav */}
+          <div className="flex items-center gap-1 -ml-1 flex-shrink-0">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => router.back()} title="Go back">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => router.forward()} title="Go forward">
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-foreground">{client.name}</h1>
-              <Badge variant="outline" className={cn(stageColor(client.stage))}>
-                {stageLabel(client.stage)}
-              </Badge>
+
+              {/* Inline stage picker */}
+              <div className="relative" ref={stagePickerRef}>
+                <button
+                  onClick={() => setStagePickerOpen(o => !o)}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all',
+                    stageColor(client.stage)
+                  )}
+                >
+                  {stageLabel(client.stage)}
+                  <ChevronDown className={cn('w-3 h-3 transition-transform', stagePickerOpen && 'rotate-180')} />
+                </button>
+                {stagePickerOpen && (
+                  <div className="absolute top-full left-0 mt-1.5 z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden min-w-[200px]">
+                    {STAGE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-xs transition-colors border-b border-border/50 last:border-0',
+                          opt.value === client.stage ? opt.color : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                        )}
+                        onClick={async () => {
+                          setStagePickerOpen(false)
+                          await quickUpdate({ stage: opt.value })
+                        }}
+                      >
+                        <span className={cn('w-2 h-2 rounded-full flex-shrink-0', opt.dot)} />
+                        {opt.label}
+                        {opt.value === client.stage && <span className="ml-auto text-[10px] opacity-60">current</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {client.payment_issue && (
                 <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/30">
                   💳 Payment Issue

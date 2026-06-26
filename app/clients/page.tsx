@@ -1,65 +1,51 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Search, AlertTriangle, Upload } from 'lucide-react'
+import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, ChevronLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
 import { cn, sentimentEmoji, timeAgo, formatCurrency } from '@/lib/utils'
-import type { Client } from '@/types'
+import type { Client, ClientStage } from '@/types'
 
-const GROUPS: { label: string; stages: string[]; color: string; border: string; dot: string }[] = [
-  {
-    label: 'Active',
-    stages: ['active_client', 'won_back'],
-    color: 'text-emerald-400',
-    border: 'border-l-emerald-500',
-    dot: 'bg-emerald-500',
-  },
-  {
-    label: 'Ready to Close',
-    stages: ['trial_concluded'],
-    color: 'text-yellow-400',
-    border: 'border-l-yellow-500',
-    dot: 'bg-yellow-500',
-  },
-  {
-    label: 'Trial Active',
-    stages: ['free_trial', 'trial_ending_soon'],
-    color: 'text-purple-400',
-    border: 'border-l-purple-500',
-    dot: 'bg-purple-500',
-  },
-  {
-    label: 'Onboarding',
-    stages: ['onboarding'],
-    color: 'text-blue-400',
-    border: 'border-l-blue-500',
-    dot: 'bg-blue-500',
-  },
-  {
-    label: 'Payments',
-    stages: ['payment_issue', 'paused'],
-    color: 'text-orange-400',
-    border: 'border-l-orange-500',
-    dot: 'bg-orange-500',
-  },
-  {
-    label: 'Churned',
-    stages: ['churned', 'churn_risk'],
-    color: 'text-muted-foreground',
-    border: 'border-l-border',
-    dot: 'bg-muted-foreground',
-  },
+const LIST_GROUPS = [
+  { label: 'Active',                stages: ['active_client', 'won_back'],           color: 'text-emerald-400', border: 'border-l-emerald-500', dot: 'bg-emerald-500' },
+  { label: 'Free Trial (Complete)', stages: ['trial_concluded'],                      color: 'text-teal-400',    border: 'border-l-teal-500',    dot: 'bg-teal-500'    },
+  { label: 'Free Trial (Active)',   stages: ['free_trial', 'trial_ending_soon'],      color: 'text-violet-400',  border: 'border-l-violet-500',  dot: 'bg-violet-500'  },
+  { label: 'Free Trial (Pending)',  stages: ['free_trial_pending'],                   color: 'text-amber-400',   border: 'border-l-amber-500',   dot: 'bg-amber-500'   },
+  { label: 'Onboarding',           stages: ['onboarding'],                            color: 'text-blue-400',    border: 'border-l-blue-500',    dot: 'bg-blue-500'    },
+  { label: 'Overdue',              stages: ['overdue', 'payment_issue', 'churn_risk'],color: 'text-red-400',     border: 'border-l-red-500',     dot: 'bg-red-500'     },
+  { label: 'Paused',               stages: ['paused'],                                color: 'text-slate-400',   border: 'border-l-slate-500',   dot: 'bg-slate-500'   },
+  { label: 'Churned / Lost',       stages: ['churned', 'free_trial_lost'],            color: 'text-muted-foreground', border: 'border-l-border', dot: 'bg-muted-foreground' },
 ]
 
-function isAtRisk(c: Client): boolean {
+const KANBAN_COLUMNS: { stage: ClientStage; label: string; headerBg: string; dot: string }[] = [
+  { stage: 'active_client',      label: 'Active',                headerBg: 'bg-emerald-500/15 border-emerald-500/30', dot: 'bg-emerald-400'      },
+  { stage: 'trial_concluded',    label: 'Free Trial (Complete)', headerBg: 'bg-teal-500/15 border-teal-500/30',       dot: 'bg-teal-400'         },
+  { stage: 'free_trial',         label: 'Free Trial (Active)',   headerBg: 'bg-violet-500/15 border-violet-500/30',   dot: 'bg-violet-400'       },
+  { stage: 'free_trial_pending', label: 'Free Trial (Pending)',  headerBg: 'bg-amber-500/15 border-amber-500/30',     dot: 'bg-amber-400'        },
+  { stage: 'onboarding',         label: 'Onboarding',            headerBg: 'bg-blue-500/15 border-blue-500/30',       dot: 'bg-blue-400'         },
+  { stage: 'overdue',            label: 'Overdue',               headerBg: 'bg-red-500/15 border-red-500/30',         dot: 'bg-red-400'          },
+  { stage: 'paused',             label: 'Paused',                headerBg: 'bg-slate-500/15 border-slate-500/30',     dot: 'bg-slate-400'        },
+  { stage: 'churned',            label: 'Churned',               headerBg: 'bg-secondary/60 border-border',           dot: 'bg-muted-foreground' },
+  { stage: 'free_trial_lost',    label: 'Free Trial (Lost)',     headerBg: 'bg-secondary/60 border-border',           dot: 'bg-muted-foreground' },
+]
+
+// URL ?filter= param → which stages to show
+const URL_FILTER_STAGES: Record<string, string[]> = {
+  free_trials:     ['free_trial', 'free_trial_pending', 'trial_ending_soon'],
+  ending_today:    ['free_trial', 'free_trial_pending', 'trial_ending_soon'],
+  payment_issues:  ['overdue', 'payment_issue', 'churn_risk'],
+  close_ready:     ['trial_concluded', 'free_trial', 'trial_ending_soon'],
+}
+
+function isAtRisk(c: Client) {
   return !!(
-    c.churn_risk_score && c.churn_risk_score >= 60 ||
-    c.urgency_level === 'critical' ||
-    c.urgency_level === 'high' ||
+    (c.churn_risk_score && c.churn_risk_score >= 60) ||
+    c.urgency_level === 'critical' || c.urgency_level === 'high' ||
     c.payment_issue ||
     ['frustrated', 'angry', 'ghosting'].includes(c.last_client_sentiment ?? '')
   )
@@ -68,50 +54,135 @@ function isAtRisk(c: Client): boolean {
 function ClientRow({ c, onClick }: { c: Client; onClick: () => void }) {
   const atRisk = isAtRisk(c)
   const overdue = c.next_followup_date && new Date(c.next_followup_date) < new Date()
-
   return (
-    <tr
-      onClick={onClick}
-      className="hover:bg-secondary/30 cursor-pointer transition-colors group"
-    >
+    <tr onClick={onClick} className="hover:bg-secondary/30 cursor-pointer transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground">{c.name}</span>
-          {atRisk && (
-            <span title="AT RISK" className="relative group/tip cursor-default">
-              <AlertTriangle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 rounded bg-red-950 border border-red-800 text-red-300 text-[10px] whitespace-nowrap opacity-0 group-hover/tip:opacity-100 pointer-events-none transition-opacity z-50">
-                AT RISK
-              </span>
-            </span>
+          <span className="font-medium">{c.name}</span>
+          {atRisk && <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
+        </div>
+        {c.business_name && <div className="text-xs text-muted-foreground">{c.business_name}</div>}
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{c.market_location || '—'}</td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{timeAgo(c.last_contact_date)}</td>
+      <td className="px-4 py-3 text-xs">
+        {c.next_followup_date
+          ? <span className={overdue ? 'text-red-400' : 'text-muted-foreground'}>{new Date(c.next_followup_date).toLocaleDateString()}</span>
+          : <span className="text-muted-foreground">—</span>}
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{c.monthly_retainer ? formatCurrency(c.monthly_retainer) : '—'}</td>
+      <td className="px-4 py-3 text-base">{sentimentEmoji(c.last_client_sentiment)}</td>
+    </tr>
+  )
+}
+
+function KanbanCard({
+  c,
+  onClick,
+  onDragStart,
+}: {
+  c: Client
+  onClick: () => void
+  onDragStart: (e: React.DragEvent, id: string) => void
+}) {
+  const atRisk = isAtRisk(c)
+  const overdue = c.next_followup_date && new Date(c.next_followup_date) < new Date()
+  return (
+    <div
+      draggable
+      onDragStart={e => onDragStart(e, c.id)}
+      onClick={onClick}
+      className="bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-primary/40 hover:bg-secondary/20 transition-all space-y-1.5 select-none"
+    >
+      <div className="flex items-start justify-between gap-1">
+        <div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium text-sm leading-tight">{c.name}</span>
+            {atRisk && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+          </div>
+          {c.business_name && <div className="text-xs text-muted-foreground leading-tight mt-0.5">{c.business_name}</div>}
+        </div>
+        <span className="text-base flex-shrink-0">{sentimentEmoji(c.last_client_sentiment)}</span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
+        {c.market_location && <span>{c.market_location}</span>}
+        {c.monthly_retainer && <span className="text-emerald-400 font-medium">{formatCurrency(c.monthly_retainer)}</span>}
+      </div>
+      {c.next_followup_date && (
+        <div className={cn('text-[11px]', overdue ? 'text-red-400' : 'text-muted-foreground')}>
+          📅 {new Date(c.next_followup_date).toLocaleDateString()}{overdue && ' (overdue)'}
+        </div>
+      )}
+      {c.last_contact_date && <div className="text-[11px] text-muted-foreground">Last: {timeAgo(c.last_contact_date)}</div>}
+    </div>
+  )
+}
+
+function KanbanColumn({
+  col,
+  clients,
+  onClientClick,
+  onDragStart,
+  onDrop,
+}: {
+  col: typeof KANBAN_COLUMNS[0]
+  clients: Client[]
+  onClientClick: (id: string) => void
+  onDragStart: (e: React.DragEvent, id: string) => void
+  onDrop: (stage: ClientStage) => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  return (
+    <div className={cn('flex-shrink-0 transition-all duration-200', collapsed ? 'w-12' : 'w-64')}>
+      {/* Header */}
+      <div
+        className={cn('flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-2 cursor-pointer select-none', col.headerBg)}
+        onClick={() => setCollapsed(c => !c)}
+      >
+        <span className={cn('w-2 h-2 rounded-full flex-shrink-0', col.dot)} />
+        {!collapsed ? (
+          <>
+            <span className="text-xs font-semibold flex-1 truncate">{col.label}</span>
+            <span className="text-xs text-muted-foreground font-normal">{clients.length}</span>
+          </>
+        ) : (
+          <ChevronLeft className="w-3 h-3 text-muted-foreground rotate-180" />
+        )}
+      </div>
+
+      {/* Drop zone */}
+      {!collapsed && (
+        <div
+          className={cn(
+            'min-h-[80px] rounded-xl transition-all space-y-2 p-1',
+            dragOver && 'bg-primary/5 ring-2 ring-primary/30 ring-dashed'
+          )}
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(col.stage) }}
+        >
+          {clients.length === 0 ? (
+            <div className={cn(
+              'text-[11px] text-muted-foreground text-center py-6 rounded-lg border border-dashed',
+              dragOver ? 'border-primary/40 text-primary/60' : 'bg-secondary/10 border-border'
+            )}>
+              {dragOver ? 'Drop here' : 'Empty'}
+            </div>
+          ) : (
+            clients.map(c => (
+              <KanbanCard
+                key={c.id}
+                c={c}
+                onClick={() => onClientClick(c.id)}
+                onDragStart={onDragStart}
+              />
+            ))
           )}
         </div>
-        {c.business_name && (
-          <div className="text-xs text-muted-foreground">{c.business_name}</div>
-        )}
-      </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
-        {c.market_location || '—'}
-      </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
-        {timeAgo(c.last_contact_date)}
-      </td>
-      <td className="px-4 py-3 text-xs">
-        {c.next_followup_date ? (
-          <span className={overdue ? 'text-red-400' : 'text-muted-foreground'}>
-            {new Date(c.next_followup_date).toLocaleDateString()}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
-        {c.monthly_retainer ? formatCurrency(c.monthly_retainer) : '—'}
-      </td>
-      <td className="px-4 py-3 text-base">
-        {sentimentEmoji(c.last_client_sentiment)}
-      </td>
-    </tr>
+      )}
+    </div>
   )
 }
 
@@ -123,6 +194,17 @@ function ClientsContent() {
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [formOpen, setFormOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const dragId = useRef<string | null>(null)
+
+  const urlFilter = searchParams.get('filter') ?? ''
+  const urlStage  = searchParams.get('stage') ?? ''
+  const view = (searchParams.get('view') ?? 'list') as 'list' | 'kanban'
+
+  function setView(v: 'list' | 'kanban') {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('view', v)
+    router.replace(`/clients?${params}`)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -136,19 +218,92 @@ function ClientsContent() {
 
   useEffect(() => { load() }, [load])
 
-  const visibleGroups = GROUPS.map((g) => ({
+  function handleDragStart(e: React.DragEvent, id: string) {
+    dragId.current = id
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  async function handleDrop(targetStage: ClientStage) {
+    const id = dragId.current
+    dragId.current = null
+    if (!id) return
+    const client = clients.find(c => c.id === id)
+    if (!client || client.stage === targetStage) return
+
+    // Optimistic update
+    setClients(prev => prev.map(c => c.id === id ? { ...c, stage: targetStage } : c))
+
+    try {
+      const res = await fetch(`/api/clients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: targetStage }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      // Revert on failure
+      setClients(prev => prev.map(c => c.id === id ? { ...c, stage: client.stage } : c))
+      toast.error('Failed to update stage')
+    }
+  }
+
+  function applyFilter(all: Client[]): Client[] {
+    if (urlFilter && URL_FILTER_STAGES[urlFilter]) {
+      let filtered = all.filter(c => URL_FILTER_STAGES[urlFilter].includes(c.stage))
+      if (urlFilter === 'ending_today') {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        filtered = filtered.filter(c => c.trial_end && c.trial_end.slice(0, 10) === todayStr)
+      }
+      if (urlFilter === 'close_ready') {
+        filtered = filtered.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready')
+      }
+      return filtered
+    }
+    if (urlStage) return all.filter(c => c.stage === urlStage)
+    return all
+  }
+
+  const visible = applyFilter(clients)
+
+  const filterLabel =
+    urlFilter === 'free_trials'    ? 'Free Trials' :
+    urlFilter === 'ending_today'   ? 'Ending Today' :
+    urlFilter === 'payment_issues' ? 'Overdue / Payment Issues' :
+    urlFilter === 'close_ready'    ? 'Close-Ready' :
+    urlStage                       ? urlStage.replace(/_/g, ' ') :
+    null
+
+  const visibleGroups = LIST_GROUPS.map(g => ({
     ...g,
-    clients: clients.filter((c) => g.stages.includes(c.stage ?? '')),
-  })).filter((g) => g.clients.length > 0)
+    clients: visible.filter(c => g.stages.includes(c.stage ?? '')),
+  })).filter(g => g.clients.length > 0)
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">All Clients</h1>
-          <p className="text-xs text-muted-foreground">{clients.length} total</p>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {filterLabel ?? 'All Clients'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {visible.length} clients
+            {filterLabel && (
+              <button className="ml-2 underline hover:text-foreground transition-colors" onClick={() => router.push('/clients')}>
+                Clear filter
+              </button>
+            )}
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-secondary/50 rounded-lg border border-border p-0.5">
+            <button onClick={() => setView('list')} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all', view === 'list' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <List className="w-3.5 h-3.5" /> List
+            </button>
+            <button onClick={() => setView('kanban')} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all', view === 'kanban' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <LayoutGrid className="w-3.5 h-3.5" /> Board
+            </button>
+          </div>
           <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setImportOpen(true)}>
             <Upload className="w-3.5 h-3.5" /> Import CSV
           </Button>
@@ -158,30 +313,24 @@ function ClientsContent() {
         </div>
       </div>
 
-      <div className="relative">
+      {/* Search */}
+      <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, phone, email..."
-          className="pl-9 h-9 bg-secondary/50 max-w-sm"
-        />
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email..." className="pl-9 h-9 bg-secondary/50" />
       </div>
 
       {loading ? (
         <div className="space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl h-24 animate-pulse" />
-          ))}
+          {[...Array(4)].map((_, i) => <div key={i} className="bg-card border border-border rounded-xl h-24 animate-pulse" />)}
         </div>
-      ) : clients.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center">
           <p className="text-muted-foreground mb-3">No clients found.</p>
           <Button size="sm" onClick={() => setFormOpen(true)}>Add First Client</Button>
         </div>
-      ) : (
+      ) : view === 'list' ? (
         <div className="space-y-6">
-          {visibleGroups.map((group) => (
+          {visibleGroups.map(group => (
             <div key={group.label}>
               <div className={cn('flex items-center gap-2 mb-2', group.color)}>
                 <span className={cn('w-2 h-2 rounded-full flex-shrink-0', group.dot)} />
@@ -201,14 +350,32 @@ function ClientsContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {group.clients.map((c) => (
-                      <ClientRow key={c.id} c={c} onClick={() => router.push(`/clients/${c.id}`)} />
-                    ))}
+                    {group.clients.map(c => <ClientRow key={c.id} c={c} onClick={() => router.push(`/clients/${c.id}`)} />)}
                   </tbody>
                 </table>
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-3 min-w-max">
+            {KANBAN_COLUMNS.map(col => (
+              <KanbanColumn
+                key={col.stage}
+                col={col}
+                clients={visible.filter(c => {
+                  if (col.stage === 'active_client') return c.stage === 'active_client' || c.stage === 'won_back'
+                  if (col.stage === 'free_trial')    return c.stage === 'free_trial' || c.stage === 'trial_ending_soon'
+                  if (col.stage === 'overdue')       return c.stage === 'overdue' || c.stage === 'payment_issue' || c.stage === 'churn_risk'
+                  return c.stage === col.stage
+                })}
+                onClientClick={id => router.push(`/clients/${id}`)}
+                onDragStart={handleDragStart}
+                onDrop={handleDrop}
+              />
+            ))}
+          </div>
         </div>
       )}
 
