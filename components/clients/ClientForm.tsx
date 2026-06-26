@@ -73,12 +73,15 @@ export function ClientForm({ open, onClose, client, onSaved }: Props) {
     if (!form.name.trim()) return toast.error('Name is required')
     setLoading(true)
 
-    const payload = {
-      ...form,
-      monthly_retainer: form.monthly_retainer ? Number(form.monthly_retainer) : null,
-      trial_start: form.trial_start || null,
-      trial_end: form.trial_end || null,
+    // Convert all empty strings to null, handle typed fields
+    const raw: Record<string, unknown> = { ...form }
+    const payload: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      payload[k] = typeof v === 'string' && v.trim() === '' ? null : v
     }
+    payload.monthly_retainer = form.monthly_retainer ? Number(form.monthly_retainer) : null
+    payload.trial_start = form.trial_start || null
+    payload.trial_end = form.trial_end || null
 
     try {
       const url = client ? `/api/clients/${client.id}` : '/api/clients'
