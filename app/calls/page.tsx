@@ -2,93 +2,94 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, CalendarPlus, ChevronDown, ChevronUp } from 'lucide-react'
+import { Phone, CalendarPlus, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
-import { ScheduleCallDialog } from '@/components/calls/ScheduleCallDialog'
+import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { cn, timeAgo } from '@/lib/utils'
 import type { Client } from '@/types'
 
+const OUTCOME_CONFIG: Record<string, { label: string; color: string }> = {
+  answered:       { label: 'Answered',       color: 'text-emerald-400' },
+  voicemail:      { label: 'Left VM',        color: 'text-yellow-400' },
+  texted:         { label: 'Texted',         color: 'text-blue-400' },
+  no_answer:      { label: 'No Answer',      color: 'text-muted-foreground' },
+  meeting_booked: { label: 'Meeting Booked', color: 'text-violet-400' },
+}
+
+const TYPE_ICON: Record<string, string> = {
+  call: '📞', text: '💬', voicemail: '📬', meeting: '📅', note: '📝', email: '✉️',
+}
+
 interface CommunicationLog {
   id: string
-  client_id: string
   created_at: string
+  client_id: string
   log_type: string
   outcome: string
   summary: string
   sentiment: string
   promises_made: string
+  objections: string
   next_step: string
   followup_date: string
   created_by: string
   client?: { id: string; name: string; business_name?: string }
 }
 
-const OUTCOME_CONFIG: Record<string, { label: string; color: string }> = {
-  answered:       { label: 'Answered',       color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
-  voicemail:      { label: 'Left VM',        color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
-  texted:         { label: 'Texted',         color: 'text-blue-400 border-blue-500/30 bg-blue-500/10' },
-  no_answer:      { label: 'No Answer',      color: 'text-muted-foreground border-border' },
-  meeting_booked: { label: 'Meeting Booked', color: 'text-violet-400 border-violet-500/30 bg-violet-500/10' },
-}
-
-const TYPE_ICON: Record<string, string> = {
-  call: '📞', text: '💬', voicemail: '📳', meeting: '📅', note: '📝', email: '✉️',
-}
-
-const SENTIMENT_EMOJI: Record<string, string> = {
-  happy: '😊', neutral: '😐', confused: '😕', concerned: '😟',
-  frustrated: '😤', angry: '😠', ghosting: '👻', close_ready: '🎯',
-}
-
 export default function CallsPage() {
   const router = useRouter()
   const [tab, setTab] = useState('queue')
-  const [clients, setClients] = useState<Client[]>([])
+  const [queueClients, setQueueClients] = useState<Client[]>([])
   const [logs, setLogs] = useState<CommunicationLog[]>([])
-  const [loadingClients, setLoadingClients] = useState(true)
-  const [loadingLogs, setLoadingLogs] = useState(true)
+  const [loadingQueue, setLoadingQueue] = useState(true)
+  const [loadingLog, setLoadingLog] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
-  const loadClients = useCallback(async () => {
-    setLoadingClients(true)
+  const loadQueue = useCallback(async () => {
+    setLoadingQueue(true)
     const res = await fetch('/api/clients?prioritized=true')
     const data = await res.json()
-    setClients(Array.isArray(data) ? data : [])
-    setLoadingClients(false)
+    const all: Client[] = Array.isArray(data) ? data : []
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const excluded = ['churned', 'trial_concluded', 'onboarding']
+    const queue = all.filter((c) => {
+      if (excluded.includes(c.stage)) return false
+      if (!c.next_followup_date && !c.last_contact_date) return true
+      if (c.next_followup_date) {
+        const due = new Date(c.next_followup_date)
+        due.setHours(0, 0, 0, 0)
+        return due <= today
+      }
+      return false
+    })
+    setQueueClients(queue)
+    setLoadingQueue(false)
   }, [])
 
-  const loadLogs = useCallback(async () => {
-    setLoadingLogs(true)
+  const loadLog = useCallback(async () => {
+    setLoadingLog(true)
     const res = await fetch('/api/communication-logs')
     const data = await res.json()
     setLogs(Array.isArray(data) ? data : [])
-    setLoadingLogs(false)
+    setLoadingLog(false)
   }, [])
 
-  useEffect(() => { loadClients() }, [loadClients])
-  useEffect(() => { if (tab === 'log') loadLogs() }, [tab, loadLogs])
-
-  // Queue: clients with a next_followup_date set (today or past), sorted by that date
-  const queue = clients
-    .filter(c => c.next_followup_date)
-    .sort((a, b) => new Date(a.next_followup_date!).getTime() - new Date(b.next_followup_date!).getTime())
-
-  const queueOverdue = queue.filter(c => new Date(c.next_followup_date!) <= new Date())
-  const queueUpcoming = queue.filter(c => new Date(c.next_followup_date!) > new Date())
-  const noFollowup = clients.filter(c => !c.next_followup_date && !['churned', 'trial_concluded', 'onboarding'].includes(c.stage))
+  useEffect(() => { loadQueue() }, [loadQueue])
+  useEffect(() => { if (tab === 'log') loadLog() }, [tab, loadLog])
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      {/* Header */}
+    <div className="max-w-3xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">Calls</h1>
-          <p className="text-xs text-muted-foreground">Schedule, track, and log all client calls</p>
+          <p className="text-xs text-muted-foreground">Manage your call queue and contact history</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setScheduleOpen(true)}>
@@ -101,139 +102,142 @@ export default function CallsPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-secondary/50">
-          <TabsTrigger value="queue" className="text-xs">
-            Call Queue {queue.length > 0 && <span className="ml-1.5 bg-primary/20 text-primary rounded-full px-1.5 py-0.5 text-[10px]">{queue.length}</span>}
+        <TabsList className="bg-secondary/50 h-9">
+          <TabsTrigger value="queue" className="text-xs px-5">
+            Call Queue
+            {queueClients.length > 0 && (
+              <span className="ml-1.5 bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[10px] font-bold">
+                {queueClients.length}
+              </span>
+            )}
           </TabsTrigger>
-          <TabsTrigger value="log" className="text-xs">Call Log</TabsTrigger>
+          <TabsTrigger value="log" className="text-xs px-5">Call Log</TabsTrigger>
         </TabsList>
 
-        {/* ── QUEUE TAB ── */}
-        <TabsContent value="queue" className="mt-4 space-y-6">
-          {loadingClients ? (
-            <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-36 bg-card border border-border rounded-xl animate-pulse" />)}</div>
-          ) : queue.length === 0 && noFollowup.length === 0 ? (
-            <EmptyState label="No calls scheduled. Use 'Schedule Call' to tee one up." />
+        <TabsContent value="queue" className="mt-4 space-y-3">
+          {loadingQueue ? (
+            [...Array(3)].map((_, i) => (
+              <div key={i} className="h-36 bg-card border border-border rounded-xl animate-pulse" />
+            ))
+          ) : queueClients.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-12 text-center space-y-2">
+              <div className="text-2xl">✅</div>
+              <div className="text-sm font-medium">Queue is clear</div>
+              <div className="text-xs text-muted-foreground">No calls due today. Schedule one or check back tomorrow.</div>
+            </div>
           ) : (
-            <>
-              {queueOverdue.length > 0 && (
-                <Section title="Overdue" color="text-red-400" count={queueOverdue.length}>
-                  {queueOverdue.map(c => <CallQueueCard key={c.id} client={c} onUpdated={loadClients} />)}
-                </Section>
-              )}
-              {queueUpcoming.length > 0 && (
-                <Section title="Upcoming" color="text-yellow-400" count={queueUpcoming.length}>
-                  {queueUpcoming.map(c => <CallQueueCard key={c.id} client={c} onUpdated={loadClients} />)}
-                </Section>
-              )}
-              {noFollowup.length > 0 && (
-                <Section title="No Call Scheduled" color="text-muted-foreground" count={noFollowup.length}>
-                  {noFollowup.map(c => <CallQueueCard key={c.id} client={c} onUpdated={loadClients} />)}
-                </Section>
-              )}
-            </>
+            queueClients.map((c) => <CallQueueCard key={c.id} client={c} onUpdated={loadQueue} />)
           )}
         </TabsContent>
 
-        {/* ── LOG TAB ── */}
         <TabsContent value="log" className="mt-4 space-y-2">
-          {loadingLogs ? (
-            <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-card border border-border rounded-xl animate-pulse" />)}</div>
-          ) : logs.length === 0 ? (
-            <EmptyState label="No calls logged yet. Use 'Log Call' to record a contact." />
-          ) : (
-            logs.map(log => (
-              <LogItem key={log.id} log={log} onClientClick={() => router.push(`/clients/${log.client_id}`)} />
+          {loadingLog ? (
+            [...Array(5)].map((_, i) => (
+              <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />
             ))
+          ) : logs.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground text-sm">
+              No calls logged yet. Use &quot;Log Call&quot; to record a contact.
+            </div>
+          ) : (
+            logs.map((log) => {
+              const cfg = OUTCOME_CONFIG[log.outcome] ?? { label: log.outcome, color: 'text-muted-foreground' }
+              const isExpanded = expandedLog === log.id
+              const clientName = log.client?.name ?? 'Unknown'
+              return (
+                <div key={log.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-secondary/20 transition-colors"
+                    onClick={() => setExpandedLog(isExpanded ? null : log.id)}
+                  >
+                    <span className="text-base">{TYPE_ICON[log.log_type] ?? '📞'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          className="font-medium text-sm hover:text-primary transition-colors"
+                          onClick={(e) => { e.stopPropagation(); router.push(`/clients/${log.client_id}`) }}
+                        >
+                          {clientName}
+                        </button>
+                        <span className={cn('text-xs font-medium', cfg.color)}>{cfg.label}</span>
+                        {log.sentiment && <span className="text-xs text-muted-foreground">{log.sentiment}</span>}
+                      </div>
+                      {log.summary && (
+                        <div className="text-xs text-muted-foreground truncate mt-0.5">{log.summary}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground">{timeAgo(log.created_at)}</span>
+                      {isExpanded
+                        ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                        : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-border px-4 py-3 space-y-3 bg-secondary/10">
+                      {log.summary && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Summary</div>
+                          <div className="text-sm">{log.summary}</div>
+                        </div>
+                      )}
+                      {log.promises_made && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Promises Made</div>
+                          <div className="text-sm">{log.promises_made}</div>
+                        </div>
+                      )}
+                      {log.objections && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Objections</div>
+                          <div className="text-sm">{log.objections}</div>
+                        </div>
+                      )}
+                      {log.next_step && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Next Step</div>
+                          <div className="text-sm">{log.next_step}</div>
+                        </div>
+                      )}
+                      {log.followup_date && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Follow-Up Scheduled</div>
+                          <div className="text-sm">{new Date(log.followup_date).toLocaleDateString()}</div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs text-muted-foreground">
+                          Logged by {log.created_by ?? 'Diego'} · {new Date(log.created_at).toLocaleString()}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs gap-1 text-muted-foreground"
+                          onClick={() => router.push(`/clients/${log.client_id}`)}
+                        >
+                          <ExternalLink className="w-3 h-3" /> View Client
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </TabsContent>
       </Tabs>
 
-      <LogCallDialog open={logOpen} onClose={() => setLogOpen(false)} onLogged={() => { loadClients(); loadLogs() }} />
-      <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} onSaved={loadClients} />
-    </div>
-  )
-}
-
-function Section({ title, color, count, children }: { title: string; color: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <div className={cn('text-xs font-semibold uppercase tracking-wider', color)}>
-        {title} <span className="text-muted-foreground font-normal">({count})</span>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground text-sm">{label}</div>
-  )
-}
-
-function LogItem({ log, onClientClick }: { log: CommunicationLog; onClientClick: () => void }) {
-  const [expanded, setExpanded] = useState(false)
-  const cfg = OUTCOME_CONFIG[log.outcome] ?? { label: log.outcome, color: 'text-muted-foreground border-border' }
-  const clientName = log.client?.name ?? 'Unknown Client'
-
-  const hasDetails = !!(log.summary || log.promises_made || log.next_step || log.followup_date || log.sentiment)
-
-  return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <div className="px-4 py-3 flex items-center gap-3">
-        <span className="text-lg leading-none flex-shrink-0">{TYPE_ICON[log.log_type] ?? '📞'}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={onClientClick} className="font-medium text-foreground hover:text-primary transition-colors text-sm">
-              {clientName}
-            </button>
-            {log.client?.business_name && (
-              <span className="text-xs text-muted-foreground">{log.client.business_name}</span>
-            )}
-            <Badge variant="outline" className={cn('text-[10px] px-1.5', cfg.color)}>{cfg.label}</Badge>
-            {log.sentiment && <span className="text-sm">{SENTIMENT_EMOJI[log.sentiment]}</span>}
-          </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {timeAgo(log.created_at)} · {log.created_by ?? 'Diego'}
-            {log.summary && <span className="text-foreground/70"> · {log.summary.slice(0, 80)}{log.summary.length > 80 ? '…' : ''}</span>}
-          </div>
-        </div>
-        {hasDetails && (
-          <button onClick={() => setExpanded(e => !e)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-        )}
-      </div>
-
-      {expanded && hasDetails && (
-        <div className="border-t border-border px-4 py-3 space-y-2 bg-secondary/20">
-          {log.summary && (
-            <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Summary</div>
-              <div className="text-sm">{log.summary}</div>
-            </div>
-          )}
-          {log.promises_made && (
-            <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Promises Made</div>
-              <div className="text-sm">{log.promises_made}</div>
-            </div>
-          )}
-          {log.next_step && (
-            <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Next Step</div>
-              <div className="text-sm">{log.next_step}</div>
-            </div>
-          )}
-          {log.followup_date && (
-            <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Follow-Up</div>
-              <div className="text-sm">{new Date(log.followup_date).toLocaleDateString()}</div>
-            </div>
-          )}
-        </div>
-      )}
+      <LogCallDialog
+        open={logOpen}
+        onClose={() => setLogOpen(false)}
+        onLogged={() => { loadQueue(); if (tab === 'log') loadLog() }}
+      />
+      <ScheduleCallDialog
+        open={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        onSaved={loadQueue}
+      />
     </div>
   )
 }
