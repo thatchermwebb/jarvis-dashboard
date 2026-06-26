@@ -450,7 +450,7 @@ export default function ClientWarRoom() {
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                     <span className="text-muted-foreground">Follow-up:</span>
-                    <span className={new Date(client.next_followup_date) < new Date() ? 'text-red-400' : 'text-foreground'}>
+                    <span className={new Date(client.next_followup_date + 'T00:00:00') < new Date() ? 'text-red-400' : 'text-foreground'}>
                       {formatDate(client.next_followup_date)}
                     </span>
                     {client.followup_reason && (
@@ -503,7 +503,14 @@ export default function ClientWarRoom() {
                               </span>
                             )}
                           </div>
-                          <span className="text-[10px] text-muted-foreground flex-shrink-0">{timeAgo(log.created_at)}</span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {log.created_by && (
+                              <span className="text-[9px] font-mono text-muted-foreground/30">
+                                {log.created_by === 'Diego' ? '(DC)' : log.created_by === 'Thatcher' ? '(TW)' : `(${log.created_by.slice(0,2).toUpperCase()})`}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">{timeAgo(log.created_at)}</span>
+                          </div>
                         </div>
                         {log.summary && (
                           <div className="text-sm text-foreground/90 mt-1.5">{log.summary}</div>

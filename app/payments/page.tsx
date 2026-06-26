@@ -443,7 +443,7 @@ function CalendarView({
       {/* Grid */}
       <div className="grid grid-cols-7" style={{ gridAutoRows: 'minmax(130px, auto)' }}>
         {cells.map((day, idx) => {
-          if (!day) return <div key={idx} className={cn('border-r border-b border-border/20 bg-background/10', idx % 7 === 6 && 'border-r-0')} />
+          if (!day) return <div key={`empty-${idx}`} className={cn('border-r border-b border-border/20 bg-background/10', idx % 7 === 6 && 'border-r-0')} />
 
           const cellDate = new Date(year, mo, day); cellDate.setHours(0,0,0,0)
           const isToday = cellDate.getTime() === today.getTime()
@@ -453,7 +453,7 @@ function CalendarView({
 
           return (
             <div
-              key={day}
+              key={`day-${idx}`}
               className={cn(
                 'border-r border-b border-border/20 p-2 min-h-[130px] cursor-pointer hover:bg-muted/10 transition-colors group/day',
                 isLastRow && 'border-b-0',

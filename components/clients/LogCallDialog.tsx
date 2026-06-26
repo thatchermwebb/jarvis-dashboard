@@ -69,6 +69,14 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
   const [selectedClient, setSelectedClient] = useState<Client | null>(preselectedClient ?? null)
   const [loading, setLoading] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
+  function getActiveUser(): string {
+    const cookie = document.cookie.split(';').find(c => c.trim().startsWith('cza_user='))
+    const userId = cookie?.split('=')[1]?.trim()
+    if (userId === 'thatcher') return 'Thatcher'
+    if (userId === 'trepp') return 'Trepp'
+    return 'Diego'
+  }
+
   const [form, setForm] = useState({
     log_type: 'call' as LogType,
     outcome: 'answered' as LogOutcome,
@@ -99,6 +107,9 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
     if (open) {
       setSelectedClient(preselectedClient ?? null)
       setSearch('')
+      if (!editLog) {
+        setForm(prev => ({ ...prev, created_by: getActiveUser() }))
+      }
     }
   }, [open, preselectedClient, editLog])
 
@@ -304,11 +315,16 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-1">
-            <Button type="button" variant="outline" size="lg" onClick={onClose}>Cancel</Button>
-            <Button type="submit" size="lg" disabled={loading}>
-              {loading ? 'Logging...' : 'Log Contact'}
-            </Button>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-muted-foreground/50 font-mono">
+              {form.created_by === 'Diego' ? '(DC)' : form.created_by === 'Thatcher' ? '(TW)' : form.created_by === 'Trepp' ? '(TG)' : ''} {form.created_by}
+            </span>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" size="lg" onClick={onClose}>Cancel</Button>
+              <Button type="submit" size="lg" disabled={loading}>
+                {loading ? 'Logging...' : 'Log Contact'}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

@@ -143,12 +143,16 @@ export default function ReportsPage() {
 
   // ── Helpers to enumerate days/weeks in range ──────────────────────────────────
 
+  function localDateStr(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
   function getDaysInRange(start: Date, end: Date): string[] {
     const days: string[] = []
     const cur = new Date(start); cur.setHours(0,0,0,0)
     const endDay = new Date(end); endDay.setHours(0,0,0,0)
     while (cur <= endDay) {
-      days.push(cur.toISOString().slice(0, 10))
+      days.push(localDateStr(cur))
       cur.setDate(cur.getDate() + 1)
     }
     return days
@@ -157,10 +161,10 @@ export default function ReportsPage() {
   function getWeeksInRange(start: Date, end: Date): string[] {
     const weeks: string[] = []
     const cur = new Date(start); cur.setHours(0,0,0,0)
-    cur.setDate(cur.getDate() - cur.getDay()) // back to Sunday
+    cur.setDate(cur.getDate() - cur.getDay()) // back to Sunday (local)
     const endDay = new Date(end); endDay.setHours(0,0,0,0)
     while (cur <= endDay) {
-      weeks.push(cur.toISOString().slice(0, 10))
+      weeks.push(localDateStr(cur))
       cur.setDate(cur.getDate() + 7)
     }
     return weeks
@@ -172,6 +176,7 @@ export default function ReportsPage() {
     const byDay: Record<string, number> = {}
     for (const p of paidInRange) {
       if (!p.paid_date) continue
+      // Use stored date string directly (already YYYY-MM-DD local date)
       const day = p.paid_date.slice(0, 10)
       byDay[day] = (byDay[day] ?? 0) + p.amount
     }
@@ -188,10 +193,12 @@ export default function ReportsPage() {
     const byWeek: Record<string, number> = {}
     for (const p of paidInRange) {
       if (!p.paid_date) continue
-      const d = new Date(p.paid_date)
-      const sun = new Date(d)
-      sun.setDate(d.getDate() - d.getDay())
-      const key = sun.toISOString().slice(0, 10)
+      // Parse as local date to avoid UTC shift
+      const [y, m, d] = p.paid_date.split('-').map(Number)
+      const date = new Date(y, m - 1, d)
+      const sun = new Date(date)
+      sun.setDate(date.getDate() - date.getDay())
+      const key = localDateStr(sun)
       byWeek[key] = (byWeek[key] ?? 0) + p.amount
     }
     const start = rangeStart ?? new Date(Math.min(...paidInRange.map(p => new Date(p.paid_date!).getTime())))

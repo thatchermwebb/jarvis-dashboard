@@ -182,6 +182,11 @@ export default function CallsPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {log.created_by && (
+                        <span className="text-[9px] font-mono text-muted-foreground/30">
+                          {log.created_by === 'Diego' ? '(DC)' : log.created_by === 'Thatcher' ? '(TW)' : log.created_by === 'Trepp' ? '(TG)' : `(${log.created_by.slice(0,2).toUpperCase()})`}
+                        </span>
+                      )}
                       <span className="text-xs text-muted-foreground">{timeAgo(log.created_at)}</span>
                       {isExpanded
                         ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />

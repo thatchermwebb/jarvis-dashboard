@@ -19,7 +19,9 @@ export function timeAgo(date?: string): string {
 export function formatDate(date?: string): string {
   if (!date) return '—'
   try {
-    return format(parseISO(date), 'MMM d, yyyy')
+    // Append local-midnight offset for date-only strings to avoid UTC→local shift
+    const iso = date.length === 10 ? date + 'T00:00:00' : date
+    return format(parseISO(iso), 'MMM d, yyyy')
   } catch {
     return '—'
   }
