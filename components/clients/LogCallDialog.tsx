@@ -12,6 +12,34 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { Client, LogType, LogOutcome, ClientSentiment } from '@/types'
 
+const LOG_TYPE_LABELS: Record<string, string> = {
+  call: '📞 Call',
+  voicemail: '📳 Voicemail',
+  text: '💬 Text',
+  meeting: '📅 Meeting',
+  note: '📝 Note',
+  email: '✉️ Email',
+}
+
+const OUTCOME_LABELS: Record<string, string> = {
+  answered: '✅ Answered',
+  voicemail: '📳 Left Voicemail',
+  texted: '💬 Texted',
+  no_answer: '❌ No Answer',
+  meeting_booked: '📅 Meeting Booked',
+}
+
+const SENTIMENT_LABELS: Record<string, string> = {
+  happy: '😊 Happy',
+  neutral: '😐 Neutral',
+  confused: '😕 Confused',
+  concerned: '😟 Concerned',
+  frustrated: '😤 Frustrated',
+  angry: '😠 Angry',
+  ghosting: '👻 Ghosting',
+  close_ready: '🎯 Close-Ready',
+}
+
 interface Props {
   open: boolean
   onClose: () => void
@@ -156,7 +184,9 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, onLogg
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">Type</Label>
               <Select value={form.log_type} onValueChange={v => v && set('log_type', v)}>
-                <SelectTrigger className="bg-secondary/50 h-11 text-base"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="bg-secondary/50 h-11 text-base">
+                  <span>{LOG_TYPE_LABELS[form.log_type] ?? form.log_type}</span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="call">📞 Call</SelectItem>
                   <SelectItem value="voicemail">📳 Voicemail</SelectItem>
@@ -170,7 +200,9 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, onLogg
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">Outcome</Label>
               <Select value={form.outcome} onValueChange={v => v && set('outcome', v)}>
-                <SelectTrigger className="bg-secondary/50 h-11 text-base"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="bg-secondary/50 h-11 text-base">
+                  <span>{OUTCOME_LABELS[form.outcome] ?? form.outcome}</span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="answered">✅ Answered</SelectItem>
                   <SelectItem value="voicemail">📳 Left Voicemail</SelectItem>
@@ -198,7 +230,11 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, onLogg
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">Client Sentiment</Label>
               <Select value={form.sentiment} onValueChange={v => v && set('sentiment', v)}>
-                <SelectTrigger className="bg-secondary/50 h-11 text-base"><SelectValue placeholder="Mood..." /></SelectTrigger>
+                <SelectTrigger className="bg-secondary/50 h-11 text-base">
+                  <span className={form.sentiment ? undefined : 'text-muted-foreground'}>
+                    {form.sentiment ? (SENTIMENT_LABELS[form.sentiment] ?? form.sentiment) : 'Mood...'}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="happy">😊 Happy</SelectItem>
                   <SelectItem value="neutral">😐 Neutral</SelectItem>

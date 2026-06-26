@@ -1,19 +1,14 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { TopBar } from '@/components/layout/TopBar'
-import { JARVISWidget } from '@/components/assistant/JARVISWidget'
+import { AuthProvider } from '@/contexts/AuthContext'
+import { AppShell } from '@/components/layout/AppShell'
 import { Toaster } from '@/components/ui/sonner'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
-})
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -28,18 +23,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <TopBar />
-            <main className="flex-1 overflow-y-auto p-6">
-              {children}
-            </main>
-          </div>
-        </div>
-        <JARVISWidget />
-        <Toaster theme="dark" />
+      <body className={`${inter.variable} antialiased bg-background text-foreground`}>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+          <Toaster theme="dark" />
+        </AuthProvider>
       </body>
     </html>
   )

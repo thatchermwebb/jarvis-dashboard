@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, CalendarPlus, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
@@ -85,33 +85,41 @@ export default function CallsPage() {
   useEffect(() => { if (tab === 'log') loadLog() }, [tab, loadLog])
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold">Calls</h1>
-          <p className="text-xs text-muted-foreground">Manage your call queue and contact history</p>
+          <h1 className="text-3xl font-bold tracking-tight">Calls</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage your call queue and contact history</p>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setScheduleOpen(true)}>
-            <CalendarPlus className="w-3.5 h-3.5" /> Schedule Call
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" variant="outline" className="h-9 px-4 text-sm border-border/60 text-muted-foreground hover:text-foreground" onClick={() => setScheduleOpen(true)}>
+            Schedule Call
           </Button>
-          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setLogOpen(true)}>
-            <Phone className="w-3.5 h-3.5" /> Log Call
+          <Button size="sm" className="h-9 px-4 text-sm bg-primary text-primary-foreground hover:bg-primary/90 font-medium" onClick={() => setLogOpen(true)}>
+            Log Call
           </Button>
         </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-secondary/50 h-9">
-          <TabsTrigger value="queue" className="text-xs px-5">
+        <TabsList className="bg-transparent border-b border-border/40 w-full justify-start rounded-none h-auto p-0 gap-0">
+          <TabsTrigger
+            value="queue"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground px-0 mr-6 pb-2.5 pt-0 text-sm font-medium bg-transparent data-[state=active]:bg-transparent shadow-none"
+          >
             Call Queue
             {queueClients.length > 0 && (
-              <span className="ml-1.5 bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[10px] font-bold">
+              <span className="ml-2 bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[11px] font-bold">
                 {queueClients.length}
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="log" className="text-xs px-5">Call Log</TabsTrigger>
+          <TabsTrigger
+            value="log"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground px-0 pb-2.5 pt-0 text-sm font-medium bg-transparent data-[state=active]:bg-transparent shadow-none"
+          >
+            Call Log
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="queue" className="mt-4 space-y-3">

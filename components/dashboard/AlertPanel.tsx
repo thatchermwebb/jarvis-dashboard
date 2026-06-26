@@ -66,16 +66,16 @@ export function AlertRow({ clients, type }: AlertRowProps) {
   if (!clients.length) return null
 
   return (
-    <div className={cn('border rounded-xl p-4', cfg.bg)}>
-      <div className={cn('text-xs font-medium mb-2', cfg.color)}>{cfg.label}</div>
-      <div className="space-y-1.5">
+    <div className={cn('border rounded-2xl p-5', cfg.bg)}>
+      <div className={cn('text-sm font-semibold mb-3 tracking-wide', cfg.color)}>{cfg.label}</div>
+      <div className="space-y-2">
         {clients.slice(0, 5).map((c) => (
           <button
             key={c.id}
             onClick={() => router.push(`/clients/${c.id}`)}
-            className="w-full text-left flex items-center justify-between hover:bg-white/5 rounded-md px-2 py-1 transition-colors"
+            className="w-full text-left flex items-center justify-between hover:bg-white/5 rounded-lg px-2 py-1.5 transition-colors group"
           >
-            <span className="text-sm text-foreground">{c.name}</span>
+            <span className="text-sm text-foreground group-hover:text-primary transition-colors">{c.name}</span>
             <span className="text-xs text-muted-foreground">
               {type === 'trials_ending' && c.trial_end ? `ends ${formatDate(c.trial_end)}` : ''}
               {type === 'payment_issues' ? 'payment failed' : ''}

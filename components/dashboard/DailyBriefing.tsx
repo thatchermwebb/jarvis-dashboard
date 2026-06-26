@@ -1,71 +1,154 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { formatCurrency } from '@/lib/utils'
-import type { DashboardStats } from '@/types'
+import { ChevronRight } from 'lucide-react'
+import { cn, formatCurrency } from '@/lib/utils'
+import type { DashboardStats, Client } from '@/types'
+
+export interface BriefingClientLists {
+  trials_ending: Client[]
+  payment_issues: Client[]
+  close_ready: Client[]
+  at_risk: Client[]
+  thatcher: Client[]
+  overdue: Client[]
+}
 
 interface Props {
   stats: DashboardStats
+  clientLists: BriefingClientLists
 }
 
-export function DailyBriefing({ stats }: Props) {
-  const today = format(new Date(), 'EEEE, MMMM d')
-
-  const lines: string[] = []
-  if (stats.trials_ending_today > 0)
-    lines.push(`🔥 ${stats.trials_ending_today} trial${stats.trials_ending_today > 1 ? 's' : ''} end${stats.trials_ending_today === 1 ? 's' : ''} today`)
-  if (stats.overdue_followups > 0)
-    lines.push(`📅 ${stats.overdue_followups} overdue follow-up${stats.overdue_followups > 1 ? 's' : ''}`)
-  if (stats.payment_issues > 0)
-    lines.push(`💳 ${stats.payment_issues} payment issue${stats.payment_issues > 1 ? 's' : ''} to resolve`)
-  if (stats.close_ready_trials > 0)
-    lines.push(`🎯 ${stats.close_ready_trials} trial${stats.close_ready_trials > 1 ? 's' : ''} close-ready — book Thatcher`)
-  if (stats.thatcher_needed > 0)
-    lines.push(`⭐ ${stats.thatcher_needed} client${stats.thatcher_needed > 1 ? 's' : ''} need${stats.thatcher_needed === 1 ? 's' : ''} Thatcher`)
-  if (stats.at_risk_clients > 0)
-    lines.push(`⚠️ ${stats.at_risk_clients} client${stats.at_risk_clients > 1 ? 's' : ''} at churn risk`)
-
-  if (lines.length === 0)
-    lines.push('✅ No critical items. Great shape today.')
+function ExpandableRow({
+  text,
+  clients,
+}: {
+  text: string
+  clients: Client[]
+}) {
+  const [open, setOpen] = useState(false)
+  const router = useRouter()
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Daily Briefing</div>
-          <div className="text-lg font-semibold text-foreground">{today}</div>
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 text-left w-full group"
+      >
+        <span className="text-base text-foreground/90 group-hover:text-foreground transition-colors">{text}</span>
+        <ChevronRight
+          className={cn(
+            'w-4 h-4 text-muted-foreground/50 transition-transform flex-shrink-0',
+            open && 'rotate-90'
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-2 ml-4 space-y-3 border-l border-border/40 pl-4">
+          {clients.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => router.push(`/clients/${c.id}`)}
+              className="block text-left w-full hover:bg-white/3 rounded-lg py-1 -mx-2 px-2 transition-colors"
+            >
+              <div className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                {c.name}
+              </div>
+              {(c.business_name || c.market_location) && (
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {[c.business_name, c.market_location].filter(Boolean).join(' · ')}
+                </div>
+              )}
+            </button>
+          ))}
         </div>
-        <div className="text-right">
-          <div className="text-xs text-muted-foreground">MRR</div>
-          <div className="text-xl font-bold text-emerald-400">{formatCurrency(stats.monthly_recurring_revenue)}</div>
-          <div className="text-xs text-muted-foreground">{stats.active_clients} active clients</div>
-        </div>
-      </div>
+      )}
+    </div>
+  )
+}
 
-      <div className="mt-4 space-y-1.5">
-        {lines.map((line, i) => (
-          <div key={i} className="text-sm text-foreground/90">
-            {line}
+export function DailyBriefing({ stats, clientLists }: Props) {
+  const today = format(new Date(), 'EEEE, MMMM d')
+
+  const rows: { text: string; clients: Client[] }[] = []
+
+  if (stats.trials_ending_today > 0)
+    rows.push({
+      text: `🔥 ${stats.trials_ending_today} trial${stats.trials_ending_today > 1 ? 's' : ''} end${stats.trials_ending_today === 1 ? 's' : ''} today`,
+      clients: clientLists.trials_ending,
+    })
+  if (stats.overdue_followups > 0)
+    rows.push({
+      text: `📅 ${stats.overdue_followups} overdue follow-up${stats.overdue_followups > 1 ? 's' : ''}`,
+      clients: clientLists.overdue,
+    })
+  if (stats.payment_issues > 0)
+    rows.push({
+      text: `💳 ${stats.payment_issues} payment issue${stats.payment_issues > 1 ? 's' : ''} to resolve`,
+      clients: clientLists.payment_issues,
+    })
+  if (stats.close_ready_trials > 0)
+    rows.push({
+      text: `🎯 ${stats.close_ready_trials} trial${stats.close_ready_trials > 1 ? 's' : ''} close-ready — book Thatcher`,
+      clients: clientLists.close_ready,
+    })
+  if (stats.thatcher_needed > 0)
+    rows.push({
+      text: `⭐ ${stats.thatcher_needed} client${stats.thatcher_needed > 1 ? 's' : ''} need${stats.thatcher_needed === 1 ? 's' : ''} Thatcher`,
+      clients: clientLists.thatcher,
+    })
+  if (stats.at_risk_clients > 0)
+    rows.push({
+      text: `⚠️ ${stats.at_risk_clients} client${stats.at_risk_clients > 1 ? 's' : ''} at churn risk`,
+      clients: clientLists.at_risk,
+    })
+
+  const allClear = rows.length === 0
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-7">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <div className="text-[11px] text-muted-foreground uppercase tracking-widest mb-2">Daily Briefing</div>
+          <div className="text-3xl font-bold text-foreground">{today}</div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">MRR</div>
+          <div className="text-4xl font-bold text-emerald-400 leading-none">
+            {formatCurrency(stats.monthly_recurring_revenue)}
           </div>
-        ))}
+          <div className="text-sm text-muted-foreground mt-1.5">{stats.active_clients} active clients</div>
+        </div>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-border grid grid-cols-4 gap-3 text-center">
+      <div className="mt-6 space-y-3">
+        {allClear ? (
+          <div className="text-base text-foreground/80">✅ No critical items. Great shape today.</div>
+        ) : (
+          rows.map((row, i) => (
+            <ExpandableRow key={i} text={row.text} clients={row.clients} />
+          ))
+        )}
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-border grid grid-cols-4 gap-4 text-center">
         <div>
-          <div className="text-lg font-bold text-violet-400">{stats.free_trials}</div>
-          <div className="text-[10px] text-muted-foreground">Active Trials</div>
+          <div className="text-2xl font-bold text-violet-400">{stats.free_trials}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Active Trials</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-amber-400">{stats.trials_ending_this_week}</div>
-          <div className="text-[10px] text-muted-foreground">Ending This Week</div>
+          <div className="text-2xl font-bold text-amber-400">{stats.trials_ending_this_week}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Ending This Week</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-blue-400">{stats.va_tasks_open}</div>
-          <div className="text-[10px] text-muted-foreground">VA Tasks Open</div>
+          <div className="text-2xl font-bold text-blue-400">{stats.va_tasks_open}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">VA Tasks Open</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-foreground">{stats.active_clients + stats.free_trials}</div>
-          <div className="text-[10px] text-muted-foreground">Total Managed</div>
+          <div className="text-2xl font-bold text-foreground">{stats.active_clients + stats.free_trials}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Total Managed</div>
         </div>
       </div>
     </div>

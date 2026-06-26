@@ -6,8 +6,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const body = await req.json()
 
+  // Auto-set paid_date; determine paid vs paid_late based on whether paid on or after due date
   if (body.status === 'paid' || body.status === 'paid_late') {
     if (!body.paid_date) body.paid_date = new Date().toISOString().split('T')[0]
+    // If caller sent status='paid' but we need to check due_date
+    if (body.status === 'paid' && body.due_date) {
+      const due = new Date(body.due_date + 'T00:00:00')
+      const paid = new Date(body.paid_date + 'T00:00:00')
+      if (paid > due) body.status = 'paid_late'
+    }
   }
 
   const { data, error } = await supabase

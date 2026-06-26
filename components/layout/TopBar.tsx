@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Phone } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
@@ -40,24 +40,20 @@ export function TopBar() {
         <div className="flex items-center gap-2 ml-auto">
           <Button
             size="sm"
-            variant="outline"
-            className="h-8 gap-1.5 text-xs border-border"
+            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
             onClick={() => setLogCallOpen(true)}
           >
-            <Phone className="w-3.5 h-3.5" />
             Log Call
           </Button>
 
           <Button
             size="sm"
             variant="outline"
-            className="h-8 gap-1.5 text-xs border-border"
+            className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10"
             onClick={() => setClientFormOpen(true)}
           >
-            <Plus className="w-3.5 h-3.5" />
             Add Client
           </Button>
-
         </div>
       </header>
 

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { sortClientsByPriority } from '@/lib/scoring'
-import { DailyBriefing } from '@/components/dashboard/DailyBriefing'
+import { DailyBriefing, type BriefingClientLists } from '@/components/dashboard/DailyBriefing'
 import { StatCard, AlertRow } from '@/components/dashboard/AlertPanel'
 import { CollapsibleQueue } from '@/components/dashboard/CollapsibleQueue'
 import { isAfter, isBefore, addDays, startOfDay } from 'date-fns'
@@ -53,14 +53,25 @@ export default async function CommandCenter() {
     .slice(0, 5)
 
   const trialsEndingSoon     = trialClients.filter(c => c.trial_end && isBefore(new Date(c.trial_end), in48h))
+  const trialsEndingToday    = trialClients.filter(c => c.trial_end && startOfDay(new Date(c.trial_end)).getTime() === today.getTime())
   const paymentIssueClients  = allClients.filter(c => c.payment_issue || c.stage === 'overdue' || c.stage === 'payment_issue')
   const atRiskClients        = allClients.filter(c => c.stage === 'overdue' || c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60)
   const overdueClients       = allClients.filter(c => c.next_followup_date && isBefore(new Date(c.next_followup_date), today))
   const thatcherClients      = allClients.filter(c => c.thatcher_needed)
+  const closeReadyClients    = trialClients.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready')
+
+  const briefingLists: BriefingClientLists = {
+    trials_ending: trialsEndingToday.length > 0 ? trialsEndingToday : trialsEndingSoon,
+    payment_issues: paymentIssueClients,
+    close_ready: closeReadyClients,
+    at_risk: atRiskClients,
+    thatcher: thatcherClients,
+    overdue: overdueClients,
+  }
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
-      <DailyBriefing stats={stats} />
+      <DailyBriefing stats={stats} clientLists={briefingLists} />
 
       {/* Stat cards — clickable, bigger */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -102,25 +113,32 @@ export default async function CommandCenter() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Priority queue — collapsible */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 order-2 lg:order-1">
           <CollapsibleQueue clients={prioritized} />
         </div>
 
-        {/* Alerts */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Alerts</h2>
+        {/* Alerts — shown first on mobile, visually prominent */}
+        <div className="order-1 lg:order-2">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-xl font-bold">Alerts</h2>
+            {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].some(a => a.length > 0) && (
+              <span className="text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5">
+                {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].reduce((n, a) => n + a.length, 0)}
+              </span>
+            )}
+          </div>
           {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].every(a => !a.length) ? (
             <div className="bg-card border border-border rounded-xl p-6 text-center text-muted-foreground text-sm">
               No urgent alerts right now.
             </div>
           ) : (
-            <>
+            <div className="space-y-3">
               <AlertRow clients={trialsEndingSoon}    type="trials_ending" />
               <AlertRow clients={paymentIssueClients} type="payment_issues" />
               <AlertRow clients={thatcherClients}     type="thatcher" />
               <AlertRow clients={atRiskClients}       type="at_risk" />
               <AlertRow clients={overdueClients}      type="overdue" />
-            </>
+            </div>
           )}
         </div>
       </div>

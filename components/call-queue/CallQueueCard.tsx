@@ -3,28 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import {
-  Phone,
-  Star,
-  Wrench,
-  CreditCard,
-  TrendingDown,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import {
   cn,
   stageLabel,
-  stageColor,
   sentimentEmoji,
   sentimentColor,
   cplStatusColor,
   timeAgo,
-  formatDate,
   formatCurrency,
 } from '@/lib/utils'
 import type { Client } from '@/types'
@@ -61,71 +48,57 @@ export function CallQueueCard({ client, onUpdated }: Props) {
     }
   }
 
-  const isHighPriority = score >= 70
-  const isCritical = score >= 100
+  // Stage as plain text label (e.g. "Free Trial · Active")
+  function stagePlainText(stage: string) {
+    const map: Record<string, string> = {
+      onboarding: 'Onboarding',
+      free_trial: 'Free Trial · Active',
+      free_trial_pending: 'Free Trial · Pending',
+      trial_concluded: 'Free Trial · Complete',
+      active_client: 'Active Client',
+      overdue: 'Overdue',
+      paused: 'Paused',
+      churn_risk: 'Churn Risk',
+      churned: 'Churned',
+      free_trial_lost: 'Free Trial · Lost',
+    }
+    return map[stage] ?? stage
+  }
 
   return (
     <>
-      <div
-        className={cn(
-          'bg-card border rounded-xl p-4 transition-all',
-          isCritical
-            ? 'border-red-500/40 priority-critical'
-            : isHighPriority
-            ? 'border-violet-500/30'
-            : 'border-border hover:border-border/80'
-        )}
-      >
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-3">
+      <div className="bg-card rounded-2xl overflow-hidden border border-border/40">
+        {/* Main row */}
+        <div className="flex items-start gap-6 px-6 py-5">
+          {/* Left: name + business */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => router.push(`/clients/${client.id}`)}
-                className="font-semibold text-foreground hover:text-primary transition-colors text-base"
-              >
-                {client.name}
-              </button>
-              <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium', stageColor(client.stage))}>
-                {stageLabel(client.stage)}
-              </span>
-              {client.payment_issue && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full border font-medium bg-red-500/20 text-red-300 border-red-500/30">
-                  💳 Payment Issue
-                </span>
-              )}
-              {client.thatcher_needed && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full border font-medium bg-amber-500/20 text-amber-300 border-amber-500/30">
-                  ⭐ Needs Thatcher
-                </span>
-              )}
-            </div>
-            {client.business_name && (
-              <div className="text-xs text-muted-foreground mt-0.5">{client.business_name} · {client.market_location}</div>
+            <button
+              onClick={() => router.push(`/clients/${client.id}`)}
+              className="text-lg font-semibold text-foreground hover:text-primary transition-colors text-left"
+            >
+              {client.name}
+            </button>
+            {(client.business_name || client.market_location) && (
+              <div className="text-sm text-muted-foreground mt-0.5">
+                {[client.business_name, client.market_location].filter(Boolean).join(' · ')}
+              </div>
             )}
           </div>
 
-          {/* Priority score */}
-          <div className={cn(
-            'flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold',
-            isCritical ? 'bg-red-500/20 text-red-300' : isHighPriority ? 'bg-violet-500/20 text-violet-300' : 'bg-secondary text-muted-foreground'
-          )}>
-            {score}
+          {/* Center: stage text */}
+          <div className="flex-shrink-0 text-right hidden sm:block">
+            <div className="text-sm text-muted-foreground">{stagePlainText(client.stage)}</div>
+          </div>
+
+          {/* Right: priority score — small, unobtrusive */}
+          <div className="flex-shrink-0 text-right">
+            <div className="text-[10px] text-muted-foreground/40 uppercase tracking-wider mb-0.5">Score</div>
+            <div className="text-sm font-semibold text-muted-foreground/60 tabular-nums">{score}</div>
           </div>
         </div>
 
         {/* Metrics row */}
-        <div className="mt-3 flex items-center gap-4 text-xs flex-wrap">
-          {client.last_contact_date && (
-            <span className="text-muted-foreground">
-              Last contact: <span className="text-foreground">{timeAgo(client.last_contact_date)}</span>
-            </span>
-          )}
-          {client.last_client_sentiment && (
-            <span className={sentimentColor(client.last_client_sentiment)}>
-              {sentimentEmoji(client.last_client_sentiment)} {client.last_client_sentiment}
-            </span>
-          )}
+        <div className="px-6 pb-3 flex items-center gap-5 flex-wrap text-sm text-muted-foreground">
           {daysLeft !== null && daysLeft !== undefined && (
             <span className={cn(
               'font-medium',
@@ -134,104 +107,115 @@ export function CallQueueCard({ client, onUpdated }: Props) {
               {daysLeft <= 0 ? '🔥 Trial ended' : daysLeft === 1 ? '⚡ Trial ends tomorrow' : `Trial ends in ${daysLeft}d`}
             </span>
           )}
-          {client.cpl != null && (
-            <span className={cplStatusColor(client.cpl)}>
-              ${client.cpl} CPL
+          {client.last_contact_date && (
+            <span>Last contact: <span className="text-foreground/70">{timeAgo(client.last_contact_date)}</span></span>
+          )}
+          {client.last_client_sentiment && (
+            <span className={sentimentColor(client.last_client_sentiment)}>
+              {sentimentEmoji(client.last_client_sentiment)} {client.last_client_sentiment}
             </span>
           )}
-          {client.leads != null && <span className="text-muted-foreground">{client.leads} leads</span>}
-          {client.phone_numbers_collected != null && (
-            <span className="text-muted-foreground">{client.phone_numbers_collected} numbers</span>
+          {client.leads != null && (
+            <span>{client.leads} <span className="text-muted-foreground/60 text-xs">leads</span></span>
           )}
-          {client.bookings != null && <span className="text-muted-foreground">{client.bookings} booked</span>}
+          {client.phone_numbers_collected != null && (
+            <span>{client.phone_numbers_collected} <span className="text-muted-foreground/60 text-xs">numbers</span></span>
+          )}
+          {client.bookings != null && (
+            <span>{client.bookings} <span className="text-muted-foreground/60 text-xs">booked</span></span>
+          )}
+          {client.cpl != null && (
+            <span className={cplStatusColor(client.cpl)}>${client.cpl} CPL</span>
+          )}
         </div>
 
-        {/* Last summary */}
+        {/* Call summary */}
         {client.last_call_summary && (
-          <div className="mt-2 text-xs text-muted-foreground bg-secondary/30 rounded-md px-3 py-2 line-clamp-2">
+          <div className="px-6 pb-3 text-sm text-muted-foreground/80 line-clamp-1">
             {client.last_call_summary}
-          </div>
-        )}
-
-        {/* Next step */}
-        {client.followup_reason && (
-          <div className="mt-2 text-xs">
-            <span className="text-muted-foreground">Next: </span>
-            <span className="text-foreground">{client.followup_reason}</span>
           </div>
         )}
 
         {/* Suggested message (collapsible) */}
         {client.suggested_message && (
-          <div className="mt-2">
+          <div className="px-6 pb-3">
             <button
               onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
+              className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary"
             >
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               Suggested message
             </button>
             {expanded && (
-              <div className="mt-1.5 text-xs text-slate-300 bg-violet-500/10 border border-violet-500/20 rounded-md px-3 py-2 italic">
+              <div className="mt-1.5 text-sm text-muted-foreground bg-primary/5 border border-primary/10 rounded-lg px-4 py-2.5 italic">
                 "{client.suggested_message}"
               </div>
             )}
           </div>
         )}
 
-        {/* Quick action buttons */}
-        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-          <Button
-            size="sm"
-            className="h-8 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+        {/* Action buttons */}
+        <div className="border-t border-border/40 px-6 py-3 flex items-center gap-2 flex-wrap bg-background/30">
+          <button
             onClick={() => setLogOpen(true)}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            <Phone className="w-3.5 h-3.5" /> Log Call
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className={cn('h-7 text-xs gap-1', client.thatcher_needed ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-border')}
+            Log Call
+          </button>
+          <button
             onClick={() => quickAction({ thatcher_needed: !client.thatcher_needed })}
             disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.thatcher_needed
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            )}
           >
-            <Star className="w-3 h-3" /> Thatcher
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className={cn('h-7 text-xs gap-1', client.va_needed ? 'border-blue-500/40 bg-blue-500/10 text-blue-300' : 'border-border')}
+            Thatcher
+          </button>
+          <button
             onClick={() => quickAction({ va_needed: !client.va_needed })}
             disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.va_needed
+                ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            )}
           >
-            <Wrench className="w-3 h-3" /> VA Needed
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className={cn('h-7 text-xs gap-1', client.payment_issue ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-border')}
+            VA Needed
+          </button>
+          <button
             onClick={() => quickAction({ payment_issue: !client.payment_issue })}
             disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.payment_issue
+                ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            )}
           >
-            <CreditCard className="w-3 h-3" /> Payment
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className={cn('h-7 text-xs gap-1', client.stage === 'churn_risk' ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-border')}
+            Payment
+          </button>
+          <button
             onClick={() => quickAction({ stage: client.stage === 'churn_risk' ? 'active_client' : 'churn_risk' })}
             disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.stage === 'churn_risk'
+                ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                : 'border-primary/30 text-primary/70 hover:text-primary hover:border-primary/50'
+            )}
           >
-            <TrendingDown className="w-3 h-3" /> Churn Risk
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs gap-1 ml-auto text-muted-foreground"
+            Churn Risk
+          </button>
+          <button
             onClick={() => router.push(`/clients/${client.id}`)}
+            className="ml-auto text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
           >
-            <ExternalLink className="w-3 h-3" /> Details
-          </Button>
+            Details →
+          </button>
         </div>
       </div>
 

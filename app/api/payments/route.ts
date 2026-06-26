@@ -24,9 +24,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const body = await req.json()
 
-  // Auto-mark overdue on creation if past due
-  if (body.status === 'pending' && body.due_date && new Date(body.due_date) < new Date()) {
-    body.status = 'overdue'
+  // Overdue only if due_date is strictly before today (yesterday or earlier)
+  if (body.status === 'pending' && body.due_date) {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const due = new Date(body.due_date + 'T00:00:00')
+    if (due < today) body.status = 'overdue'
   }
 
   const { data, error } = await supabase.from('payments').insert(body).select().single()

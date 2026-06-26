@@ -210,7 +210,8 @@ export interface CloseBrief {
   }
 }
 
-export type PaymentEntryStatus = 'pending' | 'paid' | 'paid_late' | 'overdue' | 'waived'
+export type PaymentEntryStatus = 'pending' | 'paid' | 'paid_late' | 'overdue' | 'waived' | 'voided'
+export type PaymentSource = 'stripe' | 'zelle' | 'other'
 export type PaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'one_time'
 export type PaymentType =
   | 'retainer_monthly'
@@ -219,6 +220,7 @@ export type PaymentType =
   | 'deposit'
   | 'remaining_balance'
   | 'one_time'
+  | 'partial_payment'
 
 export interface Payment {
   id: string
@@ -227,10 +229,12 @@ export interface Payment {
   client_id: string
   schedule_id?: string
   payment_type: PaymentType
+  description?: string
   amount: number
   due_date: string
   paid_date?: string
   status: PaymentEntryStatus
+  source?: PaymentSource
   notes?: string
   client?: Pick<Client, 'id' | 'name' | 'business_name'>
 }
