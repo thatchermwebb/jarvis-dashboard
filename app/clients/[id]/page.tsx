@@ -25,7 +25,7 @@ import {
   cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
   daysUntil,
 } from '@/lib/utils'
-import { getTrialHealthLabel, getChurnRiskLabel } from '@/lib/scoring'
+import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
 import type { Client, CommunicationLog } from '@/types'
 
 function Field({ label, value, mono = false }: { label: string; value?: string | number | null; mono?: boolean }) {
@@ -262,39 +262,46 @@ export default function ClientWarRoom() {
         {/* Quick action chips */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => quickUpdate({ thatcher_needed: !client.thatcher_needed })}
-            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.thatcher_needed ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'border-border text-muted-foreground hover:border-amber-500/30 hover:text-amber-300')}
-            disabled={updating}
-          >
-            ⭐ Needs Thatcher
-          </button>
-          <button
-            onClick={() => quickUpdate({ va_needed: !client.va_needed })}
-            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.va_needed ? 'bg-blue-500/20 border-blue-500/30 text-blue-300' : 'border-border text-muted-foreground hover:border-blue-500/30')}
-            disabled={updating}
-          >
-            🔧 VA Needed
-          </button>
-          <button
             onClick={() => quickUpdate({ payment_issue: !client.payment_issue })}
-            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.payment_issue ? 'bg-red-500/20 border-red-500/30 text-red-300' : 'border-border text-muted-foreground hover:border-red-500/30')}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.payment_issue ? 'bg-red-500/20 border-red-500/30 text-red-300' : 'border-border text-muted-foreground hover:border-red-500/30 hover:text-red-300')}
             disabled={updating}
           >
             💳 Payment Issue
           </button>
           <button
-            onClick={() => quickUpdate({ last_client_sentiment: 'close_ready' })}
-            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.last_client_sentiment === 'close_ready' ? 'bg-violet-500/20 border-violet-500/30 text-violet-300' : 'border-border text-muted-foreground hover:border-violet-500/30')}
+            onClick={() => quickUpdate({ thatcher_needed: !client.thatcher_needed })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.thatcher_needed ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'border-border text-muted-foreground hover:border-amber-500/30 hover:text-amber-300')}
             disabled={updating}
           >
-            🎯 Mark Close-Ready
+            ⭐ Thatcher Needed
           </button>
           <button
-            onClick={() => quickUpdate({ stage: client.stage === 'active_client' ? 'active_client' : 'active_client' })}
-            className="text-xs px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:border-emerald-500/30 hover:text-emerald-300 transition-all"
+            onClick={() => quickUpdate({ urgency_level: client.urgency_level === 'high' || client.urgency_level === 'critical' ? 'low' : 'high' })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', (client.urgency_level === 'high' || client.urgency_level === 'critical') ? 'bg-orange-500/20 border-orange-500/30 text-orange-300' : 'border-border text-muted-foreground hover:border-orange-500/30 hover:text-orange-300')}
             disabled={updating}
           >
-            ✅ Push to Active
+            🔔 Needs Attention
+          </button>
+          <button
+            onClick={() => quickUpdate({ va_needed: !client.va_needed })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.va_needed ? 'bg-blue-500/20 border-blue-500/30 text-blue-300' : 'border-border text-muted-foreground hover:border-blue-500/30 hover:text-blue-300')}
+            disabled={updating}
+          >
+            🎓 Needs Coaching
+          </button>
+          <button
+            onClick={() => quickUpdate({ new_ads: !client.new_ads })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.new_ads ? 'bg-violet-500/20 border-violet-500/30 text-violet-300' : 'border-border text-muted-foreground hover:border-violet-500/30 hover:text-violet-300')}
+            disabled={updating}
+          >
+            📣 Needs Ads
+          </button>
+          <button
+            onClick={() => quickUpdate({ stage: 'churn_risk' })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.stage === 'churn_risk' ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'border-border text-muted-foreground hover:border-rose-500/30 hover:text-rose-300')}
+            disabled={updating}
+          >
+            📉 Churn Risk
           </button>
         </div>
 
@@ -305,9 +312,12 @@ export default function ClientWarRoom() {
             {/* Snapshot */}
             <div className="bg-card border border-border rounded-xl p-4 space-y-4">
               <Section title="Contact">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2.5">
                   <Field label="Phone" value={client.phone} />
-                  <Field label="Email" value={client.email} />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Email</div>
+                    <div className="text-sm text-foreground break-all">{client.email ?? '—'}</div>
+                  </div>
                   <Field label="Owner Name" value={client.owner_name} />
                   <Field label="Timezone" value={client.timezone} />
                 </div>
@@ -617,29 +627,77 @@ export default function ClientWarRoom() {
                 <PaymentPanel clientId={client.id} clientName={client.name} />
               </TabsContent>
 
-              <TabsContent value="risk" className="mt-3">
-                <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-                  <Section title="Risk Assessment">
-                    <div className="grid grid-cols-2 gap-3">
-                      {client.churn_risk_score != null && (
+              <TabsContent value="risk" className="mt-3 space-y-3">
+                {/* Priority Score breakdown */}
+                {(() => {
+                  const score = calculatePriorityScore(client)
+                  const factors = getScoreBreakdown(client)
+                  const maxPoints = 80
+                  return (
+                    <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-muted-foreground">Churn Risk</span>
-                            <span className="text-xs">{getChurnRiskLabel(client.churn_risk_score)}</span>
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Priority Score</div>
+                          <div className={cn(
+                            'text-3xl font-bold',
+                            score >= 100 ? 'text-red-400' : score >= 60 ? 'text-orange-400' : score >= 30 ? 'text-amber-400' : 'text-muted-foreground'
+                          )}>{score}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Urgency</div>
+                          <div className={cn('text-sm font-medium capitalize',
+                            client.urgency_level === 'critical' ? 'text-red-400' :
+                            client.urgency_level === 'high' ? 'text-orange-400' : 'text-muted-foreground'
+                          )}>
+                            {client.urgency_level ?? 'low'}
                           </div>
-                          <Progress value={client.churn_risk_score} className="h-1.5" />
+                        </div>
+                      </div>
+
+                      {factors.length === 0 ? (
+                        <div className="text-xs text-muted-foreground/50 py-2">No active risk factors.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Contributing factors</div>
+                          {factors.map((f, i) => (
+                            <div key={i} className="flex items-center gap-2.5">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-xs text-foreground/80 truncate">{f.label}</span>
+                                  <span className="text-[11px] font-mono text-muted-foreground ml-2 flex-shrink-0">+{f.points}</span>
+                                </div>
+                                <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                                  <div
+                                    className={cn('h-full rounded-full transition-all', f.points >= 60 ? 'bg-red-400' : f.points >= 35 ? 'bg-orange-400' : f.points >= 20 ? 'bg-amber-400' : 'bg-muted-foreground/40')}
+                                    style={{ width: `${Math.min(100, (f.points / maxPoints) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
+                  )
+                })()}
+
+                {/* Churn risk score if set */}
+                {(client.churn_risk_score != null || client.risk_reason || client.save_action) && (
+                  <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Churn Assessment</div>
+                    {client.churn_risk_score != null && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-muted-foreground">Churn Risk Score</span>
+                          <span className="text-xs font-medium">{getChurnRiskLabel(client.churn_risk_score)} · {client.churn_risk_score}/100</span>
+                        </div>
+                        <Progress value={client.churn_risk_score} className="h-1.5" />
+                      </div>
+                    )}
                     {client.risk_reason && <Field label="Risk Reason" value={client.risk_reason} />}
                     {client.save_action && <Field label="Save Action" value={client.save_action} />}
-                    <div className="flex gap-2 text-xs">
-                      <div className={cn('px-2 py-1 rounded', client.urgency_level === 'critical' ? 'bg-red-500/20 text-red-300' : client.urgency_level === 'high' ? 'bg-orange-500/20 text-orange-300' : 'bg-secondary text-muted-foreground')}>
-                        Urgency: {client.urgency_level ?? 'low'}
-                      </div>
-                    </div>
-                  </Section>
-                </div>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </div>

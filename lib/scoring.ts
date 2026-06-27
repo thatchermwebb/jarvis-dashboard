@@ -96,6 +96,71 @@ export function getCPLStatus(cpl?: number): 'good' | 'okay' | 'bad' | 'emergency
   return 'emergency'
 }
 
+export function getScoreBreakdown(client: Client): { label: string; points: number }[] {
+  const factors: { label: string; points: number }[] = []
+  const todayStr = localToday()
+  const daysUntilTrialEnd = client.trial_end ? daysUntil(client.trial_end) : null
+  const daysSinceContact = client.last_contact_date
+    ? Math.abs(daysUntil(client.last_contact_date.slice(0, 10)))
+    : 999
+  const isActivePaying = client.stage === 'active_client' || client.stage === 'won_back'
+  const isTrial = client.stage === 'free_trial' || client.stage === 'trial_ending_soon'
+  const sentiment = client.last_client_sentiment
+
+  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 0)
+    factors.push({ label: 'Trial ended', points: 80 })
+  if (daysUntilTrialEnd === 1)
+    factors.push({ label: 'Trial ends tomorrow', points: 70 })
+  if (daysUntilTrialEnd !== null && daysUntilTrialEnd > 1 && daysUntilTrialEnd <= 3)
+    factors.push({ label: `Trial ends in ${daysUntilTrialEnd} days`, points: 50 })
+  if (isTrial && (client.trial_health_score ?? 0) >= 80)
+    factors.push({ label: `Trial health ${client.trial_health_score}/100 (close-ready)`, points: 60 })
+  if (isTrial && sentiment === 'close_ready')
+    factors.push({ label: 'Sentiment: close-ready', points: 55 })
+  if (client.payment_issue)
+    factors.push({ label: 'Payment issue flagged', points: 65 })
+  if (client.stage === 'payment_issue')
+    factors.push({ label: 'Stage: payment issue', points: 20 })
+  if (client.payment_status === 'failed')
+    factors.push({ label: 'Payment status: failed', points: 30 })
+  if (isActivePaying) {
+    if (sentiment === 'angry')       factors.push({ label: 'Sentiment: angry', points: 60 })
+    else if (sentiment === 'frustrated') factors.push({ label: 'Sentiment: frustrated', points: 50 })
+    else if (sentiment === 'ghosting')   factors.push({ label: 'Client ghosting', points: 45 })
+    else if (sentiment === 'concerned')  factors.push({ label: 'Sentiment: concerned', points: 35 })
+    else if (sentiment === 'confused')   factors.push({ label: 'Sentiment: confused', points: 20 })
+    else if (sentiment === 'neutral')    factors.push({ label: 'Sentiment: neutral', points: 5 })
+  }
+  if (isActivePaying && (client.stage === 'churn_risk' || (client.churn_risk_score ?? 0) >= 70))
+    factors.push({ label: 'Churn risk (active client)', points: 50 })
+  if (!isActivePaying && (sentiment === 'angry' || sentiment === 'frustrated'))
+    factors.push({ label: `Sentiment: ${sentiment}`, points: 35 })
+  if (sentiment === 'ghosting' && !isActivePaying)
+    factors.push({ label: 'Client ghosting', points: 25 })
+  if (client.thatcher_needed)
+    factors.push({ label: 'Needs Thatcher', points: 40 })
+  if (client.next_followup_date) {
+    const d = client.next_followup_date
+    if (d < todayStr)         factors.push({ label: 'Follow-up overdue', points: 40 })
+    else if (d === todayStr)  factors.push({ label: 'Follow-up due today', points: 35 })
+    else if ((daysUntil(d) ?? 99) <= 2) factors.push({ label: 'Follow-up due soon', points: 15 })
+  }
+  if (daysSinceContact >= 2)
+    factors.push({ label: `No contact in ${daysSinceContact === 999 ? 'a long time' : `${daysSinceContact} days`}`, points: 20 })
+  if (client.urgency_level === 'critical')
+    factors.push({ label: 'Urgency: critical', points: 30 })
+  if (client.urgency_level === 'high')
+    factors.push({ label: 'Urgency: high', points: 15 })
+  if (client.ad_status === 'off')
+    factors.push({ label: 'Ads are off', points: 25 })
+  if (client.cpl && client.cpl > 10)
+    factors.push({ label: `High CPL: $${client.cpl}`, points: 20 })
+  if (!client.bookings)
+    factors.push({ label: 'No bookings recorded', points: 15 })
+
+  return factors.sort((a, b) => b.points - a.points)
+}
+
 export function sortClientsByPriority(clients: Client[]): Client[] {
   return clients
     .map((c) => ({
