@@ -312,7 +312,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
   const [form, setForm] = useState({
     log_type: 'call' as LogType,
-    outcome: 'answered' as LogOutcome,
+    outcome: '' as LogOutcome | '',
     summary: '',
     sentiment: '' as ClientSentiment | '',
     promises_made: '',
@@ -332,7 +332,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
     if (open && editLog) {
       setForm({
         log_type: (editLog.log_type as LogType) ?? 'call',
-        outcome: (editLog.outcome as LogOutcome) ?? 'answered',
+        outcome: (editLog.outcome as LogOutcome) ?? '',
         summary: editLog.summary ?? '',
         sentiment: (editLog.sentiment as ClientSentiment) ?? '',
         promises_made: editLog.promises_made ?? '',
@@ -367,7 +367,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
   useEffect(() => {
     if (!open) {
-      setForm({ log_type: 'call', outcome: 'answered', summary: '', sentiment: '', promises_made: '', next_step: '', followup_date: '', followup_time: '', created_by: 'Diego', ad_creative: '', trial_notes: '' })
+      setForm({ log_type: 'call', outcome: '', summary: '', sentiment: '', promises_made: '', next_step: '', followup_date: '', followup_time: '', created_by: 'Diego', ad_creative: '', trial_notes: '' })
       setSearch(''); setShowDropdown(false); setTrialNotesOpen(false)
     }
   }, [open])
@@ -515,11 +515,14 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Outcome <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Select value={form.outcome} onValueChange={v => v && set('outcome', v)}>
+                  <Select value={form.outcome} onValueChange={v => set('outcome', v === '__none__' ? '' : v)}>
                     <SelectTrigger className="bg-secondary/50 h-10 text-sm">
-                      <span>{OUTCOME_LABELS[form.outcome] ?? form.outcome}</span>
+                      <span className={form.outcome ? undefined : 'text-muted-foreground'}>
+                        {form.outcome ? (OUTCOME_LABELS[form.outcome] ?? form.outcome) : 'Select outcome...'}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="__none__"><span className="text-muted-foreground">None</span></SelectItem>
                       {Object.entries(OUTCOME_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                     </SelectContent>
                   </Select>
