@@ -302,6 +302,8 @@ export interface DashboardStats {
   close_ready_trials: number
   thatcher_needed: number
   va_tasks_open: number
+  tasks_due_today: number
+  tasks_overdue: number
   overdue_followups: number
   monthly_recurring_revenue: number
   weekly_recurring_revenue: number

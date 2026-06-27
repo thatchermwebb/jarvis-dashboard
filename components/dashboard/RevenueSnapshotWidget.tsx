@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { cn, localToday, daysUntil, formatCurrency } from '@/lib/utils'
+import { cn, localToday, formatCurrency } from '@/lib/utils'
 import type { Payment } from '@/types'
 
 interface Props {
@@ -90,19 +90,10 @@ export function RevenueSnapshotWidget({ payments }: Props) {
   const dueTomorrow = payments.filter(p => p.status === 'pending' && p.due_date === tomorrow)
   const upcoming  = payments.filter(p => p.status === 'pending' && p.due_date > tomorrow && p.due_date <= in14)
 
-  const totalPending = [...overdue, ...dueToday, ...dueTomorrow, ...upcoming].reduce((s, p) => s + p.amount, 0)
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Revenue Snapshot</h2>
-          {totalPending > 0 && (
-            <span className="bg-emerald-500/15 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full">
-              {formatCurrency(totalPending)}
-            </span>
-          )}
-        </div>
+        <h2 className="text-lg font-semibold">Payments</h2>
         <Link href="/payments" className="text-sm text-primary hover:underline">
           View all →
         </Link>
@@ -113,9 +104,9 @@ export function RevenueSnapshotWidget({ payments }: Props) {
           <div className="p-8 text-center text-muted-foreground text-sm">No pending payments</div>
         ) : (
           <>
-            <Section label="⚠ Overdue"    payments={overdue}     accent="red"   defaultOpen={true} />
             <Section label="Due Today"     payments={dueToday}    accent="amber" defaultOpen={true} />
             <Section label="Due Tomorrow"  payments={dueTomorrow} accent="blue"  defaultOpen={true} />
+            <Section label="⚠ Overdue"    payments={overdue}     accent="red"   defaultOpen={true} />
             <Section label="Upcoming"      payments={upcoming}    accent="muted" defaultOpen={false} />
           </>
         )}

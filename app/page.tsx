@@ -53,6 +53,8 @@ export default async function CommandCenter() {
     close_ready_trials: trialClients.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready').length,
     thatcher_needed: allClients.filter(c => c.thatcher_needed).length,
     va_tasks_open: allTasks.length,
+    tasks_due_today: allTasks.filter(t => t.due_date === todayStr).length,
+    tasks_overdue: allTasks.filter(t => t.due_date && t.due_date < todayStr).length,
     overdue_followups: allClients.filter(c => c.next_followup_date && c.next_followup_date < todayStr).length,
     monthly_recurring_revenue: allClients
       .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer)

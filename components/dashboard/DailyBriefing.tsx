@@ -70,38 +70,65 @@ function ExpandableRow({
   )
 }
 
+function LinkRow({ text, href }: { text: string; href: string }) {
+  const router = useRouter()
+  return (
+    <button
+      onClick={() => router.push(href)}
+      className="flex items-center gap-2 text-left w-full group"
+    >
+      <span className="text-base text-foreground/90 group-hover:text-foreground transition-colors">{text}</span>
+      <ChevronRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
+    </button>
+  )
+}
+
 export function DailyBriefing({ stats, clientLists, mrrChange }: Props) {
   const today = format(new Date(), 'EEEE, MMMM d')
 
-  const rows: { text: string; clients: Client[] }[] = []
+  type BriefingRow =
+    | { kind: 'clients'; text: string; clients: Client[] }
+    | { kind: 'link'; text: string; href: string }
+
+  const rows: BriefingRow[] = []
 
   if (stats.trials_ending_today > 0)
-    rows.push({
+    rows.push({ kind: 'clients',
       text: `🔥 ${stats.trials_ending_today} trial${stats.trials_ending_today > 1 ? 's' : ''} end${stats.trials_ending_today === 1 ? 's' : ''} today`,
       clients: clientLists.trials_ending,
     })
   if (stats.overdue_followups > 0)
-    rows.push({
+    rows.push({ kind: 'clients',
       text: `📅 ${stats.overdue_followups} overdue follow-up${stats.overdue_followups > 1 ? 's' : ''}`,
       clients: clientLists.overdue,
     })
   if (stats.payment_issues > 0)
-    rows.push({
+    rows.push({ kind: 'clients',
       text: `💳 ${stats.payment_issues} payment issue${stats.payment_issues > 1 ? 's' : ''} to resolve`,
       clients: clientLists.payment_issues,
     })
   if (stats.close_ready_trials > 0)
-    rows.push({
+    rows.push({ kind: 'clients',
       text: `🎯 ${stats.close_ready_trials} trial${stats.close_ready_trials > 1 ? 's' : ''} close-ready — book Thatcher`,
       clients: clientLists.close_ready,
     })
   if (stats.thatcher_needed > 0)
-    rows.push({
+    rows.push({ kind: 'clients',
       text: `⭐ ${stats.thatcher_needed} client${stats.thatcher_needed > 1 ? 's' : ''} need${stats.thatcher_needed === 1 ? 's' : ''} Thatcher`,
       clients: clientLists.thatcher,
     })
+  if (stats.tasks_due_today > 0)
+    rows.push({ kind: 'link',
+      text: `✅ ${stats.tasks_due_today} task${stats.tasks_due_today > 1 ? 's' : ''} due today`,
+      href: '/tasks',
+    })
+  if (stats.tasks_overdue > 0)
+    rows.push({ kind: 'link',
+      text: `🚨 ${stats.tasks_overdue} overdue task${stats.tasks_overdue > 1 ? 's' : ''}`,
+      href: '/tasks',
+    })
   if (stats.at_risk_clients > 0)
-    rows.push({
+    rows.push({ kind: 'clients',
       text: `⚠️ ${stats.at_risk_clients} client${stats.at_risk_clients > 1 ? 's' : ''} at churn risk`,
       clients: clientLists.at_risk,
     })
@@ -133,9 +160,11 @@ export function DailyBriefing({ stats, clientLists, mrrChange }: Props) {
         {allClear ? (
           <div className="text-base text-foreground/80">✅ No critical items. Great shape today.</div>
         ) : (
-          rows.map((row, i) => (
-            <ExpandableRow key={i} text={row.text} clients={row.clients} />
-          ))
+          rows.map((row, i) =>
+            row.kind === 'link'
+              ? <LinkRow key={i} text={row.text} href={row.href} />
+              : <ExpandableRow key={i} text={row.text} clients={row.clients} />
+          )
         )}
       </div>
 
