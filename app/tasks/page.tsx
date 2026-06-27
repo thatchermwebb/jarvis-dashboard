@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, CheckCircle2, Circle, Trash2, ExternalLink, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, ExternalLink, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { InlineCalendar } from '@/components/ui/inline-calendar'
+import { TimePicker } from '@/components/ui/time-picker'
 import { toast } from 'sonner'
 import { cn, localToday, daysUntil, formatDate } from '@/lib/utils'
 import type { Task, TaskStatus } from '@/types'
@@ -17,92 +19,6 @@ const ASSIGNEE_META: Record<string, { initials: string; color: string; ring: str
   Diego:    { initials: 'DC', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', ring: 'border-emerald-500/40' },
   Thatcher: { initials: 'TW', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40',         ring: 'border-blue-500/40' },
   Trepp:    { initials: 'TG', color: 'bg-violet-500/20 text-violet-300 border-violet-500/40',   ring: 'border-violet-500/40' },
-}
-
-const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const CAL_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa']
-
-// ─── Inline Calendar ──────────────────────────────────────────────────────────
-
-function InlineCalendar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const today = new Date(); today.setHours(0,0,0,0)
-  const [viewYear,  setViewYear]  = useState(() => value ? +value.split('-')[0] : today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(() => value ? +value.split('-')[1] - 1 : today.getMonth())
-
-  const firstDay    = new Date(viewYear, viewMonth, 1).getDay()
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
-  while (cells.length % 7 !== 0) cells.push(null)
-
-  const selectedDate = value ? new Date(value + 'T00:00:00') : null
-
-  function prevMonth() {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
-    else setViewMonth(m => m + 1)
-  }
-  function selectDay(day: number) {
-    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`)
-  }
-  function setToday() {
-    const d = new Date(); d.setHours(0,0,0,0)
-    onChange(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
-    setViewYear(d.getFullYear()); setViewMonth(d.getMonth())
-  }
-
-  return (
-    <div className="bg-secondary/30 border border-border/40 rounded-xl p-3 select-none">
-      <div className="flex items-center justify-between mb-2">
-        <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-        <span className="text-xs font-semibold">{CAL_MONTHS[viewMonth]} {viewYear}</span>
-        <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 mb-1">
-        {CAL_DAYS.map(d => (
-          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground/50 py-0.5">{d}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-y-0.5">
-        {cells.map((day, idx) => {
-          if (!day) return <div key={`e-${idx}`} />
-          const cellDate = new Date(viewYear, viewMonth, day); cellDate.setHours(0,0,0,0)
-          const isToday    = cellDate.getTime() === today.getTime()
-          const isSelected = selectedDate && cellDate.getTime() === selectedDate.getTime()
-          return (
-            <button
-              key={`d-${idx}`}
-              type="button"
-              onClick={() => selectDay(day)}
-              className={cn(
-                'w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium transition-all',
-                isSelected ? 'bg-primary text-primary-foreground' :
-                isToday    ? 'border border-primary/50 text-primary' :
-                'text-foreground/80 hover:bg-white/10'
-              )}
-            >
-              {day}
-            </button>
-          )
-        })}
-      </div>
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-        <button type="button" onClick={() => onChange('')} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">Clear</button>
-        {value && (
-          <span className="text-[10px] text-primary font-medium">
-            {new Date(value + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        )}
-        <button type="button" onClick={setToday} className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium">Today</button>
-      </div>
-    </div>
-  )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -467,19 +383,18 @@ export default function TasksPage() {
               <Label className="text-sm font-medium">
                 Due date <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span>
               </Label>
-              <InlineCalendar value={form.due_date} onChange={v => setForm(f => ({ ...f, due_date: v, due_time: v ? f.due_time : '' }))} />
+              <InlineCalendar
+                size="lg"
+                value={form.due_date}
+                onChange={v => setForm(f => ({ ...f, due_date: v, due_time: v ? f.due_time : '' }))}
+              />
               {form.due_date && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Label className="text-xs text-muted-foreground shrink-0">Time (optional)</Label>
-                  <input
-                    type="time"
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs text-muted-foreground">Time (optional)</Label>
+                  <TimePicker
                     value={form.due_time}
-                    onChange={e => setForm(f => ({ ...f, due_time: e.target.value }))}
-                    className="flex-1 h-9 rounded-md border border-input bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    onChange={v => setForm(f => ({ ...f, due_time: v }))}
                   />
-                  {form.due_time && (
-                    <button type="button" onClick={() => setForm(f => ({ ...f, due_time: '' }))} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
-                  )}
                 </div>
               )}
             </div>

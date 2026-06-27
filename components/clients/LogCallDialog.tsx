@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { Search, X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, GripVertical, Plus } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, GripVertical, Plus, CalendarPlus } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
+import { InlineCalendar } from '@/components/ui/inline-calendar'
+import { TimePicker } from '@/components/ui/time-picker'
 import { cn } from '@/lib/utils'
 import type { Client, LogType, LogOutcome, ClientSentiment } from '@/types'
 
@@ -27,9 +29,6 @@ const SENTIMENT_LABELS: Record<string, string> = {
   concerned: '😟 Concerned', frustrated: '😤 Frustrated', angry: '😠 Angry',
   ghosting: '👻 Ghosting', close_ready: '🎯 Close-Ready',
 }
-const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const CAL_DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
-
 const TRIAL_STAGES = new Set(['free_trial','free_trial_pending','trial_ending_soon','trial_concluded','onboarding'])
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -71,93 +70,6 @@ function saveCreatives(list: AdCreative[]) {
   localStorage.setItem('cza_ad_creatives', JSON.stringify(list))
 }
 
-// ─── Inline Calendar ──────────────────────────────────────────────────────────
-
-function InlineCalendar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const today = new Date(); today.setHours(0,0,0,0)
-  const [viewYear, setViewYear] = useState(() => value ? +value.split('-')[0] : today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(() => value ? +value.split('-')[1] - 1 : today.getMonth())
-
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
-  while (cells.length % 7 !== 0) cells.push(null)
-
-  const selectedDate = value ? new Date(value + 'T00:00:00') : null
-
-  function prevMonth() {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
-    else setViewMonth(m => m + 1)
-  }
-  function selectDay(day: number) {
-    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`)
-  }
-  function setToday() {
-    const d = new Date(); d.setHours(0,0,0,0)
-    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-    onChange(ds)
-    setViewYear(d.getFullYear()); setViewMonth(d.getMonth())
-  }
-
-  return (
-    <div className="bg-secondary/30 border border-border/40 rounded-xl p-3 select-none">
-      {/* Month nav */}
-      <div className="flex items-center justify-between mb-2">
-        <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-        <span className="text-xs font-semibold">{CAL_MONTHS[viewMonth]} {viewYear}</span>
-        <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
-        {CAL_DAYS.map(d => (
-          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground/50 py-0.5">{d}</div>
-        ))}
-      </div>
-      {/* Day grid */}
-      <div className="grid grid-cols-7 gap-y-0.5">
-        {cells.map((day, idx) => {
-          if (!day) return <div key={`e-${idx}`} />
-          const cellDate = new Date(viewYear, viewMonth, day); cellDate.setHours(0,0,0,0)
-          const isToday = cellDate.getTime() === today.getTime()
-          const isSelected = selectedDate && cellDate.getTime() === selectedDate.getTime()
-          return (
-            <button
-              key={`d-${idx}`}
-              type="button"
-              onClick={() => selectDay(day)}
-              className={cn(
-                'w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium transition-all',
-                isSelected ? 'bg-primary text-primary-foreground' :
-                isToday ? 'border border-primary/50 text-primary' :
-                'text-foreground/80 hover:bg-white/10'
-              )}
-            >
-              {day}
-            </button>
-          )
-        })}
-      </div>
-      {/* Footer */}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-        <button type="button" onClick={() => onChange('')} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">Clear</button>
-        {value && (
-          <span className="text-[10px] text-primary font-medium">
-            {new Date(value + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        )}
-        <button type="button" onClick={setToday} className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium">Today</button>
-      </div>
-    </div>
-  )
-}
 
 // ─── Ad Creative Dropdown ─────────────────────────────────────────────────────
 
@@ -593,70 +505,83 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 <Label className="text-sm font-medium">Follow-Up Date <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                 <InlineCalendar value={form.followup_date} onChange={v => set('followup_date', v)} />
                 {form.followup_date && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Label className="text-xs text-muted-foreground shrink-0">Time (optional)</Label>
-                    <input
-                      type="time"
-                      value={form.followup_time}
-                      onChange={e => set('followup_time', e.target.value)}
-                      className="flex-1 h-8 rounded-md border border-input bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    {form.followup_time && (
-                      <button type="button" onClick={() => set('followup_time', '')} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
-                    )}
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs text-muted-foreground">Time (optional)</Label>
+                    <TimePicker value={form.followup_time} onChange={v => set('followup_time', v)} />
                   </div>
                 )}
               </div>
 
               {/* Action Item / Task + Next Step */}
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Action Item <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                    {!editLog && (
-                      <button
-                        type="button"
-                        onClick={() => setCreateTask(t => !t)}
-                        className={cn(
-                          'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
-                          createTask
-                            ? 'bg-primary/15 text-primary border-primary/30'
-                            : 'text-muted-foreground border-border/40 hover:text-foreground'
-                        )}
-                      >
-                        {createTask ? '✓ Creating task' : '+ Create task'}
-                      </button>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Action Item <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                   <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised / needs to happen?" className="bg-secondary/50 h-10 text-sm" />
-                  {createTask && form.promises_made.trim() && (
-                    <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 space-y-2">
-                      <div className="text-[10px] uppercase tracking-wider text-primary/60 font-semibold">Task details</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">Assigned to</Label>
-                          <Select value={taskAssignedTo} onValueChange={v => v && setTaskAssignedTo(v)}>
-                            <SelectTrigger className="h-8 text-xs bg-secondary/50">
-                              <span>{taskAssignedTo}</span>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {['Diego','Thatcher','Trepp'].map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+
+                  {/* Create Task toggle — only on new logs */}
+                  {!editLog && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateTask(t => !t)}
+                      className={cn(
+                        'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-all',
+                        createTask
+                          ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/15'
+                          : 'border-border/50 text-muted-foreground hover:text-foreground hover:border-border bg-secondary/30'
+                      )}
+                    >
+                      <CalendarPlus className="w-4 h-4" />
+                      {createTask ? 'Creating task from this action item' : '+ Create task from this action item'}
+                    </button>
+                  )}
+
+                  {/* Task details panel */}
+                  {createTask && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
+                      <div className="text-[10px] uppercase tracking-widest text-primary/50 font-semibold">Task Details</div>
+
+                      {/* Assigned to */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Assigned to</Label>
+                        <div className="flex gap-2">
+                          {(['Diego','Thatcher','Trepp'] as const).map(a => {
+                            const initials = { Diego: 'DC', Thatcher: 'TW', Trepp: 'TG' }[a]
+                            const active = taskAssignedTo === a
+                            const color = {
+                              Diego:    'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                              Thatcher: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+                              Trepp:    'bg-violet-500/20 text-violet-300 border-violet-500/40',
+                            }[a]
+                            return (
+                              <button
+                                key={a}
+                                type="button"
+                                onClick={() => setTaskAssignedTo(a)}
+                                className={cn(
+                                  'flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-medium transition-all',
+                                  active ? color : 'border-border/40 text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                <span className={cn(
+                                  'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold border flex-shrink-0',
+                                  active ? color : 'border-border/40 text-muted-foreground/50'
+                                )}>{initials}</span>
+                                {a}
+                              </button>
+                            )
+                          })}
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">Due date</Label>
-                          <input
-                            type="date"
-                            value={taskDueDate}
-                            onChange={e => setTaskDueDate(e.target.value)}
-                            className="w-full h-8 rounded-md border border-input bg-secondary/50 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
-                        </div>
+                      </div>
+
+                      {/* Due date */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Due date (optional)</Label>
+                        <InlineCalendar value={taskDueDate} onChange={setTaskDueDate} />
                       </div>
                     </div>
                   )}
                 </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Next Step <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                   <Input value={form.next_step} onChange={e => set('next_step', e.target.value)} placeholder="What needs to happen next?" className="bg-secondary/50 h-10 text-sm" />
