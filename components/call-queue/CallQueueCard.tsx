@@ -15,6 +15,7 @@ import {
   formatCurrency,
   localToday,
   daysUntil,
+  formatTime,
 } from '@/lib/utils'
 import type { Client } from '@/types'
 
