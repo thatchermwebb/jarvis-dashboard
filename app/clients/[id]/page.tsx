@@ -280,7 +280,7 @@ export default function ClientWarRoom() {
             className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', (client.urgency_level === 'high' || client.urgency_level === 'critical') ? 'bg-orange-500/20 border-orange-500/30 text-orange-300' : 'border-border text-muted-foreground hover:border-orange-500/30 hover:text-orange-300')}
             disabled={updating}
           >
-            🔔 Needs Attention
+            ‼️ Needs Attention
           </button>
           <button
             onClick={() => quickUpdate({ va_needed: !client.va_needed })}
@@ -297,11 +297,18 @@ export default function ClientWarRoom() {
             📣 Needs Ads
           </button>
           <button
+            onClick={() => quickUpdate({ last_client_sentiment: client.last_client_sentiment === 'close_ready' ? 'neutral' : 'close_ready' })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.last_client_sentiment === 'close_ready' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'border-border text-muted-foreground hover:border-emerald-500/30 hover:text-emerald-300')}
+            disabled={updating}
+          >
+            🎯 Ready to Close
+          </button>
+          <button
             onClick={() => quickUpdate({ stage: 'churn_risk' })}
             className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.stage === 'churn_risk' ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'border-border text-muted-foreground hover:border-rose-500/30 hover:text-rose-300')}
             disabled={updating}
           >
-            📉 Churn Risk
+            🚨 Churn Risk
           </button>
         </div>
 
