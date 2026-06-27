@@ -6,9 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ChevronDown, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronDown, Search, ChevronLeft, ChevronRight, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Client, Payment, PaymentType, PaymentEntryStatus, PaymentSource } from '@/types'
+import type { Client, Payment, PaymentType, PaymentEntryStatus, PaymentSource, PaymentFrequency } from '@/types'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -335,9 +335,19 @@ interface Props {
   prefill?: Partial<{ client_id: string; payment_type: PaymentType; amount: number; due_date: string }>
 }
 
+const FREQUENCIES = [
+  { value: 'weekly',    label: 'Weekly' },
+  { value: 'biweekly', label: 'Bi-weekly' },
+  { value: 'monthly',  label: 'Monthly' },
+  { value: 'one_time', label: 'One-time' },
+]
+
 export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Props) {
   const [clients, setClients] = useState<Client[]>([])
   const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<'single' | 'plan'>('single')
+
+  // Single payment form
   const [form, setForm] = useState({
     client_id: '',
     payment_type: 'retainer_monthly' as PaymentType,
@@ -349,9 +359,22 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
     notes: '',
   })
 
+  // Payment plan form
+  const [plan, setPlan] = useState({
+    client_id: '',
+    label: '',
+    payment_type: 'retainer_biweekly' as PaymentType,
+    amount: '',
+    frequency: 'biweekly' as PaymentFrequency,
+    start_date: '',
+    end_date: '',
+    notes: '',
+  })
+
   useEffect(() => {
     if (open) {
       fetch('/api/clients').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : []))
+      setTab(payment ? 'single' : 'single')
       if (payment) {
         setForm({
           client_id: payment.client_id,
@@ -372,15 +395,18 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
           due_date: prefill.due_date ?? '',
           status: 'pending',
         }))
+        setPlan(p => ({ ...p, client_id: prefill.client_id ?? '' }))
       } else {
         setForm({ client_id: '', payment_type: 'retainer_monthly', description: '', amount: '', due_date: '', status: 'pending', source: '', notes: '' })
+        setPlan({ client_id: '', label: '', payment_type: 'retainer_biweekly', amount: '', frequency: 'biweekly', start_date: '', end_date: '', notes: '' })
       }
     }
   }, [open, payment, prefill])
 
   function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })) }
+  function setPlanField(field: string, value: string) { setPlan(p => ({ ...p, [field]: value })) }
 
-  async function submit(e: React.FormEvent) {
+  async function submitSingle(e: React.FormEvent) {
     e.preventDefault()
     if (!form.client_id || !form.amount || !form.due_date) return toast.error('Client, amount, and due date required')
     setSaving(true)
@@ -405,77 +431,147 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
     } catch (err) { toast.error(String(err)) } finally { setSaving(false) }
   }
 
+  async function submitPlan(e: React.FormEvent) {
+    e.preventDefault()
+    if (!plan.client_id || !plan.amount || !plan.start_date) return toast.error('Client, amount, and start date required')
+    setSaving(true)
+    try {
+      const res = await fetch('/api/payment-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...plan, amount: Number(plan.amount), end_date: plan.end_date || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Failed to create plan'); return }
+      toast.success(`Payment plan created — ${data.payments_created} invoices generated`)
+      onSaved(); onClose()
+    } catch (err) { toast.error(String(err)) } finally { setSaving(false) }
+  }
+
+  const fieldClass = 'w-full rounded-md border border-border bg-secondary/50 px-3 h-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50'
+  const labelClass = 'text-xs font-medium text-muted-foreground uppercase tracking-wider'
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
           <DialogTitle>{payment ? 'Edit Payment' : 'Add Payment'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label>Client</Label>
-            <ClientSelect value={form.client_id} clients={clients} onChange={id => set('client_id', id)} />
-          </div>
 
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <TypeSelect value={form.payment_type} onChange={v => set('payment_type', v)} />
+        {/* Tab toggle — only show when creating */}
+        {!payment && (
+          <div className="flex items-center rounded-lg border border-border bg-secondary/30 p-0.5 gap-0.5 mt-1">
+            <button type="button" onClick={() => setTab('single')}
+              className={cn('flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium transition-all', tab === 'single' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+              Single Payment
+            </button>
+            <button type="button" onClick={() => setTab('plan')}
+              className={cn('flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium transition-all', tab === 'plan' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+              <Repeat className="w-3.5 h-3.5" /> Payment Plan
+            </button>
           </div>
+        )}
 
-          <div className="space-y-1.5">
-            <Label>Custom Description <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-            <input
-              value={form.description}
-              onChange={e => set('description', e.target.value)}
-              placeholder='e.g. "Deposit (towards 2 weeks)"'
-              className="w-full rounded-md border border-border bg-secondary/50 px-3 h-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+        {/* ── Single Payment ── */}
+        {(tab === 'single' || payment) && (
+          <form onSubmit={submitSingle} className="space-y-4 mt-1">
             <div className="space-y-1.5">
-              <Label>Amount ($)</Label>
-              <input
-                type="number"
-                value={form.amount}
-                onChange={e => set('amount', e.target.value)}
-                placeholder="500"
-                className="w-full rounded-md border border-border bg-secondary/50 px-3 h-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
-              />
+              <label className={labelClass}>Client</label>
+              <ClientSelect value={form.client_id} clients={clients} onChange={id => set('client_id', id)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Due Date</Label>
-              <DatePicker value={form.due_date} onChange={v => set('due_date', v)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <StatusSelect value={form.status} onChange={v => set('status', v)} />
+              <label className={labelClass}>Type</label>
+              <TypeSelect value={form.payment_type} onChange={v => set('payment_type', v)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Source</Label>
-              <SourceSelect value={form.source} onChange={v => set('source', v)} />
+              <label className={labelClass}>Custom Description <span className="text-muted-foreground/40 font-normal normal-case tracking-normal">(optional)</span></label>
+              <input value={form.description} onChange={e => set('description', e.target.value)}
+                placeholder='e.g. "Deposit (towards 2 weeks)"' className={fieldClass} />
             </div>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Amount ($)</label>
+                <input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="500" className={fieldClass} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Due Date</label>
+                <DatePicker value={form.due_date} onChange={v => set('due_date', v)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Status</label>
+                <StatusSelect value={form.status} onChange={v => set('status', v)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Source</label>
+                <SourceSelect value={form.source} onChange={v => set('source', v)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Notes</label>
+              <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
+                placeholder="Optional notes..." rows={2}
+                className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none" />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving...' : payment ? 'Save Changes' : 'Add Payment'}</Button>
+            </div>
+          </form>
+        )}
 
-          <div className="space-y-1.5">
-            <Label>Notes</Label>
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              placeholder="Optional notes..."
-              rows={3}
-              className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Saving...' : payment ? 'Save Changes' : 'Add Payment'}</Button>
-          </div>
-        </form>
+        {/* ── Payment Plan ── */}
+        {tab === 'plan' && !payment && (
+          <form onSubmit={submitPlan} className="space-y-4 mt-1">
+            <div className="space-y-1.5">
+              <label className={labelClass}>Client</label>
+              <ClientSelect value={plan.client_id} clients={clients} onChange={id => setPlanField('client_id', id)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Type</label>
+                <TypeSelect value={plan.payment_type} onChange={v => setPlanField('payment_type', v)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Frequency</label>
+                <select value={plan.frequency} onChange={e => setPlanField('frequency', e.target.value)}
+                  className="w-full h-9 rounded-md border border-border bg-secondary/50 px-3 text-sm text-foreground outline-none focus:border-primary/50 cursor-pointer">
+                  {FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Label <span className="text-muted-foreground/40 font-normal normal-case tracking-normal">(optional)</span></label>
+              <input value={plan.label} onChange={e => setPlanField('label', e.target.value)}
+                placeholder="e.g. Monthly Retainer" className={fieldClass} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Amount ($)</label>
+                <input type="number" value={plan.amount} onChange={e => setPlanField('amount', e.target.value)} placeholder="500" className={fieldClass} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Start Date</label>
+                <input type="date" value={plan.start_date} onChange={e => setPlanField('start_date', e.target.value)} className={fieldClass} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>End Date <span className="text-muted-foreground/40 font-normal normal-case tracking-normal">(optional — leave blank to generate 12 months)</span></label>
+              <input type="date" value={plan.end_date} onChange={e => setPlanField('end_date', e.target.value)} className={fieldClass} />
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Notes</label>
+              <textarea value={plan.notes} onChange={e => setPlanField('notes', e.target.value)}
+                placeholder="Pay plan details..." rows={2}
+                className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none" />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create Payment Plan'}</Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   )

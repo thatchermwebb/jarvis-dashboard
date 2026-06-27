@@ -409,13 +409,16 @@ function EditPaymentDialog({ payment, onClose, onSaved }: { payment: Payment; on
   )
 }
 
+const FREQUENCIES = ['weekly', 'biweekly', 'monthly', 'one_time']
+const FREQ_LABELS: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly', one_time: 'One-time' }
+
 function AddScheduleDialog({ open, onClose, clientId, clientName, onSaved }: {
   open: boolean; onClose: () => void; clientId: string; clientName?: string; onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    label: '', payment_type: 'retainer_monthly' as PaymentType,
-    amount: '', frequency: 'monthly' as PaymentFrequency,
+    label: '', payment_type: 'retainer_biweekly' as PaymentType,
+    amount: '', frequency: 'biweekly' as PaymentFrequency,
     start_date: '', end_date: '', notes: '',
   })
 
@@ -433,63 +436,61 @@ function AddScheduleDialog({ open, onClose, clientId, clientName, onSaved }: {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      toast.success(`Schedule created — ${data.payments_created} payments generated`)
-      onSaved()
-      onClose()
+      toast.success(`Plan created — ${data.payments_created} invoices generated`)
+      onSaved(); onClose()
     } catch (err) { toast.error(String(err)) } finally { setSaving(false) }
   }
 
+  const fieldClass = 'w-full rounded-md border border-border bg-secondary/50 px-3 h-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50'
+  const labelClass = 'text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1.5'
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm bg-card border-border">
+      <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader><DialogTitle>Set Pay Schedule{clientName ? ` — ${clientName}` : ''}</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-3 mt-2">
-          <div className="space-y-1.5">
-            <Label>Label (optional)</Label>
-            <Input value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="e.g. Monthly Retainer" className="bg-secondary/50" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Select value={form.payment_type} onValueChange={(v) => v && set('payment_type', v)}>
-              <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
-              <SelectContent>{PAYMENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Amount ($)</Label>
-              <Input type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="500" className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Frequency</Label>
-              <Select value={form.frequency} onValueChange={(v) => v && set('frequency', v)}>
-                <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="one_time">One-time</SelectItem>
-                </SelectContent>
+        <form onSubmit={submit} className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Type</label>
+              <Select value={form.payment_type} onValueChange={(v) => v && set('payment_type', v)}>
+                <SelectTrigger className="bg-secondary/50 h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{PAYMENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Start Date</Label>
-              <Input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} className="bg-secondary/50" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>End Date (optional)</Label>
-              <Input type="date" value={form.end_date} onChange={(e) => set('end_date', e.target.value)} className="bg-secondary/50" />
+            <div>
+              <label className={labelClass}>Frequency</label>
+              <select value={form.frequency} onChange={(e) => set('frequency', e.target.value)}
+                className={fieldClass + ' cursor-pointer'}>
+                {FREQUENCIES.map(f => <option key={f} value={f}>{FREQ_LABELS[f]}</option>)}
+              </select>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Notes</Label>
-            <Input value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Pay plan details..." className="bg-secondary/50" />
+          <div>
+            <label className={labelClass}>Label <span className="text-muted-foreground/40 font-normal normal-case tracking-normal">(optional)</span></label>
+            <input value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="e.g. Monthly Retainer" className={fieldClass} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Amount ($)</label>
+              <input type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="500" className={fieldClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Start Date</label>
+              <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>End Date <span className="text-muted-foreground/40 font-normal normal-case tracking-normal">(optional)</span></label>
+            <input type="date" value={form.end_date} onChange={(e) => set('end_date', e.target.value)} className={fieldClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Notes</label>
+            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Pay plan details..." rows={2}
+              className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none" />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create Schedule'}</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create Payment Plan'}</Button>
           </div>
         </form>
       </DialogContent>
