@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { Plus, Check, CalendarDays, Repeat, Trash2, Pencil } from 'lucide-react'
+import { Plus, Check, CalendarDays, Repeat, Trash2, Pencil, PauseCircle, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -83,6 +83,38 @@ export function PaymentPanel({ clientId, clientName }: Props) {
     toast.success('Deleted')
   }
 
+  async function cancelSchedule(id: string) {
+    if (!confirm('Cancel this plan? All future unpaid invoices will be voided.')) return
+    const res = await fetch(`/api/payment-schedules/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel' }),
+    })
+    if (res.ok) { toast.success('Plan cancelled — future invoices voided'); load() }
+    else toast.error('Failed to cancel plan')
+  }
+
+  async function pauseSchedule(id: string) {
+    if (!confirm('Pause this plan? Future invoices stay open but no new ones will generate.')) return
+    const res = await fetch(`/api/payment-schedules/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'pause' }),
+    })
+    if (res.ok) { toast.success('Plan paused'); load() }
+    else toast.error('Failed to pause plan')
+  }
+
+  async function resumeSchedule(id: string) {
+    const res = await fetch(`/api/payment-schedules/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: true }),
+    })
+    if (res.ok) { toast.success('Plan resumed'); load() }
+    else toast.error('Failed to resume plan')
+  }
+
   const overdue = payments.filter((p) => p.status === 'overdue')
   const upcoming = payments.filter((p) => p.status === 'pending')
   const history = payments.filter((p) => ['paid', 'paid_late', 'waived'].includes(p.status))
@@ -146,17 +178,40 @@ export function PaymentPanel({ clientId, clientName }: Props) {
             </div>
           )}
 
-          {/* Active schedules */}
-          {schedules.filter((s) => s.active).length > 0 && (
+          {/* Schedules */}
+          {schedules.length > 0 && (
             <div className="space-y-1.5 pt-2 border-t border-border">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring Schedules</div>
-              {schedules.filter((s) => s.active).map((s) => (
-                <div key={s.id} className="bg-card border border-border rounded-lg px-3 py-2 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-foreground font-medium">{s.label || typeLabel(s.payment_type)}</span>
-                    <span className="text-muted-foreground ml-2">{formatCurrency(s.amount)} · {s.frequency}</span>
+              {schedules.map((s) => (
+                <div key={s.id} className={cn('bg-card border rounded-lg px-3 py-2.5 text-xs', s.active ? 'border-border' : 'border-border/40 opacity-60')}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Repeat className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <span className="text-foreground font-medium truncate">{s.label || typeLabel(s.payment_type)}</span>
+                      <span className="text-muted-foreground">{formatCurrency(s.amount)} · {s.frequency}</span>
+                      {!s.active && <span className="text-[10px] text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5">Paused</span>}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {s.active ? (
+                        <>
+                          <button onClick={() => pauseSchedule(s.id)} title="Pause plan"
+                            className="p-1 text-muted-foreground/50 hover:text-amber-400 transition-colors">
+                            <PauseCircle className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => cancelSchedule(s.id)} title="Cancel plan — void future invoices"
+                            className="p-1 text-muted-foreground/50 hover:text-red-400 transition-colors">
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => resumeSchedule(s.id)}
+                          className="text-[10px] text-primary/70 hover:text-primary transition-colors px-1.5 py-0.5 border border-primary/20 rounded">
+                          Resume
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-muted-foreground">from {new Date(s.start_date).toLocaleDateString()}</span>
+                  <div className="text-muted-foreground/60 mt-0.5 pl-5">from {s.start_date}{s.end_date ? ` → ${s.end_date}` : ''}</div>
                 </div>
               ))}
             </div>
