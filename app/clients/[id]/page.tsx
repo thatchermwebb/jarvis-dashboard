@@ -22,7 +22,8 @@ import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
 import {
   cn, stageLabel, stageColor, sentimentEmoji, sentimentColor,
-  cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor
+  cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
+  daysUntil,
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel } from '@/lib/scoring'
 import type { Client, CommunicationLog } from '@/types'
@@ -131,9 +132,7 @@ export default function ClientWarRoom() {
     )
   }
 
-  const trialDaysLeft = client.trial_end
-    ? Math.ceil((new Date(client.trial_end).getTime() - Date.now()) / 86400000)
-    : null
+  const trialDaysLeft = client.trial_end ? daysUntil(client.trial_end) : null
 
   const LOG_TYPE_ICON = {
     call: <Phone className="w-3 h-3" />,

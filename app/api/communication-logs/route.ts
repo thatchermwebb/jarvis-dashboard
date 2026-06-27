@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
   if (body.summary) clientUpdate.last_call_summary = body.summary
   if (body.sentiment) clientUpdate.last_client_sentiment = body.sentiment
   if (body.followup_date) clientUpdate.next_followup_date = body.followup_date
+  if (body.followup_time) clientUpdate.next_followup_time = body.followup_time
   if (body.next_step) clientUpdate.followup_reason = body.next_step
   if (body.promises_made) clientUpdate.promises_made = body.promises_made
   if (body.objections) clientUpdate.objections = body.objections

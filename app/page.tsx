@@ -3,8 +3,8 @@ import { sortClientsByPriority } from '@/lib/scoring'
 import { DailyBriefing, type BriefingClientLists } from '@/components/dashboard/DailyBriefing'
 import { StatCard, AlertRow } from '@/components/dashboard/AlertPanel'
 import { CollapsibleQueue } from '@/components/dashboard/CollapsibleQueue'
-import { isAfter, isBefore, addDays, startOfDay } from 'date-fns'
 import type { Client, DashboardStats } from '@/types'
+import { localToday, daysUntil } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,11 +17,15 @@ export default async function CommandCenter() {
   ])
 
   const allClients = (clients ?? []) as Client[]
-  const today = startOfDay(new Date())
-  // todayStr: YYYY-MM-DD in UTC (Vercel runs UTC; compare date strings to avoid tz shift)
-  const todayStr = today.toISOString().slice(0, 10)
-  const in48h  = addDays(today, 2)
-  const in7d   = addDays(today, 7)
+  const todayStr = localToday()
+  function addDayStr(days: number): string {
+    const [y, m, d] = todayStr.split('-').map(Number)
+    const ms = Date.UTC(y, m - 1, d) + days * 86_400_000
+    const dt = new Date(ms)
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+  }
+  const in48hStr = addDayStr(2)
+  const in7dStr  = addDayStr(7)
 
   const trialStages = ['free_trial', 'free_trial_pending', 'trial_ending_soon']
   const trialClients = allClients.filter(c => trialStages.includes(c.stage))
@@ -32,7 +36,7 @@ export default async function CommandCenter() {
     trials_ending_today: trialClients.filter(c => c.trial_end === todayStr).length,
     trials_ending_this_week: trialClients.filter(c => {
       if (!c.trial_end) return false
-      return c.trial_end > todayStr && c.trial_end <= in7d.toISOString().slice(0, 10)
+      return c.trial_end > todayStr && c.trial_end <= in7dStr
     }).length,
     payment_issues: allClients.filter(c => c.payment_issue || c.stage === 'overdue' || c.stage === 'payment_issue').length,
     at_risk_clients: allClients.filter(c => c.stage === 'overdue' || c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60).length,
@@ -46,10 +50,9 @@ export default async function CommandCenter() {
     weekly_recurring_revenue: 0,
   }
 
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000)
-  // Clients active before 30 days ago (proxy for MRR 30d ago)
+  const thirtyDaysAgoStr = addDayStr(-30)
   const mrrThirtyDaysAgo = allClients
-    .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer && new Date(c.created_at) < thirtyDaysAgo)
+    .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer && c.created_at.slice(0, 10) < thirtyDaysAgoStr)
     .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0)
   const mrrChange = mrrThirtyDaysAgo > 0
     ? Math.round(((stats.monthly_recurring_revenue - mrrThirtyDaysAgo) / mrrThirtyDaysAgo) * 100)
@@ -59,7 +62,6 @@ export default async function CommandCenter() {
     .filter(c => !['churned', 'free_trial_lost', 'trial_concluded'].includes(c.stage))
     .slice(0, 5)
 
-  const in48hStr = in48h.toISOString().slice(0, 10)
   const trialsEndingSoon     = trialClients.filter(c => c.trial_end && c.trial_end <= in48hStr)
   const trialsEndingToday    = trialClients.filter(c => c.trial_end === todayStr)
   const paymentIssueClients  = allClients.filter(c => c.payment_issue || c.stage === 'overdue' || c.stage === 'payment_issue')

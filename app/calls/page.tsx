@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn, timeAgo, localToday, daysUntil } from '@/lib/utils'
 import type { Client } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -34,10 +34,11 @@ type SortMode = 'priority' | 'due_date'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function todayStr() { return new Date().toISOString().slice(0, 10) }
-function offsetStr(days: number) {
-  const d = new Date(); d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+function offsetStr(days: number): string {
+  const [y, m, d] = localToday().split('-').map(Number)
+  const ms = Date.UTC(y, m - 1, d) + days * 86_400_000
+  const dt = new Date(ms)
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
 }
 
 function stageDotColor(stage: string): string {
@@ -66,10 +67,10 @@ function DayPopup({ day, year, month, clients, onClose }: {
 }) {
   const router = useRouter()
   const label = new Date(year, month, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayLocal = localToday()
   const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-  const isOverdue = dateStr < todayStr
-  const isToday = dateStr === todayStr
+  const isOverdue = dateStr < todayLocal
+  const isToday = dateStr === todayLocal
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -300,7 +301,7 @@ function CallsPageInner() {
 
   // Filter clients by tab
   function getTabClients(tab: QueueTab): Client[] {
-    const t = todayStr()
+    const t = localToday()
     const tom = offsetStr(1)
     const in7 = offsetStr(7)
 

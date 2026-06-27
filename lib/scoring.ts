@@ -1,21 +1,20 @@
 import { differenceInDays } from 'date-fns'
 import type { Client } from '@/types'
+import { localToday, daysUntil, daysBetween } from './utils'
 
 export function calculatePriorityScore(client: Client): number {
   let score = 0
-  const today = new Date()
+  const todayStr = localToday()
 
-  const trialEnd = client.trial_end ? new Date(client.trial_end) : null
-  const daysUntilTrialEnd = trialEnd ? differenceInDays(trialEnd, today) : null
+  const daysUntilTrialEnd = client.trial_end ? daysUntil(client.trial_end) : null
 
   const daysSinceContact = client.last_contact_date
-    ? differenceInDays(today, new Date(client.last_contact_date))
+    ? Math.abs(daysUntil(client.last_contact_date.slice(0, 10))) // last_contact_date may be full ISO
     : 999
 
   const isActivePaying = client.stage === 'active_client' || client.stage === 'won_back'
   const isTrial = client.stage === 'free_trial' || client.stage === 'trial_ending_soon'
   const sentiment = client.last_client_sentiment
-  const todayStr = today.toISOString().slice(0, 10)
 
   // --- Tier 1: About to pay or end trial (highest urgency) ---
   if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 0) score += 80
@@ -31,7 +30,7 @@ export function calculatePriorityScore(client: Client): number {
   if (client.stage === 'payment_issue') score += 20
   if (client.payment_status === 'failed') score += 30
 
-  // --- Tier 3: Active client sentiment (nuanced — happy ≠ urgent) ---
+  // --- Tier 3: Active client sentiment ---
   if (isActivePaying) {
     if (sentiment === 'angry') score += 60
     else if (sentiment === 'frustrated') score += 50
@@ -39,10 +38,8 @@ export function calculatePriorityScore(client: Client): number {
     else if (sentiment === 'concerned') score += 35
     else if (sentiment === 'confused') score += 20
     else if (sentiment === 'neutral') score += 5
-    // happy = 0 (no urgency boost — they're fine)
   }
 
-  // Churn risk on active clients
   if (isActivePaying && (client.stage === 'churn_risk' || (client.churn_risk_score && client.churn_risk_score >= 70))) score += 50
 
   // --- Tier 4: General signals ---
@@ -50,15 +47,14 @@ export function calculatePriorityScore(client: Client): number {
   if (sentiment === 'ghosting' && !isActivePaying) score += 25
   if (client.thatcher_needed) score += 40
 
-  // --- Tier 5: Follow-up due date (primary queue driver) ---
+  // --- Tier 5: Follow-up due date ---
   if (client.next_followup_date) {
-    if (client.next_followup_date < todayStr) score += 40         // overdue
-    else if (client.next_followup_date === todayStr) score += 35  // due today
-    else {
-      const daysUntil = differenceInDays(new Date(client.next_followup_date + 'T00:00:00'), today)
-      if (daysUntil <= 2) score += 15                             // due in 1-2 days
-    }
+    const d = client.next_followup_date
+    if (d < todayStr) score += 40          // overdue
+    else if (d === todayStr) score += 35   // due today
+    else if (daysUntil(d) <= 2) score += 15 // due in 1-2 days
   }
+
   if (daysSinceContact >= 2) score += 20
   if (client.urgency_level === 'critical') score += 30
   if (client.urgency_level === 'high') score += 15
@@ -73,7 +69,7 @@ export function calculatePriorityScore(client: Client): number {
 
 export function getTrialDaysLeft(trialEnd?: string): number | null {
   if (!trialEnd) return null
-  return differenceInDays(new Date(trialEnd), new Date())
+  return daysUntil(trialEnd)
 }
 
 export function getTrialHealthLabel(score?: number): string {

@@ -7,6 +7,47 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// ─── Centralized date helpers ─────────────────────────────────────────────────
+// All date-only values in the DB are YYYY-MM-DD strings.
+// Never use new Date('YYYY-MM-DD') — it parses as UTC midnight and shifts by
+// the local timezone offset, causing off-by-one errors for evening users.
+
+/** Today's date as YYYY-MM-DD in the LOCAL timezone (browser or Node/Vercel). */
+export function localToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Parse a YYYY-MM-DD string safely (noon local time to avoid DST edge cases). */
+export function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d, 12, 0, 0)
+}
+
+/** Days between two YYYY-MM-DD strings (pure UTC arithmetic, no timezone shift). */
+export function daysBetween(fromStr: string, toStr: string): number {
+  const [fy, fm, fd] = fromStr.split('-').map(Number)
+  const [ty, tm, td] = toStr.split('-').map(Number)
+  const fromMs = Date.UTC(fy, fm - 1, fd)
+  const toMs   = Date.UTC(ty, tm - 1, td)
+  return Math.round((toMs - fromMs) / 86_400_000)
+}
+
+/** Days until a YYYY-MM-DD date from today (negative = past). */
+export function daysUntil(dateStr: string): number {
+  return daysBetween(localToday(), dateStr)
+}
+
+/** Format HH:MM (24h) to 12-hour display: "2:30 PM" */
+export function formatTime(t?: string): string {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  if (isNaN(h) || isNaN(m)) return t
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
 export function timeAgo(date?: string): string {
   if (!date) return 'Never'
   try {

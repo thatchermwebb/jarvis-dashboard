@@ -13,6 +13,8 @@ import {
   cplStatusColor,
   timeAgo,
   formatCurrency,
+  localToday,
+  daysUntil,
 } from '@/lib/utils'
 import type { Client } from '@/types'
 
@@ -118,14 +120,15 @@ export function CallQueueCard({ client, onUpdated }: Props) {
         <div className="px-6 pb-3 flex items-center gap-5 flex-wrap text-sm text-muted-foreground">
           {/* Follow-up due date chip */}
           {client.next_followup_date && (() => {
-            const todayStr = new Date().toISOString().slice(0, 10)
+            const today = localToday()
             const d = client.next_followup_date!
-            const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
-            const tomorrowStr = tomorrow.toISOString().slice(0, 10)
-            if (d < todayStr) return <span className="text-[11px] font-medium bg-red-500/15 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">Overdue · {d}</span>
-            if (d === todayStr) return <span className="text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">Due today</span>
-            if (d === tomorrowStr) return <span className="text-[11px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Due tomorrow</span>
-            return <span className="text-[11px] font-medium bg-secondary/60 text-muted-foreground border border-border/40 px-2 py-0.5 rounded-full">Due {d}</span>
+            const diff = daysUntil(d)
+            const t = (client as { next_followup_time?: string }).next_followup_time
+            const timeSuffix = t ? ` · ${formatTime(t)}` : ''
+            if (d < today) return <span className="text-[11px] font-medium bg-red-500/15 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">Overdue · {d}{timeSuffix}</span>
+            if (d === today) return <span className="text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">Due today{timeSuffix}</span>
+            if (diff === 1) return <span className="text-[11px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Due tomorrow{timeSuffix}</span>
+            return <span className="text-[11px] font-medium bg-secondary/60 text-muted-foreground border border-border/40 px-2 py-0.5 rounded-full">Due {d}{timeSuffix}</span>
           })()}
           {daysLeft !== null && daysLeft !== undefined && (
             <span className={cn(

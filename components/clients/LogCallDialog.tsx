@@ -318,6 +318,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
     promises_made: '',
     next_step: '',
     followup_date: '',
+    followup_time: '',
     created_by: 'Diego',
     ad_creative: '',
     trial_notes: '',
@@ -337,6 +338,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
         promises_made: editLog.promises_made ?? '',
         next_step: editLog.next_step ?? '',
         followup_date: editLog.followup_date ?? '',
+        followup_time: (editLog as { followup_time?: string }).followup_time ?? '',
         created_by: editLog.created_by ?? 'Diego',
         ad_creative: editLog.ad_creative ?? '',
         trial_notes: editLog.trial_notes ?? '',
@@ -365,7 +367,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
   useEffect(() => {
     if (!open) {
-      setForm({ log_type: 'call', outcome: 'answered', summary: '', sentiment: '', promises_made: '', next_step: '', followup_date: '', created_by: 'Diego', ad_creative: '', trial_notes: '' })
+      setForm({ log_type: 'call', outcome: 'answered', summary: '', sentiment: '', promises_made: '', next_step: '', followup_date: '', followup_time: '', created_by: 'Diego', ad_creative: '', trial_notes: '' })
       setSearch(''); setShowDropdown(false); setTrialNotesOpen(false)
     }
   }, [open])
@@ -562,10 +564,24 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 </Select>
               </div>
 
-              {/* Follow-Up Calendar */}
+              {/* Follow-Up Date + Time */}
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Follow-Up Date <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                 <InlineCalendar value={form.followup_date} onChange={v => set('followup_date', v)} />
+                {form.followup_date && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Label className="text-xs text-muted-foreground shrink-0">Time (optional)</Label>
+                    <input
+                      type="time"
+                      value={form.followup_time}
+                      onChange={e => set('followup_time', e.target.value)}
+                      className="flex-1 h-8 rounded-md border border-input bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    {form.followup_time && (
+                      <button type="button" onClick={() => set('followup_time', '')} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Promises + Next Step */}
