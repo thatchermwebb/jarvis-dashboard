@@ -7,13 +7,17 @@ export async function GET(req: NextRequest) {
   const clientId = searchParams.get('client_id')
   const status = searchParams.get('status')
 
+  const assignedTo = searchParams.get('assigned_to')
+
   let query = supabase
     .from('tasks')
     .select('*, client:clients(id, name, stage)')
+    .order('due_date', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false })
 
   if (clientId) query = query.eq('client_id', clientId)
   if (status) query = query.eq('status', status)
+  if (assignedTo) query = query.eq('assigned_to', assignedTo)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

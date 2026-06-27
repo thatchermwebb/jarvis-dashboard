@@ -168,18 +168,21 @@ export interface CommunicationLog {
 
 export interface Task {
   id: string
-  client_id: string
+  client_id?: string | null
   created_at: string
   updated_at: string
+  title?: string
   task_type?: TaskType
   priority?: TaskPriority
   assigned_va?: string
+  assigned_to?: string
   due_date?: string
+  due_time?: string
   status?: TaskStatus
   slack_sent?: boolean
   notes?: string
   asset_links?: string
-  client?: Pick<Client, 'id' | 'name' | 'stage'>
+  client?: Pick<Client, 'id' | 'name' | 'stage'> | null
 }
 
 export interface TimelineEvent {

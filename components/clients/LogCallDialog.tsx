@@ -310,6 +310,11 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
   const [trialNotesOpen, setTrialNotesOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
+  // Task creation alongside log
+  const [createTask, setCreateTask] = useState(false)
+  const [taskAssignedTo, setTaskAssignedTo] = useState('Diego')
+  const [taskDueDate, setTaskDueDate] = useState('')
+
   const [form, setForm] = useState({
     log_type: 'call' as LogType,
     outcome: '' as LogOutcome | '',
@@ -369,6 +374,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
     if (!open) {
       setForm({ log_type: 'call', outcome: '', summary: '', sentiment: '', promises_made: '', next_step: '', followup_date: '', followup_time: '', created_by: 'Diego', ad_creative: '', trial_notes: '' })
       setSearch(''); setShowDropdown(false); setTrialNotesOpen(false)
+      setCreateTask(false); setTaskAssignedTo('Diego'); setTaskDueDate('')
     }
   }, [open])
 
@@ -408,6 +414,21 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
         })
         if (!res.ok) throw new Error('Failed to log')
+        // Create linked task if requested
+        if (createTask && form.promises_made.trim()) {
+          await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: form.promises_made.trim(),
+              client_id: clientId,
+              assigned_to: taskAssignedTo,
+              due_date: taskDueDate || null,
+              priority: 'medium',
+              status: 'open',
+            }),
+          })
+        }
         toast.success('Call logged')
       }
       onLogged?.()
@@ -587,11 +608,55 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 )}
               </div>
 
-              {/* Promises + Next Step */}
+              {/* Action Item / Task + Next Step */}
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Promises Made <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised?" className="bg-secondary/50 h-10 text-sm" />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Action Item <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
+                    {!editLog && (
+                      <button
+                        type="button"
+                        onClick={() => setCreateTask(t => !t)}
+                        className={cn(
+                          'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
+                          createTask
+                            ? 'bg-primary/15 text-primary border-primary/30'
+                            : 'text-muted-foreground border-border/40 hover:text-foreground'
+                        )}
+                      >
+                        {createTask ? '✓ Creating task' : '+ Create task'}
+                      </button>
+                    )}
+                  </div>
+                  <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised / needs to happen?" className="bg-secondary/50 h-10 text-sm" />
+                  {createTask && form.promises_made.trim() && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider text-primary/60 font-semibold">Task details</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Assigned to</Label>
+                          <Select value={taskAssignedTo} onValueChange={v => v && setTaskAssignedTo(v)}>
+                            <SelectTrigger className="h-8 text-xs bg-secondary/50">
+                              <span>{taskAssignedTo}</span>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {['Diego','Thatcher','Trepp'].map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Due date</Label>
+                          <input
+                            type="date"
+                            value={taskDueDate}
+                            onChange={e => setTaskDueDate(e.target.value)}
+                            className="w-full h-8 rounded-md border border-input bg-secondary/50 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Next Step <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>

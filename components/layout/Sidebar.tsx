@@ -14,12 +14,14 @@ import {
   LogOut,
   Clapperboard,
   CalendarDays,
+  CheckSquare,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
+  { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Ad Production', icon: Clapperboard },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/payments', label: 'Payments', icon: CreditCard },

@@ -3,18 +3,23 @@ import { sortClientsByPriority } from '@/lib/scoring'
 import { DailyBriefing, type BriefingClientLists } from '@/components/dashboard/DailyBriefing'
 import { StatCard, AlertRow } from '@/components/dashboard/AlertPanel'
 import { CollapsibleQueue } from '@/components/dashboard/CollapsibleQueue'
-import type { Client, DashboardStats } from '@/types'
-import { localToday, daysUntil } from '@/lib/utils'
+import { TasksWidget } from '@/components/dashboard/TasksWidget'
+import type { Client, Task, DashboardStats } from '@/types'
+import { localToday } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CommandCenter() {
   const supabase = await createClient()
 
-  const [{ data: clients }, { data: tasks }] = await Promise.all([
+  const [{ data: clients }, { data: tasksRaw }] = await Promise.all([
     supabase.from('clients').select('*').not('stage', 'eq', 'churned'),
-    supabase.from('tasks').select('id').neq('status', 'done'),
+    supabase.from('tasks')
+      .select('*, client:clients(id, name, stage)')
+      .neq('status', 'done')
+      .order('due_date', { ascending: true, nullsFirst: false }),
   ])
+  const allTasks = (tasksRaw ?? []) as Task[]
 
   const allClients = (clients ?? []) as Client[]
   const todayStr = localToday()
@@ -42,7 +47,7 @@ export default async function CommandCenter() {
     at_risk_clients: allClients.filter(c => c.stage === 'overdue' || c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60).length,
     close_ready_trials: trialClients.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready').length,
     thatcher_needed: allClients.filter(c => c.thatcher_needed).length,
-    va_tasks_open: tasks?.length ?? 0,
+    va_tasks_open: allTasks.length,
     overdue_followups: allClients.filter(c => c.next_followup_date && c.next_followup_date < todayStr).length,
     monthly_recurring_revenue: allClients
       .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer)
@@ -124,9 +129,10 @@ export default async function CommandCenter() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Priority queue — collapsible */}
-        <div className="lg:col-span-2 order-2 lg:order-1">
+        {/* Priority queue + Tasks */}
+        <div className="lg:col-span-2 order-2 lg:order-1 space-y-8">
           <CollapsibleQueue clients={dueToday} />
+          <TasksWidget tasks={allTasks} />
         </div>
 
         {/* Alerts — shown first on mobile, visually prominent */}
@@ -157,3 +163,4 @@ export default async function CommandCenter() {
     </div>
   )
 }
+
