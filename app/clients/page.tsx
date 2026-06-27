@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
-import { cn, sentimentEmoji, timeAgo, formatCurrency } from '@/lib/utils'
+import { cn, sentimentEmoji, timeAgo, formatCurrency, localToday } from '@/lib/utils'
 import { getTrialDaysLeft } from '@/lib/scoring'
 import type { Client, ClientStage } from '@/types'
 
@@ -52,6 +52,33 @@ function isAtRisk(c: Client) {
   )
 }
 
+function atRiskReasons(c: Client): string[] {
+  const reasons: string[] = []
+  if (c.payment_issue) reasons.push('Payment issue flagged')
+  if (c.urgency_level === 'critical') reasons.push('Urgency: critical')
+  else if (c.urgency_level === 'high') reasons.push('Urgency: high')
+  if (c.churn_risk_score && c.churn_risk_score >= 60) reasons.push(`Churn risk: ${c.churn_risk_score}%`)
+  if (c.last_client_sentiment === 'frustrated') reasons.push('Sentiment: frustrated')
+  else if (c.last_client_sentiment === 'angry') reasons.push('Sentiment: angry')
+  else if (c.last_client_sentiment === 'ghosting') reasons.push('Client ghosting')
+  return reasons
+}
+
+function RiskTooltip({ c }: { c: Client }) {
+  const reasons = atRiskReasons(c)
+  return (
+    <span className="relative group/risk inline-flex">
+      <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 hidden group-hover/risk:flex flex-col gap-0.5 bg-popover border border-border rounded-lg shadow-xl px-2.5 py-2 min-w-[160px] whitespace-nowrap">
+        <span className="text-[10px] font-semibold text-red-400 mb-0.5">At risk</span>
+        {reasons.map(r => (
+          <span key={r} className="text-[11px] text-foreground/80">{r}</span>
+        ))}
+      </span>
+    </span>
+  )
+}
+
 function TrialTag({ c }: { c: Client }) {
   const isTrial = c.stage === 'free_trial' || c.stage === 'trial_ending_soon'
   if (!isTrial || !c.trial_end) return null
@@ -65,13 +92,15 @@ function TrialTag({ c }: { c: Client }) {
 function ClientRow({ c, onClick, onDelete }: { c: Client; onClick: () => void; onDelete: (id: string) => void }) {
   const [confirm, setConfirm] = useState(false)
   const atRisk = isAtRisk(c)
-  const overdue = c.next_followup_date && new Date(c.next_followup_date) < new Date()
+  const today = localToday()
+  const overdue = c.next_followup_date && c.next_followup_date < today
+  const dueToday = c.next_followup_date === today
   return (
     <tr onClick={onClick} className="hover:bg-secondary/30 cursor-pointer transition-colors group">
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           <span className="font-medium truncate max-w-[130px]">{c.name}</span>
-          {atRisk && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+          {atRisk && <RiskTooltip c={c} />}
           <TrialTag c={c} />
         </div>
         {c.business_name && <div className="text-xs text-muted-foreground truncate max-w-[130px]">{c.business_name}</div>}
@@ -80,7 +109,7 @@ function ClientRow({ c, onClick, onDelete }: { c: Client; onClick: () => void; o
       <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{timeAgo(c.last_contact_date)}</td>
       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
         {c.next_followup_date
-          ? <span className={overdue ? 'text-red-400' : 'text-muted-foreground'}>{new Date(c.next_followup_date).toLocaleDateString()}</span>
+          ? <span className={overdue ? 'text-red-400' : dueToday ? 'text-amber-400' : 'text-muted-foreground'}>{new Date(c.next_followup_date + 'T00:00:00').toLocaleDateString()}</span>
           : <span className="text-muted-foreground">—</span>}
       </td>
       <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{c.monthly_retainer ? formatCurrency(c.monthly_retainer) : '—'}</td>
@@ -115,7 +144,8 @@ function KanbanCard({
   onDragStart: (e: React.DragEvent, id: string) => void
 }) {
   const atRisk = isAtRisk(c)
-  const overdue = c.next_followup_date && new Date(c.next_followup_date) < new Date()
+  const today = localToday()
+  const overdue = c.next_followup_date && c.next_followup_date < today
   return (
     <div
       draggable
@@ -127,7 +157,7 @@ function KanbanCard({
         <div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-medium text-sm leading-tight">{c.name}</span>
-            {atRisk && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+            {atRisk && <RiskTooltip c={c} />}
           </div>
           {c.business_name && <div className="text-xs text-muted-foreground leading-tight mt-0.5">{c.business_name}</div>}
         </div>
@@ -138,8 +168,8 @@ function KanbanCard({
         {c.monthly_retainer && <span className="text-emerald-400 font-medium">{formatCurrency(c.monthly_retainer)}</span>}
       </div>
       {c.next_followup_date && (
-        <div className={cn('text-[11px]', overdue ? 'text-red-400' : 'text-muted-foreground')}>
-          📅 {new Date(c.next_followup_date).toLocaleDateString()}{overdue && ' (overdue)'}
+        <div className={cn('text-[11px]', overdue ? 'text-red-400' : c.next_followup_date === today ? 'text-amber-400' : 'text-muted-foreground')}>
+          📅 {new Date(c.next_followup_date + 'T00:00:00').toLocaleDateString()}{overdue && ' (overdue)'}
         </div>
       )}
       {c.last_contact_date && <div className="text-[11px] text-muted-foreground">Last: {timeAgo(c.last_contact_date)}</div>}
@@ -224,7 +254,12 @@ function KanbanColumn({
   )
 }
 
-type SortDir = 'asc' | 'desc' | null
+type SortField = 'last_contact' | 'followup' | 'retainer' | 'mood'
+type SortDir = 'asc' | 'desc'
+
+const MOOD_ORDER: Record<string, number> = {
+  close_ready: 0, happy: 1, neutral: 2, frustrated: 3, angry: 4, ghosting: 5,
+}
 
 function ClientsContent() {
   const router = useRouter()
@@ -236,7 +271,8 @@ function ClientsContent() {
   const [formDefaultStage, setFormDefaultStage] = useState<ClientStage | undefined>()
   const [importOpen, setImportOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  const [sortDir, setSortDir] = useState<SortDir>(null)
+  const [sortField, setSortField] = useState<SortField | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const dragId = useRef<string | null>(null)
 
   function toggleGroup(label: string) {
@@ -247,17 +283,35 @@ function ClientsContent() {
     })
   }
 
-  function cycleSortDir() {
-    setSortDir(d => d === null ? 'desc' : d === 'desc' ? 'asc' : null)
+  function cycleSort(field: SortField) {
+    if (sortField !== field) { setSortField(field); setSortDir('desc') }
+    else if (sortDir === 'desc') setSortDir('asc')
+    else { setSortField(null); setSortDir('desc') }
   }
 
   function sortClients(list: Client[]): Client[] {
-    if (!sortDir) return list
+    if (!sortField) return list
     return [...list].sort((a, b) => {
-      const av = a.monthly_retainer ?? 0
-      const bv = b.monthly_retainer ?? 0
+      let av: number, bv: number
+      if (sortField === 'retainer') {
+        av = a.monthly_retainer ?? 0; bv = b.monthly_retainer ?? 0
+      } else if (sortField === 'last_contact') {
+        av = a.last_contact_date ? new Date(a.last_contact_date).getTime() : 0
+        bv = b.last_contact_date ? new Date(b.last_contact_date).getTime() : 0
+      } else if (sortField === 'followup') {
+        av = a.next_followup_date ? new Date(a.next_followup_date).getTime() : Infinity
+        bv = b.next_followup_date ? new Date(b.next_followup_date).getTime() : Infinity
+      } else {
+        av = MOOD_ORDER[a.last_client_sentiment ?? ''] ?? 99
+        bv = MOOD_ORDER[b.last_client_sentiment ?? ''] ?? 99
+      }
       return sortDir === 'desc' ? bv - av : av - bv
     })
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 opacity-40" />
+    return sortDir === 'desc' ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
   }
 
   const urlFilter = searchParams.get('filter') ?? ''
@@ -326,7 +380,7 @@ function ClientsContent() {
     if (urlFilter && URL_FILTER_STAGES[urlFilter]) {
       let filtered = all.filter(c => URL_FILTER_STAGES[urlFilter].includes(c.stage))
       if (urlFilter === 'ending_today') {
-        const todayStr = new Date().toISOString().slice(0, 10)
+        const todayStr = localToday()
         filtered = filtered.filter(c => c.trial_end && c.trial_end.slice(0, 10) === todayStr)
       }
       if (urlFilter === 'close_ready') {
@@ -440,20 +494,26 @@ function ClientsContent() {
                           <tr className="border-b border-border">
                             <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">Client</th>
                             <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">Location</th>
-                            <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">Last Contact</th>
-                            <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">Follow-Up</th>
                             <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">
-                              <button
-                                onClick={cycleSortDir}
-                                className="flex items-center gap-1 hover:text-foreground transition-colors"
-                              >
-                                Retainer
-                                {sortDir === null && <ArrowUpDown className="w-3 h-3 opacity-40" />}
-                                {sortDir === 'desc' && <ArrowDown className="w-3 h-3 text-primary" />}
-                                {sortDir === 'asc' && <ArrowUp className="w-3 h-3 text-primary" />}
+                              <button onClick={() => cycleSort('last_contact')} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                                Last Contact <SortIcon field="last_contact" />
                               </button>
                             </th>
-                            <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">Mood</th>
+                            <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">
+                              <button onClick={() => cycleSort('followup')} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                                Follow-Up <SortIcon field="followup" />
+                              </button>
+                            </th>
+                            <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">
+                              <button onClick={() => cycleSort('retainer')} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                                Retainer <SortIcon field="retainer" />
+                              </button>
+                            </th>
+                            <th className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">
+                              <button onClick={() => cycleSort('mood')} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                                Mood <SortIcon field="mood" />
+                              </button>
+                            </th>
                             <th className="px-3 py-2 w-9" />
                           </tr>
                         </thead>

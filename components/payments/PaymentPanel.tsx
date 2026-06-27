@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import type { Payment, PaymentSchedule, PaymentType, PaymentFrequency } from '@/types'
 
 const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
@@ -244,8 +244,8 @@ function PaymentRow({ payment: p, onMark, onDelete, onEdit }: {
         </div>
         <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
           <CalendarDays className="w-3 h-3 flex-shrink-0" />
-          Due {new Date(p.due_date).toLocaleDateString()}
-          {p.paid_date && <span>· Paid {new Date(p.paid_date).toLocaleDateString()}</span>}
+          Due {formatDate(p.due_date)}
+          {p.paid_date && <span>· Paid {formatDate(p.paid_date)}</span>}
           {p.notes && <span>· {p.notes}</span>}
         </div>
       </div>

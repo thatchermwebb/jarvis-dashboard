@@ -5,7 +5,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, parseLocalDate, localToday } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,13 +51,11 @@ function getRangeStart(range: Range): Date | null {
 }
 
 function fmtDay(dateStr: string) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function fmtWeek(dateStr: string) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
@@ -99,11 +97,10 @@ export default function ReportsPage() {
   }, [])
 
   const rangeStart = useMemo(() => getRangeStart(range), [range])
+  // Convert rangeStart Date → YYYY-MM-DD in LOCAL time for safe string comparison against date-only fields
+  const rangeStartStr = useMemo(() => rangeStart ? localDateStr(rangeStart) : null, [rangeStart])
 
-  const inRange = (dateStr: string) => {
-    if (!rangeStart) return true
-    return new Date(dateStr) >= rangeStart
-  }
+  const inRange = (dateStr: string) => !rangeStartStr || dateStr.slice(0, 10) >= rangeStartStr
 
   // ── Revenue metrics ──────────────────────────────────────────────────────────
 
@@ -117,7 +114,7 @@ export default function ReportsPage() {
       p.paid_date && inRange(p.paid_date)
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [payments, range, rangeStart]
+    [payments, range, rangeStartStr]
   )
 
   const totalCollected = useMemo(() => paidInRange.reduce((s, p) => s + p.amount, 0), [paidInRange])
@@ -180,8 +177,10 @@ export default function ReportsPage() {
       const day = p.paid_date.slice(0, 10)
       byDay[day] = (byDay[day] ?? 0) + p.amount
     }
-    const start = rangeStart ?? new Date(Math.min(...paidInRange.map(p => new Date(p.paid_date!).getTime())))
-    if (!start || isNaN(start.getTime())) return []
+    // Use localDateStr on the rangeStart Date (local) or parse the earliest paid_date safely
+    const earliestPaid = paidInRange.length > 0 ? parseLocalDate(paidInRange.map(p => p.paid_date!).sort()[0]) : null
+    const start = rangeStart ?? earliestPaid
+    if (!start) return []
     return getDaysInRange(start, new Date()).map(date => ({
       date, amount: byDay[date] ?? 0, label: fmtDay(date)
     }))
@@ -193,16 +192,15 @@ export default function ReportsPage() {
     const byWeek: Record<string, number> = {}
     for (const p of paidInRange) {
       if (!p.paid_date) continue
-      // Parse as local date to avoid UTC shift
-      const [y, m, d] = p.paid_date.split('-').map(Number)
-      const date = new Date(y, m - 1, d)
+      const date = parseLocalDate(p.paid_date)
       const sun = new Date(date)
       sun.setDate(date.getDate() - date.getDay())
       const key = localDateStr(sun)
       byWeek[key] = (byWeek[key] ?? 0) + p.amount
     }
-    const start = rangeStart ?? new Date(Math.min(...paidInRange.map(p => new Date(p.paid_date!).getTime())))
-    if (!start || isNaN(start.getTime())) return []
+    const earliestPaid = paidInRange.length > 0 ? parseLocalDate(paidInRange.map(p => p.paid_date!).sort()[0]) : null
+    const start = rangeStart ?? earliestPaid
+    if (!start) return []
     return getWeeksInRange(start, new Date()).map(date => ({
       date, amount: byWeek[date] ?? 0, label: fmtWeek(date)
     }))

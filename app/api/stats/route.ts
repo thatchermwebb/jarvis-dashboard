@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { isAfter, isBefore, addDays, startOfDay } from 'date-fns'
+import { localToday, daysBetween } from '@/lib/utils'
 import type { Client, DashboardStats } from '@/types'
 
 export async function GET() {
@@ -13,9 +13,8 @@ export async function GET() {
     .not('status', 'eq', 'done')
 
   const allClients = (clients ?? []) as Client[]
-  const today = startOfDay(new Date())
-  const in48h = addDays(today, 2)
-  const in7d = addDays(today, 7)
+  // Use YYYY-MM-DD string arithmetic — no Date objects, no timezone shifts
+  const todayStr = localToday()
 
   const trialClients = allClients.filter(
     (c) => c.stage === 'free_trial' || c.stage === 'trial_ending_soon'
@@ -24,15 +23,13 @@ export async function GET() {
   const stats: DashboardStats = {
     active_clients: allClients.filter((c) => c.stage === 'active_client').length,
     free_trials: trialClients.length,
-    trials_ending_today: trialClients.filter((c) => {
-      if (!c.trial_end) return false
-      const end = startOfDay(new Date(c.trial_end))
-      return end.getTime() === today.getTime()
-    }).length,
+    trials_ending_today: trialClients.filter((c) =>
+      c.trial_end && c.trial_end.slice(0, 10) === todayStr
+    ).length,
     trials_ending_this_week: trialClients.filter((c) => {
       if (!c.trial_end) return false
-      const end = new Date(c.trial_end)
-      return isAfter(end, today) && isBefore(end, in7d)
+      const d = daysBetween(todayStr, c.trial_end.slice(0, 10))
+      return d > 0 && d <= 7
     }).length,
     payment_issues: allClients.filter((c) => c.payment_issue || c.stage === 'payment_issue').length,
     at_risk_clients: allClients.filter(
@@ -46,7 +43,7 @@ export async function GET() {
     overdue_followups: allClients.filter(
       (c) =>
         c.next_followup_date &&
-        isBefore(new Date(c.next_followup_date), today) &&
+        c.next_followup_date.slice(0, 10) < todayStr &&
         !['churned'].includes(c.stage)
     ).length,
     monthly_recurring_revenue: allClients
@@ -60,8 +57,8 @@ export async function GET() {
   // Trials ending in 48h (alert)
   const trialsEndingSoon = trialClients.filter((c) => {
     if (!c.trial_end) return false
-    const end = new Date(c.trial_end)
-    return isAfter(end, today) && isBefore(end, in48h)
+    const d = daysBetween(todayStr, c.trial_end.slice(0, 10))
+    return d > 0 && d <= 2
   })
 
   return NextResponse.json({ stats, trialsEndingSoon })

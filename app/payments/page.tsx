@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, localToday } from '@/lib/utils'
 import type { Payment, PaymentEntryStatus, PaymentType } from '@/types'
 import { PaymentDialog } from '@/components/payments/PaymentDialog'
 import { toast } from 'sonner'
@@ -93,7 +93,7 @@ export default function PaymentsPage() {
   function openEdit(p: Payment) { setEditing(p); setPrefill(undefined); setDialogOpen(true) }
 
   async function markPaid(p: Payment) {
-    const today = new Date().toISOString().split('T')[0]
+    const today = localToday()
     const status = today <= p.due_date ? 'paid' : 'paid_late'
     await fetch(`/api/payments/${p.id}`, {
       method: 'PATCH',

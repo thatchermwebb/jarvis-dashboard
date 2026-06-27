@@ -419,6 +419,60 @@ export default function ClientWarRoom() {
               </div>
             </div>
 
+            {/* Next Step card */}
+            <div className={cn(
+              'border rounded-xl p-4 space-y-3',
+              client.next_followup_date ? 'bg-card border-border' : 'bg-secondary/20 border-border/40'
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Step</span>
+                <button
+                  onClick={() => setLogOpen(true)}
+                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
+                >
+                  + Log Call
+                </button>
+              </div>
+
+              {client.next_followup_date ? (() => {
+                const d = daysUntil(client.next_followup_date)
+                const overdue = d !== null && d < 0
+                const isToday = d === 0
+                const isTomorrow = d === 1
+                const dateLabel = overdue
+                  ? `${Math.abs(d!)} day${Math.abs(d!) !== 1 ? 's' : ''} overdue`
+                  : isToday ? 'Today'
+                  : isTomorrow ? 'Tomorrow'
+                  : d !== null ? `In ${d} days`
+                  : formatDate(client.next_followup_date)
+                return (
+                  <>
+                    <div>
+                      <div className={cn(
+                        'text-xl font-bold leading-tight',
+                        overdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-foreground'
+                      )}>
+                        {formatDate(client.next_followup_date)}
+                      </div>
+                      <div className={cn(
+                        'text-xs font-medium mt-0.5',
+                        overdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-muted-foreground'
+                      )}>
+                        {overdue && '⚠ '}{dateLabel}
+                      </div>
+                    </div>
+                    {client.followup_reason && (
+                      <div className="text-sm text-foreground/80 bg-secondary/30 rounded-lg px-3 py-2">
+                        {client.followup_reason}
+                      </div>
+                    )}
+                  </>
+                )
+              })() : (
+                <div className="text-sm text-muted-foreground/50 py-1">No next step scheduled</div>
+              )}
+            </div>
+
           </div>
 
           {/* Right column — communication + tabs */}
