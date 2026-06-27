@@ -466,7 +466,7 @@ export default function TasksPage() {
             </button>
           ))}
         </div>
-        <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+        <Select value={filterAssignee} onValueChange={(v) => setFilterAssignee(v ?? 'all')}>
           <SelectTrigger className="h-8 text-xs w-36 bg-secondary/40 border-border/40">
             <span className="text-muted-foreground">{filterAssignee === 'all' ? 'All assignees' : filterAssignee}</span>
           </SelectTrigger>
