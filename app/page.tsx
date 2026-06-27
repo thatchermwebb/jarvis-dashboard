@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { sortClientsByPriority } from '@/lib/scoring'
 import { DailyBriefing, type BriefingClientLists } from '@/components/dashboard/DailyBriefing'
 import { StatCard, AlertRow } from '@/components/dashboard/AlertPanel'
-import { CollapsibleQueue } from '@/components/dashboard/CollapsibleQueue'
 import { TasksWidget } from '@/components/dashboard/TasksWidget'
-import type { Client, Task, DashboardStats } from '@/types'
+import { TrialPipelineWidget } from '@/components/dashboard/TrialPipelineWidget'
+import { RevenueSnapshotWidget } from '@/components/dashboard/RevenueSnapshotWidget'
+import type { Client, Task, Payment, DashboardStats } from '@/types'
 import { localToday } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -12,14 +12,19 @@ export const dynamic = 'force-dynamic'
 export default async function CommandCenter() {
   const supabase = await createClient()
 
-  const [{ data: clients }, { data: tasksRaw }] = await Promise.all([
+  const [{ data: clients }, { data: tasksRaw }, { data: paymentsRaw }] = await Promise.all([
     supabase.from('clients').select('*').not('stage', 'eq', 'churned'),
     supabase.from('tasks')
       .select('*, client:clients(id, name, stage)')
       .neq('status', 'done')
       .order('due_date', { ascending: true, nullsFirst: false }),
+    supabase.from('payments')
+      .select('*, client:clients(id, name, business_name)')
+      .in('status', ['pending', 'overdue'])
+      .order('due_date', { ascending: true }),
   ])
   const allTasks = (tasksRaw ?? []) as Task[]
+  const dashboardPayments = (paymentsRaw ?? []) as Payment[]
 
   const allClients = (clients ?? []) as Client[]
   const todayStr = localToday()
@@ -62,12 +67,6 @@ export default async function CommandCenter() {
   const mrrChange = mrrThirtyDaysAgo > 0
     ? Math.round(((stats.monthly_recurring_revenue - mrrThirtyDaysAgo) / mrrThirtyDaysAgo) * 100)
     : null
-
-  const excludedStages = ['churned', 'free_trial_lost', 'trial_concluded', 'onboarding']
-  const dueToday = sortClientsByPriority(allClients)
-    .filter(c => !excludedStages.includes(c.stage))
-    .filter(c => !c.next_followup_date || c.next_followup_date <= todayStr)
-    .slice(0, 8)
 
   const trialsEndingSoon     = trialClients.filter(c => c.trial_end && c.trial_end <= in48hStr)
   const trialsEndingToday    = trialClients.filter(c => c.trial_end === todayStr)
@@ -129,9 +128,12 @@ export default async function CommandCenter() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Priority queue + Tasks */}
+        {/* Trial Pipeline + Revenue Snapshot + Tasks */}
         <div className="lg:col-span-2 order-2 lg:order-1 space-y-8">
-          <CollapsibleQueue clients={dueToday} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <TrialPipelineWidget trials={trialClients} />
+            <RevenueSnapshotWidget payments={dashboardPayments} />
+          </div>
           <TasksWidget tasks={allTasks} />
         </div>
 

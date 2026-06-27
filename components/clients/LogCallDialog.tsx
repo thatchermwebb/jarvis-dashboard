@@ -657,7 +657,6 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                     </div>
                   )}
                 </div>
-                </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Next Step <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                   <Input value={form.next_step} onChange={e => set('next_step', e.target.value)} placeholder="What needs to happen next?" className="bg-secondary/50 h-10 text-sm" />
