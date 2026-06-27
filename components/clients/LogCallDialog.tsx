@@ -515,7 +515,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Outcome <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Select value={form.outcome || 'none'} onValueChange={v => set('outcome', v === 'none' ? '' : v)}>
+                  <Select value={form.outcome || 'none'} onValueChange={(v: string) => set('outcome', v === 'none' ? '' : v)}>
                     <SelectTrigger className="bg-secondary/50 h-10 text-sm">
                       <span className={form.outcome ? undefined : 'text-muted-foreground'}>
                         {form.outcome ? (OUTCOME_LABELS[form.outcome as LogOutcome] ?? form.outcome) : 'Select outcome...'}
