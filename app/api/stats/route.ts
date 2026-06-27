@@ -40,6 +40,8 @@ export async function GET() {
     ).length,
     thatcher_needed: allClients.filter((c) => c.thatcher_needed).length,
     va_tasks_open: tasks?.length ?? 0,
+    tasks_due_today: 0,
+    tasks_overdue: 0,
     overdue_followups: allClients.filter(
       (c) =>
         c.next_followup_date &&
