@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ChevronRight } from 'lucide-react'
-import { cn, formatCurrency } from '@/lib/utils'
-import type { DashboardStats, Client } from '@/types'
+import { cn, formatCurrency, localToday } from '@/lib/utils'
+import type { DashboardStats, Client, Task } from '@/types'
 
 export interface BriefingClientLists {
   trials_ending: Client[]
@@ -20,15 +20,20 @@ interface Props {
   stats: DashboardStats
   clientLists: BriefingClientLists
   mrrChange?: number | null
+  allTasks?: Task[]
 }
 
-function ExpandableRow({
-  text,
-  clients,
-}: {
-  text: string
-  clients: Client[]
-}) {
+function getActiveUser(): string {
+  try {
+    const cookie = document.cookie.split(';').find(c => c.trim().startsWith('cza_user='))
+    const id = cookie?.split('=')[1]?.trim()
+    if (id === 'thatcher') return 'Thatcher'
+    if (id === 'trepp') return 'Trepp'
+  } catch {}
+  return 'Diego'
+}
+
+function ExpandableRow({ text, clients }: { text: string; clients: Client[] }) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
@@ -70,25 +75,66 @@ function ExpandableRow({
   )
 }
 
-function LinkRow({ text, href }: { text: string; href: string }) {
+function TasksExpandableRow({ text, tasks }: { text: string; tasks: Task[] }) {
+  const [open, setOpen] = useState(false)
   const router = useRouter()
+
   return (
-    <button
-      onClick={() => router.push(href)}
-      className="flex items-center gap-2 text-left w-full group"
-    >
-      <span className="text-base text-foreground/90 group-hover:text-foreground transition-colors">{text}</span>
-      <ChevronRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
-    </button>
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 text-left w-full group"
+      >
+        <span className="text-base text-foreground/90 group-hover:text-foreground transition-colors">{text}</span>
+        <ChevronRight
+          className={cn(
+            'w-4 h-4 text-muted-foreground/50 transition-transform flex-shrink-0',
+            open && 'rotate-90'
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-2 ml-4 border-l border-border/40 pl-4 space-y-2">
+          {tasks.map((t) => {
+            const label = t.title || 'Task'
+            const clientName = (t.client as { name?: string } | null)?.name
+            return (
+              <div key={t.id} className="py-1">
+                <div className="text-sm text-foreground/90">{label}</div>
+                {clientName && (
+                  <div className="text-xs text-muted-foreground">{clientName}</div>
+                )}
+              </div>
+            )
+          })}
+          <button
+            onClick={() => router.push('/tasks')}
+            className="text-xs text-primary hover:underline pt-1 block"
+          >
+            See all tasks →
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
-export function DailyBriefing({ stats, clientLists, mrrChange }: Props) {
+export function DailyBriefing({ stats, clientLists, mrrChange, allTasks = [] }: Props) {
   const today = format(new Date(), 'EEEE, MMMM d')
+  const todayStr = localToday()
+  const [activeUser, setActiveUser] = useState('Diego')
+
+  useEffect(() => {
+    setActiveUser(getActiveUser())
+  }, [])
+
+  const userTasks = allTasks.filter(t => !t.assigned_to || t.assigned_to === activeUser)
+  const userTasksDueToday = userTasks.filter(t => t.due_date === todayStr)
+  const userTasksOverdue = userTasks.filter(t => t.due_date && t.due_date < todayStr)
 
   type BriefingRow =
     | { kind: 'clients'; text: string; clients: Client[] }
-    | { kind: 'link'; text: string; href: string }
+    | { kind: 'tasks'; text: string; tasks: Task[] }
 
   const rows: BriefingRow[] = []
 
@@ -117,15 +163,15 @@ export function DailyBriefing({ stats, clientLists, mrrChange }: Props) {
       text: `⭐ ${stats.thatcher_needed} client${stats.thatcher_needed > 1 ? 's' : ''} need${stats.thatcher_needed === 1 ? 's' : ''} Thatcher`,
       clients: clientLists.thatcher,
     })
-  if (stats.tasks_due_today > 0)
-    rows.push({ kind: 'link',
-      text: `✅ ${stats.tasks_due_today} task${stats.tasks_due_today > 1 ? 's' : ''} due today`,
-      href: '/tasks',
+  if (userTasksDueToday.length > 0)
+    rows.push({ kind: 'tasks',
+      text: `✅ ${userTasksDueToday.length} task${userTasksDueToday.length > 1 ? 's' : ''} due today`,
+      tasks: userTasksDueToday,
     })
-  if (stats.tasks_overdue > 0)
-    rows.push({ kind: 'link',
-      text: `🚨 ${stats.tasks_overdue} overdue task${stats.tasks_overdue > 1 ? 's' : ''}`,
-      href: '/tasks',
+  if (userTasksOverdue.length > 0)
+    rows.push({ kind: 'tasks',
+      text: `🚨 ${userTasksOverdue.length} overdue task${userTasksOverdue.length > 1 ? 's' : ''}`,
+      tasks: userTasksOverdue,
     })
   if (stats.at_risk_clients > 0)
     rows.push({ kind: 'clients',
@@ -161,8 +207,8 @@ export function DailyBriefing({ stats, clientLists, mrrChange }: Props) {
           <div className="text-base text-foreground/80">✅ No critical items. Great shape today.</div>
         ) : (
           rows.map((row, i) =>
-            row.kind === 'link'
-              ? <LinkRow key={i} text={row.text} href={row.href} />
+            row.kind === 'tasks'
+              ? <TasksExpandableRow key={i} text={row.text} tasks={row.tasks} />
               : <ExpandableRow key={i} text={row.text} clients={row.clients} />
           )
         )}

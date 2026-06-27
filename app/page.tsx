@@ -89,7 +89,7 @@ export default async function CommandCenter() {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
-      <DailyBriefing stats={stats} clientLists={briefingLists} mrrChange={mrrChange} />
+      <DailyBriefing stats={stats} clientLists={briefingLists} mrrChange={mrrChange} allTasks={allTasks} />
 
       {/* Stat cards — clickable, bigger */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

@@ -1,31 +1,111 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, CheckCircle2, Circle, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, ExternalLink, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { cn, localToday, daysUntil, formatDate } from '@/lib/utils'
-import type { Task, TaskPriority, TaskStatus } from '@/types'
+import type { Task, TaskStatus } from '@/types'
 
 const ASSIGNEES = ['Diego', 'Thatcher', 'Trepp']
-const PRIORITIES: { value: TaskPriority; label: string; color: string }[] = [
-  { value: 'urgent', label: 'Urgent', color: 'text-red-400' },
-  { value: 'high',   label: 'High',   color: 'text-orange-400' },
-  { value: 'medium', label: 'Medium', color: 'text-yellow-400' },
-  { value: 'low',    label: 'Low',    color: 'text-slate-400' },
-]
-
-function priorityDot(p?: TaskPriority) {
-  if (p === 'urgent') return 'bg-red-400'
-  if (p === 'high')   return 'bg-orange-400'
-  if (p === 'medium') return 'bg-yellow-400'
-  return 'bg-slate-500'
+const ASSIGNEE_META: Record<string, { initials: string; color: string; ring: string }> = {
+  Diego:    { initials: 'DC', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', ring: 'border-emerald-500/40' },
+  Thatcher: { initials: 'TW', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40',         ring: 'border-blue-500/40' },
+  Trepp:    { initials: 'TG', color: 'bg-violet-500/20 text-violet-300 border-violet-500/40',   ring: 'border-violet-500/40' },
 }
+
+const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const CAL_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+// ─── Inline Calendar ──────────────────────────────────────────────────────────
+
+function InlineCalendar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const [viewYear,  setViewYear]  = useState(() => value ? +value.split('-')[0] : today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => value ? +value.split('-')[1] - 1 : today.getMonth())
+
+  const firstDay    = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const selectedDate = value ? new Date(value + 'T00:00:00') : null
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
+    else setViewMonth(m => m + 1)
+  }
+  function selectDay(day: number) {
+    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`)
+  }
+  function setToday() {
+    const d = new Date(); d.setHours(0,0,0,0)
+    onChange(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
+    setViewYear(d.getFullYear()); setViewMonth(d.getMonth())
+  }
+
+  return (
+    <div className="bg-secondary/30 border border-border/40 rounded-xl p-3 select-none">
+      <div className="flex items-center justify-between mb-2">
+        <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        <span className="text-xs font-semibold">{CAL_MONTHS[viewMonth]} {viewYear}</span>
+        <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {CAL_DAYS.map(d => (
+          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground/50 py-0.5">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`e-${idx}`} />
+          const cellDate = new Date(viewYear, viewMonth, day); cellDate.setHours(0,0,0,0)
+          const isToday    = cellDate.getTime() === today.getTime()
+          const isSelected = selectedDate && cellDate.getTime() === selectedDate.getTime()
+          return (
+            <button
+              key={`d-${idx}`}
+              type="button"
+              onClick={() => selectDay(day)}
+              className={cn(
+                'w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium transition-all',
+                isSelected ? 'bg-primary text-primary-foreground' :
+                isToday    ? 'border border-primary/50 text-primary' :
+                'text-foreground/80 hover:bg-white/10'
+              )}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
+        <button type="button" onClick={() => onChange('')} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">Clear</button>
+        {value && (
+          <span className="text-[10px] text-primary font-medium">
+            {new Date(value + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        )}
+        <button type="button" onClick={setToday} className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium">Today</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function dueDateChip(dateStr?: string) {
   if (!dateStr) return null
@@ -37,18 +117,39 @@ function dueDateChip(dateStr?: string) {
   return <span className="text-[11px] bg-secondary/60 text-muted-foreground border border-border/40 px-2 py-0.5 rounded-full">Due {formatDate(dateStr)}</span>
 }
 
+function getActiveUser(): string {
+  try {
+    const cookie = document.cookie.split(';').find(c => c.trim().startsWith('cza_user='))
+    const id = cookie?.split('=')[1]?.trim()
+    if (id === 'thatcher') return 'Thatcher'
+    if (id === 'trepp') return 'Trepp'
+  } catch {}
+  return 'Diego'
+}
+
+// ─── Form State ───────────────────────────────────────────────────────────────
+
 interface TaskFormState {
   title: string
-  client_search: string
   client_id: string
   client_name: string
   assigned_to: string
   due_date: string
-  priority: TaskPriority
+  due_time: string
   notes: string
 }
 
-interface ClientOption { id: string; name: string; business_name?: string }
+interface ClientOption { id: string; name: string; business_name?: string; stage?: string }
+
+function stageDot(stage?: string): string {
+  if (stage === 'active_client' || stage === 'won_back') return 'bg-emerald-400'
+  if (stage === 'free_trial' || stage === 'trial_ending_soon') return 'bg-violet-400'
+  if (stage === 'free_trial_pending') return 'bg-amber-400'
+  if (stage === 'overdue' || stage === 'churn_risk' || stage === 'payment_issue') return 'bg-red-400'
+  return 'bg-muted-foreground/40'
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
   const router = useRouter()
@@ -58,12 +159,16 @@ export default function TasksPage() {
   const [filterStatus, setFilterStatus] = useState<'open' | 'done' | 'all'>('open')
   const [createOpen, setCreateOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // client search
   const [clients, setClients] = useState<ClientOption[]>([])
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDrop, setShowClientDrop] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+
   const [form, setForm] = useState<TaskFormState>({
-    title: '', client_search: '', client_id: '', client_name: '',
-    assigned_to: 'Diego', due_date: '', priority: 'medium', notes: '',
+    title: '', client_id: '', client_name: '',
+    assigned_to: 'Diego', due_date: '', due_time: '', notes: '',
   })
 
   const load = useCallback(async () => {
@@ -80,14 +185,18 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (createOpen) {
+      setForm(f => ({ ...f, assigned_to: getActiveUser() }))
       fetch('/api/clients').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : []))
+    } else {
+      setForm({ title: '', client_id: '', client_name: '', assigned_to: 'Diego', due_date: '', due_time: '', notes: '' })
+      setClientSearch('')
     }
   }, [createOpen])
 
   const filteredClients = clients.filter(c =>
     c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
     (c.business_name ?? '').toLowerCase().includes(clientSearch.toLowerCase())
-  ).slice(0, 8)
+  ).slice(0, 10)
 
   const displayTasks = filterStatus === 'all'
     ? tasks
@@ -114,7 +223,7 @@ export default function TasksPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.title.trim()) return toast.error('Task title is required')
+    if (!form.title.trim()) return toast.error('Description is required')
     setSaving(true)
     try {
       const res = await fetch('/api/tasks', {
@@ -125,7 +234,7 @@ export default function TasksPage() {
           client_id: form.client_id || null,
           assigned_to: form.assigned_to,
           due_date: form.due_date || null,
-          priority: form.priority,
+          due_time: form.due_time || null,
           notes: form.notes || null,
           status: 'open',
         }),
@@ -133,8 +242,6 @@ export default function TasksPage() {
       if (!res.ok) throw new Error()
       toast.success('Task created')
       setCreateOpen(false)
-      setForm({ title: '', client_search: '', client_id: '', client_name: '', assigned_to: 'Diego', due_date: '', priority: 'medium', notes: '' })
-      setClientSearch('')
       load()
     } catch {
       toast.error('Failed to create task')
@@ -144,9 +251,9 @@ export default function TasksPage() {
   }
 
   const today = localToday()
-  const overdue = displayTasks.filter(t => t.due_date && t.due_date < today && t.status !== 'done').length
+  const overdue  = displayTasks.filter(t => t.due_date && t.due_date < today && t.status !== 'done').length
   const dueToday = displayTasks.filter(t => t.due_date === today && t.status !== 'done').length
-  const open = displayTasks.filter(t => t.status !== 'done').length
+  const open     = displayTasks.filter(t => t.status !== 'done').length
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -155,7 +262,9 @@ export default function TasksPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {open} open · {dueToday > 0 && <span className="text-amber-400">{dueToday} due today</span>}{dueToday > 0 && overdue > 0 && ' · '}{overdue > 0 && <span className="text-red-400">{overdue} overdue</span>}
+            {open} open
+            {dueToday > 0 && <> · <span className="text-amber-400">{dueToday} due today</span></>}
+            {overdue  > 0 && <> · <span className="text-red-400">{overdue} overdue</span></>}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)} className="h-9 px-4 text-sm font-medium">
@@ -170,11 +279,11 @@ export default function TasksPage() {
             <button
               key={s}
               onClick={() => setFilterStatus(s)}
-              className={cn('px-3 py-1.5 rounded text-xs font-medium transition-colors capitalize',
+              className={cn('px-3 py-1.5 rounded text-xs font-medium transition-colors',
                 filterStatus === s ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              {s === 'open' ? 'Not Done' : s === 'done' ? 'Completed' : 'All'}
+              {s === 'open' ? 'Incomplete' : s === 'done' ? 'Completed' : 'All'}
             </button>
           ))}
         </div>
@@ -212,20 +321,14 @@ export default function TasksPage() {
                   done && 'opacity-40'
                 )}
               >
-                {/* Checkbox */}
                 <button
                   onClick={() => toggleDone(task)}
                   className={cn('mt-0.5 flex-shrink-0 transition-colors', done ? 'text-emerald-400' : 'text-muted-foreground/40 hover:text-muted-foreground')}
                 >
                   {done ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                 </button>
-
-                {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <span className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{label}</span>
-                    <span className={cn('w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0', priorityDot(task.priority))} />
-                  </div>
+                  <span className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{label}</span>
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                     {clientName && (
                       <button
@@ -244,8 +347,6 @@ export default function TasksPage() {
                     )}
                   </div>
                 </div>
-
-                {/* Delete */}
                 <button
                   onClick={() => deleteTask(task.id)}
                   className="flex-shrink-0 text-muted-foreground/30 hover:text-red-400 transition-colors mt-0.5"
@@ -258,51 +359,71 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Create dialog */}
+      {/* ── Create Dialog ─────────────────────────────────────────────────── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md bg-card border-border">
-          <DialogHeader>
-            <DialogTitle>New Task</DialogTitle>
+        <DialogContent className="w-[90vw] max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border p-0">
+          <DialogHeader className="px-7 pt-6 pb-4 border-b border-border/40">
+            <DialogTitle className="text-xl">New Task</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4 mt-1">
-            <div className="space-y-1.5">
-              <Label>What needs to be done <span className="text-primary">*</span></Label>
-              <Input
+
+          <form onSubmit={handleCreate} className="p-7 space-y-6">
+            {/* Description */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Description <span className="text-primary">*</span></Label>
+              <Textarea
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Task description..."
-                className="bg-secondary/50"
+                placeholder="What needs to be done?"
+                className="bg-secondary/50 min-h-[80px] text-sm resize-none"
                 autoFocus
               />
             </div>
 
             {/* Client */}
-            <div className="space-y-1.5 relative">
-              <Label>For which client <span className="text-muted-foreground/50 text-xs font-normal">(optional)</span></Label>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Client <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span>
+              </Label>
               {form.client_id ? (
-                <div className="flex items-center gap-2 bg-secondary/50 rounded-md px-3 py-2 text-sm">
-                  <span className="flex-1">{form.client_name}</span>
-                  <button type="button" onClick={() => setForm(f => ({ ...f, client_id: '', client_name: '' }))} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+                <div className="flex items-center gap-2 bg-secondary/50 border border-border rounded-xl px-4 py-3 text-sm">
+                  <span className="flex-1 font-medium">{form.client_name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, client_id: '', client_name: '' }))}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               ) : (
                 <div className="relative">
-                  <Input
-                    value={clientSearch}
-                    onChange={e => { setClientSearch(e.target.value); setShowClientDrop(true) }}
-                    onFocus={() => setShowClientDrop(true)}
-                    placeholder="Search clients..."
-                    className="bg-secondary/50"
-                  />
-                  {showClientDrop && clientSearch && filteredClients.length > 0 && (
-                    <div className="absolute z-50 top-full mt-1 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
+                  <div
+                    className={cn('flex items-center gap-2 bg-secondary/50 border border-border rounded-xl px-4 h-12 cursor-text', showClientDrop && 'border-primary/50')}
+                    onClick={() => { setShowClientDrop(true); setTimeout(() => searchRef.current?.focus(), 50) }}
+                  >
+                    <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <input
+                      ref={searchRef}
+                      value={clientSearch}
+                      onChange={e => { setClientSearch(e.target.value); setShowClientDrop(true) }}
+                      onFocus={() => setShowClientDrop(true)}
+                      onBlur={() => setTimeout(() => setShowClientDrop(false), 150)}
+                      placeholder="Search clients..."
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  {showClientDrop && filteredClients.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
                       {filteredClients.map(c => (
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => { setForm(f => ({ ...f, client_id: c.id, client_name: c.name })); setClientSearch(''); setShowClientDrop(false) }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 transition-colors"
+                          className="w-full text-left px-4 py-2.5 hover:bg-secondary/60 transition-colors flex items-center gap-2"
+                          onMouseDown={() => { setForm(f => ({ ...f, client_id: c.id, client_name: c.name })); setClientSearch(''); setShowClientDrop(false) }}
                         >
-                          {c.name}{c.business_name && <span className="text-muted-foreground text-xs ml-2">{c.business_name}</span>}
+                          <span className={cn('w-2 h-2 rounded-full flex-shrink-0', stageDot(c.stage))} />
+                          <span className="text-sm font-medium">{c.name}</span>
+                          {c.business_name && <span className="text-xs text-muted-foreground ml-auto">{c.business_name}</span>}
                         </button>
                       ))}
                     </div>
@@ -311,53 +432,74 @@ export default function TasksPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Assigned to</Label>
-                <Select value={form.assigned_to} onValueChange={v => v && setForm(f => ({ ...f, assigned_to: v }))}>
-                  <SelectTrigger className="bg-secondary/50">
-                    <span>{form.assigned_to}</span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ASSIGNEES.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Due date</Label>
-                <Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className="bg-secondary/50" />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Priority</Label>
+            {/* Assigned To */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Assigned to</Label>
               <div className="flex gap-2">
-                {PRIORITIES.map(p => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, priority: p.value }))}
-                    className={cn(
-                      'flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors',
-                      form.priority === p.value
-                        ? 'border-current bg-current/10 ' + p.color
-                        : 'border-border/40 text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                {ASSIGNEES.map(a => {
+                  const meta = ASSIGNEE_META[a]
+                  const active = form.assigned_to === a
+                  return (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, assigned_to: a }))}
+                      className={cn(
+                        'flex-1 flex items-center gap-2.5 px-3 py-3 rounded-xl border text-sm font-medium transition-all',
+                        active ? meta.color : 'border-border/40 text-muted-foreground hover:text-foreground hover:border-border'
+                      )}
+                    >
+                      <span className={cn(
+                        'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border flex-shrink-0',
+                        active ? meta.color : 'border-border/40 text-muted-foreground/50'
+                      )}>
+                        {meta.initials}
+                      </span>
+                      {a}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Notes <span className="text-muted-foreground/50 text-xs font-normal">(optional)</span></Label>
-              <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any extra context..." className="bg-secondary/50" />
+            {/* Due Date */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Due date <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span>
+              </Label>
+              <InlineCalendar value={form.due_date} onChange={v => setForm(f => ({ ...f, due_date: v, due_time: v ? f.due_time : '' }))} />
+              {form.due_date && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Label className="text-xs text-muted-foreground shrink-0">Time (optional)</Label>
+                  <input
+                    type="time"
+                    value={form.due_time}
+                    onChange={e => setForm(f => ({ ...f, due_time: e.target.value }))}
+                    className="flex-1 h-9 rounded-md border border-input bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  {form.due_time && (
+                    <button type="button" onClick={() => setForm(f => ({ ...f, due_time: '' }))} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Notes <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span>
+              </Label>
+              <Textarea
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Any extra context..."
+                className="bg-secondary/50 text-sm resize-none min-h-[70px]"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t border-border/40">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create Task'}</Button>
+              <Button type="submit" disabled={saving} className="px-8">{saving ? 'Creating...' : 'Create Task'}</Button>
             </div>
           </form>
         </DialogContent>
