@@ -131,7 +131,7 @@ export function CallQueueCard({ client, onUpdated }: Props) {
             if (diff === 1) return <span className="text-[11px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Due tomorrow{timeSuffix}</span>
             return <span className="text-[11px] font-medium bg-secondary/60 text-muted-foreground border border-border/40 px-2 py-0.5 rounded-full">Due {d}{timeSuffix}</span>
           })()}
-          {daysLeft !== null && daysLeft !== undefined && (
+          {daysLeft !== null && daysLeft !== undefined && (client.stage === 'free_trial' || client.stage === 'trial_ending_soon' || client.stage === 'free_trial_pending') && (
             <span className={cn(
               'font-medium',
               daysLeft <= 0 ? 'text-red-400' : daysLeft <= 1 ? 'text-orange-400' : daysLeft <= 3 ? 'text-amber-400' : 'text-muted-foreground'

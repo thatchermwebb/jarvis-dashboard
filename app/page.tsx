@@ -58,9 +58,11 @@ export default async function CommandCenter() {
     ? Math.round(((stats.monthly_recurring_revenue - mrrThirtyDaysAgo) / mrrThirtyDaysAgo) * 100)
     : null
 
-  const prioritized = sortClientsByPriority(allClients)
-    .filter(c => !['churned', 'free_trial_lost', 'trial_concluded'].includes(c.stage))
-    .slice(0, 5)
+  const excludedStages = ['churned', 'free_trial_lost', 'trial_concluded', 'onboarding']
+  const dueToday = sortClientsByPriority(allClients)
+    .filter(c => !excludedStages.includes(c.stage))
+    .filter(c => !c.next_followup_date || c.next_followup_date <= todayStr)
+    .slice(0, 8)
 
   const trialsEndingSoon     = trialClients.filter(c => c.trial_end && c.trial_end <= in48hStr)
   const trialsEndingToday    = trialClients.filter(c => c.trial_end === todayStr)
@@ -124,7 +126,7 @@ export default async function CommandCenter() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Priority queue — collapsible */}
         <div className="lg:col-span-2 order-2 lg:order-1">
-          <CollapsibleQueue clients={prioritized} />
+          <CollapsibleQueue clients={dueToday} />
         </div>
 
         {/* Alerts — shown first on mobile, visually prominent */}

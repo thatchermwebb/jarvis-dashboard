@@ -36,8 +36,10 @@ export function CollapsibleQueue({ clients }: { clients: Client[] }) {
       {open && (
         <div className="space-y-3">
           {clients.length === 0 ? (
-            <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground text-sm">
-              No active clients yet. Add your first client to get started.
+            <div className="bg-card border border-border rounded-xl p-10 text-center space-y-2">
+              <div className="text-3xl">✅</div>
+              <div className="text-sm font-semibold">All caught up!</div>
+              <div className="text-sm text-muted-foreground">No follow-ups due today.</div>
             </div>
           ) : (
             clients.map(c => <CallQueueCard key={c.id} client={c} />)
