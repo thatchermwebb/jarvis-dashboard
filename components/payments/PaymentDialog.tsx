@@ -398,10 +398,11 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
       const url = payment ? `/api/payments/${payment.id}` : '/api/payments'
       const method = payment ? 'PATCH' : 'POST'
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (!res.ok) throw new Error()
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Failed to save'); return }
       toast.success(payment ? 'Payment updated' : 'Payment added')
       onSaved(); onClose()
-    } catch { toast.error('Failed to save') } finally { setSaving(false) }
+    } catch (err) { toast.error(String(err)) } finally { setSaving(false) }
   }
 
   return (
