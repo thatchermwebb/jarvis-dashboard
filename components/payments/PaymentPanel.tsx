@@ -26,7 +26,7 @@ const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:   { label: 'Open',      color: 'text-yellow-400 border-yellow-800 bg-yellow-950/40' },
   paid:      { label: 'Paid',      color: 'text-emerald-400 border-emerald-800 bg-emerald-950/40' },
-  paid_late: { label: 'Paid Late', color: 'text-blue-400 border-blue-800 bg-blue-950/40' },
+  paid_late: { label: 'Paid Late', color: 'text-emerald-500/60 border-emerald-700/40 bg-emerald-900/20' },
   overdue:   { label: 'Overdue',   color: 'text-red-400 border-red-800 bg-red-950/40' },
   waived:    { label: 'Waived',    color: 'text-muted-foreground border-border bg-secondary/30' },
 }

@@ -33,7 +33,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const STATUS_STYLE: Record<PaymentEntryStatus, { label: string; badge: string; border: string; calBg: string; dot: string }> = {
   paid:      { label: 'Paid',        badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', border: 'border-l-emerald-500', calBg: 'bg-emerald-500/10 border-emerald-500/25',   dot: 'bg-emerald-400' },
-  paid_late: { label: 'Paid (Late)', badge: 'bg-blue-500/15 text-blue-400 border-blue-500/30',         border: 'border-l-blue-500',    calBg: 'bg-blue-500/10 border-blue-500/25',         dot: 'bg-blue-400' },
+  paid_late: { label: 'Paid (Late)', badge: 'bg-emerald-500/10 text-emerald-500/60 border-emerald-500/20', border: 'border-l-emerald-700', calBg: 'bg-emerald-500/5 border-emerald-700/30',    dot: 'bg-emerald-600' },
   pending:   { label: 'Open',        badge: 'bg-muted/60 text-muted-foreground border-border',          border: 'border-l-border',      calBg: 'bg-muted/30 border-border/40',              dot: 'bg-muted-foreground/60' },
   overdue:   { label: 'Overdue',     badge: 'bg-red-500/15 text-red-400 border-red-500/30',             border: 'border-l-red-500',     calBg: 'bg-red-500/10 border-red-500/25',           dot: 'bg-red-400' },
   voided:    { label: 'Voided',      badge: 'bg-muted/30 text-muted-foreground/40 border-border/30',    border: 'border-l-border/30',   calBg: 'bg-muted/20 border-border/20',              dot: 'bg-muted-foreground/30' },
