@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, CheckCircle2, Circle, Trash2, ExternalLink, Search, X, Calendar, Clock } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, ExternalLink, Search, X, Calendar, Clock, Pencil } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { InlineCalendar } from '@/components/ui/inline-calendar'
 import { TimePicker } from '@/components/ui/time-picker'
@@ -230,16 +230,19 @@ function ClientPicker({ clientId, clientName, clients, onSelect }: {
   )
 }
 
-// ─── Inline new task row ──────────────────────────────────────────────────────
+// ─── Inline task form (create + edit) ────────────────────────────────────────
 
-function InlineNewTask({ clients, onSave, onCancel }: {
+function InlineTaskForm({ clients, onSave, onCancel, initialValues, saveLabel = 'Add task' }: {
   clients: ClientOption[]
   onSave: (form: TaskFormState) => Promise<void>
   onCancel: () => void
+  initialValues?: Partial<TaskFormState>
+  saveLabel?: string
 }) {
   const [form, setForm] = useState<TaskFormState>({
     title: '', client_id: '', client_name: '',
     assigned_to: getActiveUser(), due_date: '', due_time: '', notes: '',
+    ...initialValues,
   })
   const [saving, setSaving] = useState(false)
   const titleRef = useRef<HTMLTextAreaElement>(null)
@@ -339,7 +342,7 @@ function InlineNewTask({ clients, onSave, onCancel }: {
           disabled={saving || !form.title.trim()}
           className="text-xs bg-primary text-primary-foreground px-3 py-1.5 rounded-lg font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors"
         >
-          {saving ? 'Adding...' : 'Add task'}
+          {saving ? 'Saving...' : saveLabel}
         </button>
         <button type="button" onClick={onCancel} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
           Cancel
@@ -358,6 +361,7 @@ export default function TasksPage() {
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [filterStatus, setFilterStatus] = useState<'open' | 'done' | 'all'>('open')
   const [creating, setCreating] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [clients, setClients] = useState<ClientOption[]>([])
 
   const load = useCallback(async () => {
@@ -397,6 +401,28 @@ export default function TasksPage() {
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
     setTasks(prev => prev.filter(t => t.id !== id))
     toast.success('Task deleted')
+  }
+
+  async function handleUpdate(id: string, form: TaskFormState) {
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:       form.title       || null,
+          client_id:   form.client_id   || null,
+          assigned_to: form.assigned_to || null,
+          due_date:    form.due_date    || null,
+          notes:       form.notes       || null,
+        }),
+      })
+      if (!res.ok) { toast.error('Failed to update task'); return }
+      toast.success('Task updated')
+      setEditingId(null)
+      load()
+    } catch {
+      toast.error('Failed to update task')
+    }
   }
 
   async function handleCreate(form: TaskFormState) {
@@ -479,7 +505,7 @@ export default function TasksPage() {
 
       {/* Inline new task */}
       {creating && (
-        <InlineNewTask
+        <InlineTaskForm
           clients={clients}
           onSave={handleCreate}
           onCancel={() => setCreating(false)}
@@ -504,6 +530,28 @@ export default function TasksPage() {
             const label = task.title || task.task_type?.replace(/_/g, ' ') || 'Task'
             const clientName = (task.client as { name?: string } | null)?.name
             const assigneeMeta = task.assigned_to ? ASSIGNEE_META[task.assigned_to] : null
+
+            if (editingId === task.id) {
+              return (
+                <InlineTaskForm
+                  key={task.id}
+                  clients={clients}
+                  saveLabel="Save"
+                  initialValues={{
+                    title:       task.title || task.task_type?.replace(/_/g, ' ') || '',
+                    client_id:   task.client_id || '',
+                    client_name: clientName || '',
+                    assigned_to: task.assigned_to || getActiveUser(),
+                    due_date:    task.due_date || '',
+                    due_time:    task.due_time || '',
+                    notes:       task.notes || '',
+                  }}
+                  onSave={form => handleUpdate(task.id, form)}
+                  onCancel={() => setEditingId(null)}
+                />
+              )
+            }
+
             return (
               <div
                 key={task.id}
@@ -518,12 +566,12 @@ export default function TasksPage() {
                 >
                   {done ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                 </button>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingId(task.id)}>
                   <span className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{label}</span>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     {clientName && (
                       <button
-                        onClick={() => router.push(`/clients/${task.client_id}`)}
+                        onClick={e => { e.stopPropagation(); router.push(`/clients/${task.client_id}`) }}
                         className="text-[11px] text-primary/70 hover:text-primary flex items-center gap-1 transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" /> {clientName}
@@ -541,12 +589,22 @@ export default function TasksPage() {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  className="flex-shrink-0 text-muted-foreground/20 hover:text-red-400 transition-colors mt-0.5 opacity-0 group-hover:opacity-100"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => setEditingId(task.id)}
+                    className="text-muted-foreground/30 hover:text-foreground transition-colors"
+                    title="Edit"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => deleteTask(task.id)}
+                    className="text-muted-foreground/20 hover:text-red-400 transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             )
           })}
