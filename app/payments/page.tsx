@@ -78,7 +78,11 @@ export default function PaymentsPage() {
     try {
       const res = await fetch('/api/payments')
       const data = await res.json()
-      setPayments(Array.isArray(data) ? data : [])
+      const today = localToday()
+      const normalized = (Array.isArray(data) ? data : []).map((p: Payment) =>
+        p.status === 'pending' && p.due_date && p.due_date < today ? { ...p, status: 'overdue' as const } : p
+      )
+      setPayments(normalized)
     } finally { setLoading(false) }
   }, [])
 

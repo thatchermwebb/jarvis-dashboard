@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, localToday } from '@/lib/utils'
 import type { Payment, PaymentSchedule, PaymentType, PaymentFrequency } from '@/types'
 
 const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
@@ -55,7 +55,11 @@ export function PaymentPanel({ clientId, clientName }: Props) {
       fetch(`/api/payment-schedules?client_id=${clientId}`),
     ])
     const [pData, sData] = await Promise.all([pRes.json(), sRes.json()])
-    setPayments(Array.isArray(pData) ? pData : [])
+    const today = localToday()
+    const normalized = (Array.isArray(pData) ? pData : []).map((p: Payment) =>
+      p.status === 'pending' && p.due_date && p.due_date < today ? { ...p, status: 'overdue' as const } : p
+    )
+    setPayments(normalized)
     setSchedules(Array.isArray(sData) ? sData : [])
     setLoading(false)
   }, [clientId])
