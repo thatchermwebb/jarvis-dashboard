@@ -337,12 +337,12 @@ export default function CalendarPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Calendar</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Calendar</h1>
           <p className="text-sm text-muted-foreground mt-1">GHL appointments — view, create, and cancel</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={loadAppointments} className="gap-2">
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </Button>

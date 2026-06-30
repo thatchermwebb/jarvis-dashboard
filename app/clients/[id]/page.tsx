@@ -26,6 +26,7 @@ import {
   daysUntil,
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import type { Client, CommunicationLog } from '@/types'
 
 function Field({ label, value, mono = false }: { label: string; value?: string | number | null; mono?: boolean }) {
@@ -62,6 +63,7 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
 export default function ClientWarRoom() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [client, setClient] = useState<Client | null>(null)
   const [logs, setLogs] = useState<CommunicationLog[]>([])
   const [editOpen, setEditOpen] = useState(false)
@@ -147,7 +149,8 @@ export default function ClientWarRoom() {
     <>
       <div className="max-w-6xl mx-auto space-y-5">
         {/* Header */}
-        <div className="flex items-start gap-4">
+        <div className={cn('flex gap-4', isMobile ? 'flex-col' : 'items-start')}>
+          <div className={cn('flex items-start gap-4', isMobile && 'w-full')}>
           {/* Back / Forward nav */}
           <div className="flex items-center gap-1 -ml-1 flex-shrink-0">
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => router.back()} title="Go back">
@@ -213,6 +216,7 @@ export default function ClientWarRoom() {
                 {[client.business_name, client.market_location, client.timezone].filter(Boolean).join(' · ')}
               </div>
             )}
+          </div>
           </div>
 
           {/* Action buttons */}

@@ -12,26 +12,32 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Clapperboard,
+  Package,
   CalendarDays,
   CheckSquare,
 } from 'lucide-react'
 
-const navItems = [
+const ALL_NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
-  { href: '/ad-production', label: 'Ad Production', icon: Clapperboard },
+  { href: '/ad-production', label: 'Fulfillment', icon: Package },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
+const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/tasks', '/settings']
+
 export function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+
+  const navItems = user?.userType === 'va'
+    ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
+    : ALL_NAV_ITEMS
 
   return (
     <aside className="w-52 flex-shrink-0 flex flex-col h-screen bg-sidebar border-r border-sidebar-border">

@@ -7,12 +7,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
+import { useAuth } from '@/contexts/AuthContext'
 
 export function TopBar() {
   const [clientFormOpen, setClientFormOpen] = useState(false)
   const [logCallOpen, setLogCallOpen] = useState(false)
   const [search, setSearch] = useState('')
   const router = useRouter()
+  const { user } = useAuth()
+  const isVA = user?.userType === 'va'
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -37,24 +40,26 @@ export function TopBar() {
           </div>
         </form>
 
-        <div className="flex items-center gap-2 ml-auto">
-          <Button
-            size="sm"
-            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
-            onClick={() => setLogCallOpen(true)}
-          >
-            Log Call
-          </Button>
+        {!isVA && (
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              size="sm"
+              className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+              onClick={() => setLogCallOpen(true)}
+            >
+              Log Call
+            </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10"
-            onClick={() => setClientFormOpen(true)}
-          >
-            Add Client
-          </Button>
-        </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10"
+              onClick={() => setClientFormOpen(true)}
+            >
+              Add Client
+            </Button>
+          </div>
+        )}
       </header>
 
       <ClientForm open={clientFormOpen} onClose={() => setClientFormOpen(false)} />

@@ -182,15 +182,15 @@ export function DailyBriefing({ stats, clientLists, mrrChange, allTasks = [] }: 
   const allClear = rows.length === 0
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-7">
-      <div className="flex items-start justify-between gap-6">
+    <div className="bg-card border border-border rounded-2xl p-5 sm:p-7">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
         <div>
           <div className="text-[11px] text-muted-foreground uppercase tracking-widest mb-2">Daily Briefing</div>
-          <div className="text-3xl font-bold text-foreground">{today}</div>
+          <div className="text-2xl sm:text-3xl font-bold text-foreground">{today}</div>
         </div>
-        <div className="text-right flex-shrink-0">
+        <div className="sm:text-right sm:flex-shrink-0">
           <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">MRR</div>
-          <div className="text-4xl font-bold text-emerald-400 leading-none">
+          <div className="text-3xl sm:text-4xl font-bold text-emerald-400 leading-none">
             {formatCurrency(stats.monthly_recurring_revenue)}
           </div>
           {mrrChange !== null && mrrChange !== undefined && (

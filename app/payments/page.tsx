@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn, formatCurrency, localToday } from '@/lib/utils'
 import type { Payment, PaymentEntryStatus, PaymentType } from '@/types'
 import { PaymentDialog } from '@/components/payments/PaymentDialog'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { toast } from 'sonner'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -161,15 +162,17 @@ export default function PaymentsPage() {
 
   const nwLabel = `${nwStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})}–${nwEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`
 
+  const isMobile = useIsMobile()
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Payments</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Track retainers, deposits, and balances</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center rounded-lg border border-border bg-card p-0.5 gap-0.5">
             <button
               onClick={() => setView('table')}
@@ -184,14 +187,16 @@ export default function PaymentsPage() {
               <Calendar className="w-3.5 h-3.5" /> Calendar
             </button>
           </div>
-          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => openAdd()}>
-            <Plus className="w-3.5 h-3.5" /> Add Payment
-          </Button>
+          {!isMobile && (
+            <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => openAdd()}>
+              <Plus className="w-3.5 h-3.5" /> Add Payment
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Summary — 4 cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
           <div className="text-2xl font-bold text-red-400">{formatCurrency(overdueAmt)}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Overdue ({overdue.length})</div>
@@ -217,6 +222,8 @@ export default function PaymentsPage() {
       ) : view === 'table' ? (
         <TableView
           payments={payments}
+          isMobile={isMobile}
+          onAdd={openAdd}
           onEdit={openEdit}
           onMarkPaid={markPaid}
           onClone={cloneWith}
@@ -245,6 +252,17 @@ export default function PaymentsPage() {
         payment={editing}
         prefill={prefill}
       />
+
+      {/* Mobile FAB */}
+      {isMobile && (
+        <button
+          onClick={() => openAdd()}
+          className="fixed right-4 z-40 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-xl flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 134px)' }}
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
     </div>
   )
 }
@@ -252,9 +270,11 @@ export default function PaymentsPage() {
 // ─── Table View (card-row style) ──────────────────────────────────────────────
 
 function TableView({
-  payments, onEdit, onMarkPaid, onClone, deleteConfirm, onDeleteRequest, onDeleteConfirm, onDeleteCancel, onClientClick,
+  payments, isMobile, onAdd, onEdit, onMarkPaid, onClone, deleteConfirm, onDeleteRequest, onDeleteConfirm, onDeleteCancel, onClientClick,
 }: {
   payments: Payment[]
+  isMobile: boolean
+  onAdd: () => void
   onEdit: (p: Payment) => void
   onMarkPaid: (p: Payment) => void
   onClone: (p: Payment, days: number) => void
@@ -264,6 +284,16 @@ function TableView({
   onDeleteCancel: () => void
   onClientClick: (id: string) => void
 }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(['History']))
+
+  function toggleSection(title: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(title)) next.delete(title); else next.add(title)
+      return next
+    })
+  }
+
   const sorted = [...payments].sort((a, b) => {
     const order: Record<string, number> = { overdue: 0, pending: 1, paid: 2, paid_late: 2, voided: 3, waived: 3 }
     const oa = order[a.status] ?? 2, ob = order[b.status] ?? 2
@@ -279,7 +309,6 @@ function TableView({
     )
   }
 
-  // Group by status sections
   const sections: { title: string; color: string; items: Payment[] }[] = [
     { title: 'Overdue',  color: 'text-red-400',           items: sorted.filter(p => p.status === 'overdue') },
     { title: 'Open',     color: 'text-amber-400',          items: sorted.filter(p => p.status === 'pending') },
@@ -287,30 +316,121 @@ function TableView({
   ].filter(s => s.items.length > 0)
 
   return (
-    <div className="space-y-5">
-      {sections.map(section => (
-        <div key={section.title} className="space-y-1.5">
-          <div className={cn('text-xs font-semibold uppercase tracking-wider px-1', section.color)}>
-            {section.title} <span className="text-muted-foreground font-normal">({section.items.length})</span>
+    <div className="space-y-4">
+      {isMobile && (
+        <button
+          onClick={onAdd}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground hover:text-foreground hover:border-border active:bg-muted/20 transition-colors"
+        >
+          <Plus className="w-4 h-4" /> Add Payment
+        </button>
+      )}
+      {sections.map(section => {
+        const isCollapsed = collapsed.has(section.title)
+        return (
+          <div key={section.title} className="space-y-1.5">
+            <button
+              onClick={() => toggleSection(section.title)}
+              className="flex items-center gap-2 w-full px-1 group"
+            >
+              <span className={cn('text-xs font-semibold uppercase tracking-wider', section.color)}>
+                {section.title}
+              </span>
+              <span className="text-xs text-muted-foreground font-normal">({section.items.length})</span>
+              <ChevronRight className={cn('w-3.5 h-3.5 text-muted-foreground/40 ml-auto transition-transform', !isCollapsed && 'rotate-90')} />
+            </button>
+            {!isCollapsed && (
+              <div className="space-y-1.5">
+                {section.items.map(p => isMobile ? (
+                  <MobilePaymentRow
+                    key={p.id}
+                    payment={p}
+                    onMarkPaid={() => onMarkPaid(p)}
+                    onEdit={() => onEdit(p)}
+                  />
+                ) : (
+                  <PaymentRow
+                    key={p.id}
+                    payment={p}
+                    deleteConfirm={deleteConfirm}
+                    onMarkPaid={() => onMarkPaid(p)}
+                    onClone={days => onClone(p, days)}
+                    onEdit={() => onEdit(p)}
+                    onClientClick={() => onClientClick(p.client_id)}
+                    onDeleteRequest={() => onDeleteRequest(p.id)}
+                    onDeleteConfirm={() => onDeleteConfirm(p.id)}
+                    onDeleteCancel={onDeleteCancel}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          <div className="space-y-1.5">
-            {section.items.map(p => (
-              <PaymentRow
-                key={p.id}
-                payment={p}
-                deleteConfirm={deleteConfirm}
-                onMarkPaid={() => onMarkPaid(p)}
-                onClone={days => onClone(p, days)}
-                onEdit={() => onEdit(p)}
-                onClientClick={() => onClientClick(p.client_id)}
-                onDeleteRequest={() => onDeleteRequest(p.id)}
-                onDeleteConfirm={() => onDeleteConfirm(p.id)}
-                onDeleteCancel={onDeleteCancel}
-              />
-            ))}
-          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function MobilePaymentRow({ payment: p, onMarkPaid, onEdit }: {
+  payment: Payment
+  onMarkPaid: () => void
+  onEdit: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const st = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending
+  const isPaid = ['paid','paid_late','waived','voided'].includes(p.status)
+  const clientName = (p.client as any)?.name ?? 'Unknown'
+  const dueDate = new Date(p.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  return (
+    <div className={cn('bg-card border border-border border-l-2 rounded-xl px-3 py-2.5 flex items-center gap-3', st.border)}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-semibold text-foreground truncate">{clientName}</span>
+          <span className="text-sm font-bold tabular-nums text-foreground flex-shrink-0">{formatCurrency(p.amount)}</span>
         </div>
-      ))}
+        <div className="text-xs text-muted-foreground/70 truncate mt-0.5">
+          {paymentLabel(p)} · Due {dueDate}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {isPaid ? (
+          <>
+            <span className={cn('text-[10px] font-semibold px-2 py-1 rounded-full border whitespace-nowrap', st.badge)}>{st.label}</span>
+            <button onClick={onEdit} className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground active:bg-muted/30 transition-colors">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </>
+        ) : confirming ? (
+          <>
+            <span className="text-xs text-muted-foreground">Sure?</span>
+            <button
+              onClick={() => { setConfirming(false); onMarkPaid() }}
+              className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg active:bg-emerald-500/20"
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="text-xs text-muted-foreground px-2 py-1.5"
+            >
+              No
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setConfirming(true)}
+              className="flex items-center gap-1 text-xs font-medium text-emerald-400 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg active:bg-emerald-500/10 transition-colors"
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> Paid
+            </button>
+            <button onClick={onEdit} className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground active:bg-muted/30 transition-colors">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -402,6 +522,7 @@ function CalendarView({
 }) {
   const { year, month: mo } = month
   const today = new Date(); today.setHours(0,0,0,0)
+  const isMobile = useIsMobile()
 
   const firstDay = new Date(year, mo, 1).getDay()
   const daysInMonth = new Date(year, mo + 1, 0).getDate()
@@ -422,6 +543,85 @@ function CalendarView({
   function paymentsOnDay(day: number) {
     const ds = dateStr(day)
     return payments.filter(p => p.due_date === ds)
+  }
+
+  if (isMobile) {
+    const daysWithPayments = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+      .map(day => ({ day, items: paymentsOnDay(day) }))
+      .filter(d => d.items.length > 0)
+
+    return (
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
+          <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="text-base font-semibold">{MONTH_NAMES[mo]} {year}</div>
+          <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+        {daysWithPayments.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">No payments this month</div>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {daysWithPayments.map(({ day, items }) => {
+              const cellDate = new Date(year, mo, day); cellDate.setHours(0,0,0,0)
+              const isToday = cellDate.getTime() === today.getTime()
+              return (
+                <div key={day} className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={cn(
+                      'text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0',
+                      isToday ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-secondary/50'
+                    )}>
+                      {day}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{DAY_NAMES[cellDate.getDay()]}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {items.map(p => {
+                      const st = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending
+                      const clientName = (p.client as any)?.name ?? '?'
+                      const isPaid = ['paid','paid_late','waived','voided'].includes(p.status)
+                      return (
+                        <div key={p.id} className={cn('rounded-lg px-3 py-2.5 border', st.calBg)} onClick={() => onEdit(p)}>
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              className="text-sm font-semibold text-foreground hover:text-primary transition-colors truncate text-left"
+                              onClick={e => {
+                                e.stopPropagation()
+                                const clientId = (p.client as any)?.id
+                                if (clientId && onClientClick) onClientClick(clientId)
+                              }}
+                            >
+                              {clientName}
+                            </button>
+                            <span className="text-sm font-bold tabular-nums flex-shrink-0">{formatCurrency(p.amount)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="text-[11px] text-muted-foreground/70 truncate">{paymentLabel(p)}</span>
+                            <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0', st.badge)}>{st.label}</span>
+                          </div>
+                          {!isPaid && (
+                            <button
+                              onClick={e => { e.stopPropagation(); onMarkPaid(p) }}
+                              className="mt-1.5 text-[11px] text-emerald-400 flex items-center gap-1"
+                            >
+                              <CheckCircle className="w-3 h-3" /> Mark paid
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (

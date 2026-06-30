@@ -363,12 +363,12 @@ function CallsPageInner() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Page header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Calls</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Calls</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your call queue and contact history</p>
         </div>
-        <div className="flex gap-2 pt-1">
+        <div className="flex gap-2 pt-1 flex-wrap">
           <Button size="sm" variant="outline" className="h-9 px-4 text-sm border-border/60 text-muted-foreground hover:text-foreground" onClick={() => setScheduleOpen(true)}>
             Schedule Call
           </Button>
@@ -398,10 +398,10 @@ function CallsPageInner() {
       )}
 
       {/* Top tab bar */}
-      <div className="border-b border-border/40">
-        <div className="flex items-end">
+      <div className="border-b border-border/40 overflow-x-auto">
+        <div className="flex items-end min-w-max">
           {/* Queue tabs */}
-          <div className="flex flex-1">
+          <div className="flex flex-shrink-0">
             {([
               { key: 'today', label: 'Due Today' },
               { key: 'tomorrow', label: 'Due Tomorrow' },

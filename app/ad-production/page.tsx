@@ -6,6 +6,8 @@ import { Plus, Pencil, Trash2, ChevronDown, Check, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
+import { DeliveryPipeline } from '@/components/delivery/DeliveryPipeline'
 import type { AdProduction, AdProductionStatus, AdProductionPriority } from '@/types'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -234,6 +236,12 @@ function AdFormDialog({
 type FilterStatus = 'all' | 'incomplete' | AdProductionStatus
 
 export default function AdProductionPage() {
+  const { user } = useAuth()
+  if (!user) return null
+  return <DeliveryPipeline user={user} />
+}
+
+function AdminAdProduction() {
   const router = useRouter()
   const [ads, setAds] = useState<AdProduction[]>([])
   const [clients, setClients] = useState<{ id: string; name: string; business_name?: string }[]>([])

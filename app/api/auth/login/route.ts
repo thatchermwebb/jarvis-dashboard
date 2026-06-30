@@ -8,6 +8,8 @@ export async function POST(req: NextRequest) {
     thatcher: process.env.PW_THATCHER,
     trepp:    process.env.PW_TREPP,
     diego:    process.env.PW_DIEGO,
+    wilson:   process.env.PW_WILSON,
+    samuel:   process.env.PW_SAMUEL,
   }
 
   const expected = passwords[userId]

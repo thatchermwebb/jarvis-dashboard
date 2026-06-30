@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
+import { useAuth } from '@/contexts/AuthContext'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn, sentimentEmoji, timeAgo, formatCurrency, localToday } from '@/lib/utils'
 import { getTrialDaysLeft } from '@/lib/scoring'
 import type { Client, ClientStage } from '@/types'
@@ -131,6 +133,51 @@ function ClientRow({ c, onClick, onDelete }: { c: Client; onClick: () => void; o
         )}
       </td>
     </tr>
+  )
+}
+
+function ClientCardMobile({ c, onClick, onDelete }: { c: Client; onClick: () => void; onDelete: (id: string) => void }) {
+  const [confirm, setConfirm] = useState(false)
+  const atRisk = isAtRisk(c)
+  const today = localToday()
+  const overdue = c.next_followup_date && c.next_followup_date < today
+  const dueToday = c.next_followup_date === today
+  return (
+    <div onClick={onClick} className="px-3.5 py-3 active:bg-secondary/30 transition-colors">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-sm truncate">{c.name}</span>
+            {atRisk && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+            <TrialTag c={c} />
+          </div>
+          {c.business_name && <div className="text-xs text-muted-foreground truncate">{c.business_name}</div>}
+          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
+            {c.market_location && <span>{c.market_location}</span>}
+            {c.last_contact_date && <span>· {timeAgo(c.last_contact_date)}</span>}
+            {c.monthly_retainer && <span className="text-emerald-400 font-medium">{formatCurrency(c.monthly_retainer)}</span>}
+          </div>
+          {c.next_followup_date && (
+            <div className={cn('text-[11px] mt-1', overdue ? 'text-red-400' : dueToday ? 'text-amber-400' : 'text-muted-foreground')}>
+              Follow-up: {new Date(c.next_followup_date + 'T00:00:00').toLocaleDateString()}{overdue && ' (overdue)'}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+          <span className="text-lg">{sentimentEmoji(c.last_client_sentiment)}</span>
+          {confirm ? (
+            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <button onClick={() => onDelete(c.id)} className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/40 px-1.5 py-0.5 rounded-md">Yes</button>
+              <button onClick={() => setConfirm(false)} className="text-[10px] text-muted-foreground px-1 py-0.5">No</button>
+            </div>
+          ) : (
+            <button onClick={e => { e.stopPropagation(); setConfirm(true) }} className="text-muted-foreground/40 p-1">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -264,6 +311,9 @@ const MOOD_ORDER: Record<string, number> = {
 function ClientsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useAuth()
+  const isVA = user?.userType === 'va'
+  const isMobile = useIsMobile()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
@@ -410,9 +460,9 @@ function ClientsContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className={cn('flex gap-3', isMobile ? 'flex-col px-1' : 'items-center justify-between')}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className={cn('font-bold tracking-tight', isMobile ? 'text-xl' : 'text-2xl')}>
             {filterLabel ?? 'All Clients'}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -424,7 +474,7 @@ function ClientsContent() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center bg-secondary/50 rounded-lg border border-border p-0.5">
             <button onClick={() => setView('list')} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all', view === 'list' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
               <List className="w-3.5 h-3.5" /> List
@@ -433,17 +483,23 @@ function ClientsContent() {
               <LayoutGrid className="w-3.5 h-3.5" /> Board
             </button>
           </div>
-          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setImportOpen(true)}>
-            <Upload className="w-3.5 h-3.5" /> Import CSV
-          </Button>
-          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setFormOpen(true)}>
-            <Plus className="w-3.5 h-3.5" /> Add Client
-          </Button>
+          {!isVA && (
+            <>
+              {!isMobile && (
+                <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setImportOpen(true)}>
+                  <Upload className="w-3.5 h-3.5" /> Import CSV
+                </Button>
+              )}
+              <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setFormOpen(true)}>
+                <Plus className="w-3.5 h-3.5" /> Add Client
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
+      <div className={cn('relative', isMobile ? 'px-1' : 'max-w-sm')}>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
         <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email..." className="pl-9 h-9 bg-secondary/50" />
       </div>
@@ -455,7 +511,7 @@ function ClientsContent() {
       ) : visible.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center">
           <p className="text-muted-foreground mb-3">No clients found.</p>
-          <Button size="sm" onClick={() => setFormOpen(true)}>Add First Client</Button>
+          {!isVA && <Button size="sm" onClick={() => setFormOpen(true)}>Add First Client</Button>}
         </div>
       ) : view === 'list' ? (
         <div className="space-y-4">
@@ -477,7 +533,13 @@ function ClientsContent() {
                   <span className="text-xs text-muted-foreground">({group.clients.length})</span>
                 </button>
 
-                {!collapsed && (
+                {!collapsed && isMobile ? (
+                  <div className={cn('bg-card border border-border rounded-xl overflow-hidden border-l-2 divide-y divide-border/60', group.border)}>
+                    {sorted.map(c => (
+                      <ClientCardMobile key={c.id} c={c} onClick={() => router.push(`/clients/${c.id}`)} onDelete={handleDelete} />
+                    ))}
+                  </div>
+                ) : !collapsed && (
                   <div className={cn('bg-card border border-border rounded-xl overflow-hidden border-l-2', group.border)}>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm" style={{ minWidth: 560 }}>
