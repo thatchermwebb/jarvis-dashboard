@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { RefreshCw } from 'lucide-react'
 import { OnboardingCard } from './OnboardingCard'
@@ -52,6 +52,8 @@ const COLUMN_CONFIG = [
 export function DeliveryPipeline({ user }: { user: AppUser }) {
   const [clients, setClients] = useState<ClientWithAds[]>([])
   const [loading, setLoading] = useState(true)
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+  const dragClient = useRef<{ id: string; col: 'new' | 'in_progress' | 'completed' } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -169,6 +171,16 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     load()
   }
 
+  async function handleDrop(targetCol: 'new' | 'in_progress' | 'completed') {
+    setDragOverCol(null)
+    const drag = dragClient.current
+    if (!drag || drag.col === targetCol) return
+    const client = clients.find(c => c.id === drag.id)
+    if (!client) return
+    if (drag.col === 'new' && targetCol === 'in_progress') await handleStart(client)
+    else if (drag.col === 'in_progress' && targetCol === 'completed') await handleComplete(client)
+  }
+
   async function handleFlag(client: ClientWithAds) {
     const name = client.business_name || client.name
     const taskType = user.id === 'wilson' ? 'build_ads' : 'fix_crm'
@@ -231,9 +243,15 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {columns.map(col => (
-            <div key={col.id} className="space-y-3">
+            <div
+              key={col.id}
+              className="space-y-3"
+              onDragOver={e => { e.preventDefault(); setDragOverCol(col.id) }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null) }}
+              onDrop={() => handleDrop(col.id as 'new' | 'in_progress' | 'completed')}
+            >
               {/* Column header */}
-              <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${col.border} ${col.bg}`}>
+              <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-colors ${dragOverCol === col.id ? `${col.border} ${col.bg} ring-2 ring-inset ring-current opacity-80` : `${col.border} ${col.bg}`}`}>
                 <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-semibold ${col.headerColor}`}>{col.label}</div>
@@ -260,6 +278,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
                       onStart={handleStart}
                       onComplete={handleComplete}
                       onFlag={handleFlag}
+                      onDragStart={() => { dragClient.current = { id: client.id, col: col.id } }}
                     />
                   ))
                 )}

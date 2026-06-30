@@ -18,9 +18,10 @@ interface Props {
   onStart: (client: ClientWithAds) => Promise<void>
   onComplete: (client: ClientWithAds) => Promise<void>
   onFlag: (client: ClientWithAds) => Promise<void>
+  onDragStart: () => void
 }
 
-export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag }: Props) {
+export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag, onDragStart }: Props) {
   const [busy, setBusy] = useState<'start' | 'complete' | 'flag' | null>(null)
 
   async function run(action: 'start' | 'complete' | 'flag') {
@@ -43,10 +44,15 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
     : null
 
   return (
-    <div className={cn(
-      'bg-card border border-border rounded-xl p-4 space-y-3.5 transition-all hover:border-border/80',
-      column === 'completed' && 'opacity-70'
-    )}>
+    <div
+      draggable={column !== 'completed'}
+      onDragStart={e => { onDragStart(); e.dataTransfer.effectAllowed = 'move' }}
+      className={cn(
+        'bg-card border border-border rounded-xl p-4 space-y-3.5 transition-all hover:border-border/80',
+        column !== 'completed' && 'cursor-grab active:cursor-grabbing active:opacity-60 active:scale-[0.98]',
+        column === 'completed' && 'opacity-70'
+      )}
+    >
       {/* Name + link */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
