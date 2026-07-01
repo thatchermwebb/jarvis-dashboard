@@ -128,7 +128,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     await fetch('/api/slack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: lines }),
+      body: JSON.stringify({ message: lines }),
     })
 
     toast.success('Started — Slack notified')
@@ -164,7 +164,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     await fetch('/api/slack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: slackText }),
+      body: JSON.stringify({ message: slackText }),
     })
 
     toast.success('Onboarding marked complete')
@@ -208,7 +208,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     await fetch('/api/slack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: slackText }),
+      body: JSON.stringify({ message: slackText }),
     })
 
     toast.success('Issue flagged — Diego notified')
