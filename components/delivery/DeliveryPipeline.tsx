@@ -96,6 +96,14 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   async function handleStart(client: ClientWithAds) {
     const name = client.business_name || client.name
 
+    // Optimistic update — move card to In Progress immediately
+    setClients(prev => prev.map(c => c.id !== client.id ? c : {
+      ...c,
+      adProductions: c.adProductions.length > 0
+        ? c.adProductions.map((a, i) => i === 0 ? { ...a, status: 'in_progress' as const } : a)
+        : [{ id: 'temp', client_id: c.id, status: 'in_progress' as const, ad_name: '', assigned_to: user.name, priority: 'high', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any],
+    }))
+
     const lines = [
       `<!channel>`,
       `New Onboarding`,
@@ -103,7 +111,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
       client.market_location || '',
     ].filter(Boolean).join('\n')
 
-    // Create an in_progress ad production if none exists
     if (client.adProductions.length === 0) {
       await fetch('/api/ad-productions', {
         method: 'POST',
@@ -117,7 +124,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         }),
       })
     } else {
-      // Move first ad to in_progress
       await fetch(`/api/ad-productions/${client.adProductions[0].id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   ArrowLeft, ArrowRight, Edit, Phone, ExternalLink, Star, Wrench, CreditCard,
   AlertTriangle, TrendingDown, CheckCircle, Bot, Plus, Clock,
-  MessageSquare, Calendar, ChevronDown, Trash2, Pencil, Clapperboard
+  MessageSquare, Calendar, ChevronDown, Trash2, Pencil, Play
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -76,6 +76,8 @@ export default function ClientWarRoom() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
   const [adSetupOpen, setAdSetupOpen] = useState(false)
+  const [adStarted, setAdStarted] = useState(false)
+  const [startingAds, setStartingAds] = useState(false)
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -89,14 +91,17 @@ export default function ClientWarRoom() {
   }, [])
 
   const load = useCallback(async () => {
-    const [clientRes, logsRes] = await Promise.all([
+    const [clientRes, logsRes, adsRes] = await Promise.all([
       fetch(`/api/clients/${id}`),
       fetch(`/api/communication-logs?client_id=${id}`),
+      fetch(`/api/ad-productions?client_id=${id}`),
     ])
     if (!clientRes.ok) { router.push('/clients'); return }
-    const [clientData, logsData] = await Promise.all([clientRes.json(), logsRes.json()])
+    const [clientData, logsData, adsData] = await Promise.all([clientRes.json(), logsRes.json(), adsRes.json()])
     setClient(clientData)
     setLogs(Array.isArray(logsData) ? logsData : [])
+    const ads = Array.isArray(adsData) ? adsData : []
+    setAdStarted(ads.some((a: any) => a.status === 'in_progress' || a.status === 'done'))
   }, [id, router])
 
   useEffect(() => { load() }, [load])
@@ -123,6 +128,37 @@ export default function ClientWarRoom() {
       toast.error('Failed to update')
     } finally {
       setUpdating(false)
+    }
+  }
+
+  async function startFulfillment() {
+    if (!client || adStarted || startingAds) return
+    setStartingAds(true)
+    try {
+      const name = client.business_name || client.name
+      await fetch('/api/ad-productions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: client.id,
+          ad_name: `${name.replace(/\s+/g, '_')}_Onboarding`,
+          status: 'in_progress',
+          priority: 'high',
+        }),
+      })
+      await fetch('/api/slack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: [`<!channel>`, `New Onboarding`, client.name, client.market_location || ''].filter(Boolean).join('\n'),
+        }),
+      })
+      setAdStarted(true)
+      toast.success('Fulfillment started — Slack notified')
+    } catch {
+      toast.error('Failed to start fulfillment')
+    } finally {
+      setStartingAds(false)
     }
   }
 
@@ -236,8 +272,14 @@ export default function ClientWarRoom() {
               </Button>
             )}
             {client.stage === 'onboarding' && (
-              <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-blue-500/30 text-blue-300 hover:bg-blue-500/10" onClick={() => setAdSetupOpen(true)}>
-                <Clapperboard className="w-3 h-3" /> Set Up Ads
+              <Button
+                size="sm"
+                className="h-8 text-xs gap-1"
+                disabled={adStarted || startingAds}
+                onClick={startFulfillment}
+              >
+                <Play className="w-3 h-3" />
+                {startingAds ? 'Starting...' : adStarted ? 'Started' : 'Start + Notify Slack'}
               </Button>
             )}
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setEditOpen(true)}>
