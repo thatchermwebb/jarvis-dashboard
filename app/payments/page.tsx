@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Plus, ChevronLeft, ChevronRight, Calendar, List,
-  Pencil, Trash2, CheckCircle, Repeat,
+  Pencil, Trash2, CheckCircle, Repeat, Table2, X, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -65,7 +65,11 @@ export default function PaymentsPage() {
   const router = useRouter()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'table' | 'calendar'>('table')
+  const [view, setView] = useState<'list' | 'table' | 'calendar'>('list')
+  const [datePreset, setDatePreset] = useState<'all' | 'this_month' | 'last_month' | 'custom'>('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [clientFilter, setClientFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Payment | null>(null)
   const [prefill, setPrefill] = useState<Partial<{ client_id: string; payment_type: PaymentType; amount: number; due_date: string }> | undefined>()
@@ -162,6 +166,40 @@ export default function PaymentsPage() {
 
   const nwLabel = `${nwStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})}–${nwEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`
 
+  // Unique clients for filter dropdown
+  const clientOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    payments.forEach(p => {
+      const name = (p.client as any)?.name
+      if (p.client_id && name) seen.set(p.client_id, name)
+    })
+    return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  }, [payments])
+
+  // Date-filtered payments (applied to all views)
+  const dateBoundPayments = useMemo(() => {
+    if (datePreset === 'all') return payments
+    const now = new Date()
+    let from = '', to = ''
+    if (datePreset === 'this_month') {
+      from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
+      to = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0]
+    } else if (datePreset === 'last_month') {
+      const y = now.getMonth() === 0 ? now.getFullYear()-1 : now.getFullYear()
+      const m = now.getMonth() === 0 ? 12 : now.getMonth()
+      from = `${y}-${String(m).padStart(2,'0')}-01`
+      to = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
+    } else {
+      from = dateFrom; to = dateTo
+    }
+    return payments.filter(p => (!from || p.due_date >= from) && (!to || p.due_date <= to))
+  }, [payments, datePreset, dateFrom, dateTo])
+
+  // Client-filtered (table view only)
+  const visiblePayments = useMemo(() =>
+    clientFilter === 'all' ? dateBoundPayments : dateBoundPayments.filter(p => p.client_id === clientFilter),
+  [dateBoundPayments, clientFilter])
+
   const isMobile = useIsMobile()
 
   return (
@@ -174,16 +212,13 @@ export default function PaymentsPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center rounded-lg border border-border bg-card p-0.5 gap-0.5">
-            <button
-              onClick={() => setView('table')}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-            >
-              <List className="w-3.5 h-3.5" /> Table
+            <button onClick={() => setView('list')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <List className="w-3.5 h-3.5" /> List
             </button>
-            <button
-              onClick={() => setView('calendar')}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-            >
+            <button onClick={() => setView('table')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <Table2 className="w-3.5 h-3.5" /> Table
+            </button>
+            <button onClick={() => setView('calendar')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
               <Calendar className="w-3.5 h-3.5" /> Calendar
             </button>
           </div>
@@ -193,6 +228,41 @@ export default function PaymentsPage() {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center rounded-lg border border-border bg-card p-0.5 gap-0.5">
+          {(['all','this_month','last_month','custom'] as const).map(p => (
+            <button key={p} onClick={() => setDatePreset(p)} className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap', datePreset === p ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              {p === 'all' ? 'All Time' : p === 'this_month' ? 'This Month' : p === 'last_month' ? 'Last Month' : 'Custom'}
+            </button>
+          ))}
+        </div>
+        {datePreset === 'custom' && (
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 px-2 text-xs rounded-lg border border-border bg-card text-foreground" />
+            <span className="text-xs text-muted-foreground">to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 px-2 text-xs rounded-lg border border-border bg-card text-foreground" />
+          </div>
+        )}
+        {view === 'table' && (
+          <select
+            value={clientFilter}
+            onChange={e => setClientFilter(e.target.value)}
+            className="h-8 px-2 text-xs rounded-lg border border-border bg-card text-foreground cursor-pointer"
+          >
+            <option value="all">All Clients</option>
+            {clientOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        )}
+        {(datePreset !== 'all' || clientFilter !== 'all') && (
+          <button onClick={() => { setDatePreset('all'); setDateFrom(''); setDateTo(''); setClientFilter('all') }} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-3 h-3" /> Clear
+          </button>
+        )}
       </div>
 
       {/* Summary — 4 cards */}
@@ -219,9 +289,9 @@ export default function PaymentsPage() {
 
       {loading ? (
         <div className="space-y-2">{[...Array(5)].map((_,i) => <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />)}</div>
-      ) : view === 'table' ? (
+      ) : view === 'list' ? (
         <TableView
-          payments={payments}
+          payments={visiblePayments}
           isMobile={isMobile}
           onAdd={openAdd}
           onEdit={openEdit}
@@ -233,9 +303,17 @@ export default function PaymentsPage() {
           onDeleteCancel={() => setDeleteConfirm(null)}
           onClientClick={id => router.push(`/clients/${id}`)}
         />
+      ) : view === 'table' ? (
+        <SpreadsheetView
+          payments={visiblePayments}
+          onEdit={openEdit}
+          onMarkPaid={markPaid}
+          onAdd={openAdd}
+          onClientClick={id => router.push(`/clients/${id}`)}
+        />
       ) : (
         <CalendarView
-          payments={payments}
+          payments={dateBoundPayments}
           month={calMonth}
           onMonthChange={setCalMonth}
           onEdit={openEdit}
@@ -507,6 +585,166 @@ function PaymentRow({
 
 // ─── Calendar View ────────────────────────────────────────────────────────────
 
+// ─── Spreadsheet View ─────────────────────────────────────────────────────────
+
+const SPREADSHEET_COLS = [
+  { key: 'client',       label: 'Client',     width: 'w-40'  },
+  { key: 'type',         label: 'Type',       width: 'w-36'  },
+  { key: 'amount',       label: 'Amount',     width: 'w-24'  },
+  { key: 'due_date',     label: 'Due Date',   width: 'w-28'  },
+  { key: 'paid_date',    label: 'Paid Date',  width: 'w-28'  },
+  { key: 'status',       label: 'Status',     width: 'w-24'  },
+  { key: 'source',       label: 'Source',     width: 'w-20'  },
+  { key: 'notes',        label: 'Notes',      width: 'flex-1'},
+]
+
+function SpreadsheetView({
+  payments, onEdit, onMarkPaid, onAdd, onClientClick,
+}: {
+  payments: Payment[]
+  onEdit: (p: Payment) => void
+  onMarkPaid: (p: Payment) => void
+  onAdd: (date?: string) => void
+  onClientClick: (id: string) => void
+}) {
+  const [sortCol, setSortCol] = useState<string>('due_date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function toggleSort(col: string) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const sorted = useMemo(() => {
+    return [...payments].sort((a, b) => {
+      let va = '', vb = ''
+      if (sortCol === 'client') {
+        va = (a.client as any)?.name ?? ''
+        vb = (b.client as any)?.name ?? ''
+      } else if (sortCol === 'type') { va = paymentLabel(a); vb = paymentLabel(b) }
+      else if (sortCol === 'amount') return sortDir === 'asc' ? a.amount - b.amount : b.amount - a.amount
+      else if (sortCol === 'due_date') { va = a.due_date; vb = b.due_date }
+      else if (sortCol === 'paid_date') { va = a.paid_date ?? ''; vb = b.paid_date ?? '' }
+      else if (sortCol === 'status') { va = a.status; vb = b.status }
+      else if (sortCol === 'source') { va = a.source ?? ''; vb = b.source ?? '' }
+      else if (sortCol === 'notes') { va = a.notes ?? ''; vb = b.notes ?? '' }
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
+  }, [payments, sortCol, sortDir])
+
+  function fmtDate(d?: string | null) {
+    if (!d) return '—'
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  const SortIcon = ({ col }: { col: string }) => {
+    if (sortCol !== col) return <ChevronDown className="w-3 h-3 opacity-20" />
+    return sortDir === 'asc' ? <ChevronUp className="w-3 h-3 opacity-70" /> : <ChevronDown className="w-3 h-3 opacity-70" />
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-border bg-background/40">
+              {SPREADSHEET_COLS.map(col => (
+                <th
+                  key={col.key}
+                  onClick={() => toggleSort(col.key)}
+                  className={cn('px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors select-none whitespace-nowrap', col.width)}
+                >
+                  <span className="flex items-center gap-1">
+                    {col.label} <SortIcon col={col.key} />
+                  </span>
+                </th>
+              ))}
+              <th className="w-16 px-3 py-2.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={SPREADSHEET_COLS.length + 1} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  No payments match the current filters.
+                </td>
+              </tr>
+            )}
+            {sorted.map((p, i) => {
+              const st = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending
+              const isPaid = ['paid','paid_late','waived','voided'].includes(p.status)
+              const clientName = (p.client as any)?.name ?? '—'
+              const clientId = (p.client as any)?.id
+              return (
+                <tr
+                  key={p.id}
+                  onClick={() => onEdit(p)}
+                  className={cn(
+                    'border-b border-border/40 cursor-pointer transition-colors group',
+                    i % 2 === 0 ? 'bg-transparent' : 'bg-muted/20',
+                    'hover:bg-primary/5'
+                  )}
+                >
+                  {/* Client */}
+                  <td className="px-3 py-2.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); if (clientId) onClientClick(clientId) }}
+                      className="font-medium text-foreground hover:text-primary transition-colors truncate max-w-[140px] block text-left"
+                    >
+                      {clientName}
+                    </button>
+                  </td>
+                  {/* Type */}
+                  <td className="px-3 py-2.5 text-muted-foreground/80 truncate max-w-[140px]">{paymentLabel(p)}</td>
+                  {/* Amount */}
+                  <td className="px-3 py-2.5 font-semibold tabular-nums">{formatCurrency(p.amount)}</td>
+                  {/* Due Date */}
+                  <td className="px-3 py-2.5 text-muted-foreground/80 whitespace-nowrap">{fmtDate(p.due_date)}</td>
+                  {/* Paid Date */}
+                  <td className="px-3 py-2.5 text-muted-foreground/80 whitespace-nowrap">{fmtDate(p.paid_date)}</td>
+                  {/* Status */}
+                  <td className="px-3 py-2.5">
+                    <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap', st.badge)}>
+                      {st.label}
+                    </span>
+                  </td>
+                  {/* Source */}
+                  <td className="px-3 py-2.5 text-muted-foreground/60 text-xs">{SOURCE_LABELS[p.source ?? ''] ?? '—'}</td>
+                  {/* Notes */}
+                  <td className="px-3 py-2.5 text-muted-foreground/60 text-xs truncate max-w-[200px]">{p.notes ?? '—'}</td>
+                  {/* Actions */}
+                  <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                    {!isPaid && (
+                      <button
+                        onClick={() => onMarkPaid(p)}
+                        className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-md hover:bg-emerald-500/10 transition-all whitespace-nowrap"
+                      >
+                        <CheckCircle className="w-3 h-3" /> Paid
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-border/60">
+              <td colSpan={SPREADSHEET_COLS.length + 1} className="px-3 py-2">
+                <button
+                  onClick={() => onAdd()}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add row
+                </button>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 function CalendarView({
@@ -603,6 +841,9 @@ function CalendarView({
                             <span className="text-[11px] text-muted-foreground/70 truncate">{paymentLabel(p)}</span>
                             <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0', st.badge)}>{st.label}</span>
                           </div>
+                          {p.notes && (
+                            <div className="text-[11px] text-muted-foreground/60 mt-1 truncate">{p.notes}</div>
+                          )}
                           {!isPaid && (
                             <button
                               onClick={e => { e.stopPropagation(); onMarkPaid(p) }}
@@ -701,7 +942,10 @@ function CalendarView({
                         <span className="text-xs font-bold tabular-nums flex-shrink-0">{formatCurrency(p.amount)}</span>
                       </div>
                       {/* Type */}
-                      <div className="text-[10px] text-muted-foreground/70 truncate mb-1.5">{paymentLabel(p)}</div>
+                      <div className="text-[10px] text-muted-foreground/70 truncate">{paymentLabel(p)}</div>
+                      {p.notes && (
+                        <div className="text-[10px] text-muted-foreground/50 truncate mt-0.5 mb-1">{p.notes}</div>
+                      )}
                       {/* Status badge + mark paid */}
                       <div className="flex items-center justify-between gap-1">
                         <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap', st.badge)}>{st.label}</span>
