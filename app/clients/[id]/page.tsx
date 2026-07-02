@@ -20,6 +20,7 @@ import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
+import { StartFulfillmentModal } from '@/components/delivery/StartFulfillmentModal'
 import {
   cn, stageLabel, stageColor, sentimentEmoji, sentimentColor,
   cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
@@ -78,6 +79,7 @@ export default function ClientWarRoom() {
   const [adSetupOpen, setAdSetupOpen] = useState(false)
   const [adStarted, setAdStarted] = useState(false)
   const [startingAds, setStartingAds] = useState(false)
+  const [startModalOpen, setStartModalOpen] = useState(false)
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -131,8 +133,8 @@ export default function ClientWarRoom() {
     }
   }
 
-  async function startFulfillment() {
-    if (!client || adStarted || startingAds) return
+  async function startFulfillment(message: string) {
+    if (!client || adStarted) return
     setStartingAds(true)
     try {
       const name = client.business_name || client.name
@@ -149,9 +151,7 @@ export default function ClientWarRoom() {
       await fetch('/api/slack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: [`<!channel>`, `New Onboarding`, client.name, client.market_location || ''].filter(Boolean).join('\n'),
-        }),
+        body: JSON.stringify({ message }),
       })
       setAdStarted(true)
       toast.success('Fulfillment started — Slack notified')
@@ -276,7 +276,7 @@ export default function ClientWarRoom() {
                 size="sm"
                 className="h-8 text-xs gap-1"
                 disabled={adStarted || startingAds}
-                onClick={startFulfillment}
+                onClick={() => setStartModalOpen(true)}
               >
                 <Play className="w-3 h-3" />
                 {startingAds ? 'Starting...' : adStarted ? 'Started' : 'Start + Notify Slack'}
@@ -764,6 +764,13 @@ export default function ClientWarRoom() {
       <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} client={client} onSaved={load} />
       <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />
       <BriefGenerator open={briefOpen} onClose={() => setBriefOpen(false)} client={client} />
+      {startModalOpen && (
+        <StartFulfillmentModal
+          client={{ ...client, adProductions: [] }}
+          onConfirm={startFulfillment}
+          onClose={() => setStartModalOpen(false)}
+        />
+      )}
     </>
   )
 }

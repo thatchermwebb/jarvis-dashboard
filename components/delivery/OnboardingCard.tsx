@@ -15,7 +15,7 @@ interface Props {
   client: ClientWithAds
   column: 'new' | 'in_progress' | 'completed'
   user: AppUser
-  onStart: (client: ClientWithAds) => Promise<void>
+  onStart: (client: ClientWithAds) => void
   onComplete: (client: ClientWithAds) => Promise<void>
   onFlag: (client: ClientWithAds) => Promise<void>
   onDragStart: () => void
@@ -24,11 +24,10 @@ interface Props {
 export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag, onDragStart }: Props) {
   const [busy, setBusy] = useState<'start' | 'complete' | 'flag' | null>(null)
 
-  async function run(action: 'start' | 'complete' | 'flag') {
+  async function run(action: 'complete' | 'flag') {
     setBusy(action)
     try {
-      if (action === 'start') await onStart(client)
-      else if (action === 'complete') await onComplete(client)
+      if (action === 'complete') await onComplete(client)
       else await onFlag(client)
     } finally {
       setBusy(null)
@@ -145,12 +144,12 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
         <div className="flex gap-2 pt-0.5">
           {column === 'new' && (
             <button
-              onClick={() => run('start')}
+              onClick={() => onStart(client)}
               disabled={!!busy}
               className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Play className="w-3 h-3" />
-              {busy === 'start' ? 'Starting...' : 'Start + Notify Slack'}
+              Start + Notify Slack
             </button>
           )}
           {column === 'in_progress' && (
@@ -172,6 +171,7 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
                 <AlertTriangle className="w-3 h-3" />
                 {busy === 'flag' ? '...' : 'Flag'}
               </button>
+
             </>
           )}
         </div>

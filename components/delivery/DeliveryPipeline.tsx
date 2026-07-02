@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { RefreshCw } from 'lucide-react'
 import { OnboardingCard } from './OnboardingCard'
+import { StartFulfillmentModal } from './StartFulfillmentModal'
 import type { Client, AdProduction } from '@/types'
 import type { AppUser } from '@/lib/auth'
 import { localToday } from '@/lib/utils'
@@ -53,6 +54,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   const [clients, setClients] = useState<ClientWithAds[]>([])
   const [loading, setLoading] = useState(true)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+  const [startModalClient, setStartModalClient] = useState<ClientWithAds | null>(null)
   const dragClient = useRef<{ id: string; col: 'new' | 'in_progress' | 'completed' } | null>(null)
 
   const load = useCallback(async () => {
@@ -67,7 +69,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         adsRes.json(),
       ])
 
-      const todayStr = localToday()
       const fourteenDaysAgo = new Date()
       fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
       const cutoff = fourteenDaysAgo.toISOString()
@@ -93,7 +94,8 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
 
   useEffect(() => { load() }, [load])
 
-  async function handleStart(client: ClientWithAds) {
+  // Core execution — called after message is confirmed (either from modal or direct drag)
+  async function handleStartCore(client: ClientWithAds, message: string) {
     const name = client.business_name || client.name
 
     // Optimistic update — move card to In Progress immediately
@@ -103,13 +105,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         ? c.adProductions.map((a, i) => i === 0 ? { ...a, status: 'in_progress' as const } : a)
         : [{ id: 'temp', client_id: c.id, status: 'in_progress' as const, ad_name: '', assigned_to: user.name, priority: 'high', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any],
     }))
-
-    const lines = [
-      `<!channel>`,
-      `New Onboarding`,
-      client.name,
-      client.market_location || '',
-    ].filter(Boolean).join('\n')
 
     if (client.adProductions.length === 0) {
       await fetch('/api/ad-productions', {
@@ -134,15 +129,26 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     await fetch('/api/slack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: lines }),
+      body: JSON.stringify({ message }),
     })
 
     toast.success('Started — Slack notified')
     load()
   }
 
+  // Opens the preview modal (called from card button click)
+  function handleStartClick(client: ClientWithAds) {
+    setStartModalClient(client)
+  }
+
   async function handleComplete(client: ClientWithAds) {
     const name = client.business_name || client.name
+
+    // Optimistic update — move card to Completed immediately
+    setClients(prev => prev.map(c => c.id !== client.id ? c : {
+      ...c,
+      stage: 'free_trial' as const,
+    }))
 
     await fetch(`/api/clients/${client.id}`, {
       method: 'PATCH',
@@ -150,7 +156,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
       body: JSON.stringify({ stage: 'free_trial' }),
     })
 
-    // Mark all ads done
     await Promise.all(
       client.adProductions.map(ad =>
         fetch(`/api/ad-productions/${ad.id}`, {
@@ -177,14 +182,26 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     load()
   }
 
-  async function handleDrop(targetCol: 'new' | 'in_progress' | 'completed') {
+  async function handleDrop(e: React.DragEvent, targetCol: 'new' | 'in_progress' | 'completed') {
+    e.preventDefault()
     setDragOverCol(null)
     const drag = dragClient.current
     if (!drag || drag.col === targetCol) return
     const client = clients.find(c => c.id === drag.id)
     if (!client) return
-    if (drag.col === 'new' && targetCol === 'in_progress') await handleStart(client)
-    else if (drag.col === 'in_progress' && targetCol === 'completed') await handleComplete(client)
+
+    if (drag.col === 'new' && targetCol === 'in_progress') {
+      // Drag bypasses the preview modal — fires default message directly
+      const defaultMessage = [
+        `<!channel>`,
+        `New Onboarding`,
+        client.name,
+        client.market_location || '',
+      ].filter(Boolean).join('\n')
+      await handleStartCore(client, defaultMessage)
+    } else if (drag.col === 'in_progress' && targetCol === 'completed') {
+      await handleComplete(client)
+    }
   }
 
   async function handleFlag(client: ClientWithAds) {
@@ -226,73 +243,86 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   }))
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Fulfillment</h1>
-          <p className="text-sm text-muted-foreground mt-1">Onboarding pipeline — {user.name}</p>
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Fulfillment</h1>
+            <p className="text-sm text-muted-foreground mt-1">Onboarding pipeline — {user.name}</p>
+          </div>
+          <button
+            onClick={load}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+            Loading pipeline...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {columns.map(col => (
+              <div
+                key={col.id}
+                className="space-y-3"
+                onDragOver={e => { e.preventDefault(); setDragOverCol(col.id) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null) }}
+                onDrop={e => handleDrop(e, col.id as 'new' | 'in_progress' | 'completed')}
+              >
+                {/* Column header */}
+                <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-colors ${dragOverCol === col.id ? `${col.border} ${col.bg} ring-2 ring-inset ring-current opacity-80` : `${col.border} ${col.bg}`}`}>
+                  <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-semibold ${col.headerColor}`}>{col.label}</div>
+                    <div className="text-[10px] text-muted-foreground/60">{col.sublabel}</div>
+                  </div>
+                  <span className="text-xs font-bold text-muted-foreground/50 tabular-nums">
+                    {col.cards.length}
+                  </span>
+                </div>
+
+                {/* Cards */}
+                <div className="space-y-3">
+                  {col.cards.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-muted-foreground/40">
+                      Nothing here
+                    </div>
+                  ) : (
+                    col.cards.map(client => (
+                      <OnboardingCard
+                        key={client.id}
+                        client={client}
+                        column={col.id}
+                        user={user}
+                        onStart={handleStartClick}
+                        onComplete={handleComplete}
+                        onFlag={handleFlag}
+                        onDragStart={() => { dragClient.current = { id: client.id, col: col.id } }}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-          Loading pipeline...
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {columns.map(col => (
-            <div
-              key={col.id}
-              className="space-y-3"
-              onDragOver={e => { e.preventDefault(); setDragOverCol(col.id) }}
-              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null) }}
-              onDrop={() => handleDrop(col.id as 'new' | 'in_progress' | 'completed')}
-            >
-              {/* Column header */}
-              <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-colors ${dragOverCol === col.id ? `${col.border} ${col.bg} ring-2 ring-inset ring-current opacity-80` : `${col.border} ${col.bg}`}`}>
-                <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-semibold ${col.headerColor}`}>{col.label}</div>
-                  <div className="text-[10px] text-muted-foreground/60">{col.sublabel}</div>
-                </div>
-                <span className="text-xs font-bold text-muted-foreground/50 tabular-nums">
-                  {col.cards.length}
-                </span>
-              </div>
-
-              {/* Cards */}
-              <div className="space-y-3">
-                {col.cards.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-muted-foreground/40">
-                    Nothing here
-                  </div>
-                ) : (
-                  col.cards.map(client => (
-                    <OnboardingCard
-                      key={client.id}
-                      client={client}
-                      column={col.id}
-                      user={user}
-                      onStart={handleStart}
-                      onComplete={handleComplete}
-                      onFlag={handleFlag}
-                      onDragStart={() => { dragClient.current = { id: client.id, col: col.id } }}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Start Fulfillment preview modal */}
+      {startModalClient && (
+        <StartFulfillmentModal
+          client={startModalClient}
+          onConfirm={async (message) => {
+            await handleStartCore(startModalClient, message)
+          }}
+          onClose={() => setStartModalClient(null)}
+        />
       )}
-    </div>
+    </>
   )
 }
