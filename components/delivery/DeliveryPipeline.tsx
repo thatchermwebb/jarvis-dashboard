@@ -186,6 +186,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     e.preventDefault()
     setDragOverCol(null)
     const drag = dragClient.current
+    dragClient.current = null
     if (!drag || drag.col === targetCol) return
     const client = clients.find(c => c.id === drag.id)
     if (!client) return

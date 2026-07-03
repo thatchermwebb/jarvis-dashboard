@@ -45,7 +45,12 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
   return (
     <div
       draggable={column !== 'completed'}
-      onDragStart={e => { onDragStart(); e.dataTransfer.effectAllowed = 'move' }}
+      onDragStart={e => {
+        // Only fire if the drag originates on the card itself, not a child link/button
+        if ((e.target as HTMLElement).closest('a, button')) { e.preventDefault(); return }
+        onDragStart()
+        e.dataTransfer.effectAllowed = 'move'
+      }}
       className={cn(
         'bg-card border border-border rounded-xl p-4 space-y-3.5 transition-all hover:border-border/80',
         column !== 'completed' && 'cursor-grab active:cursor-grabbing active:opacity-60 active:scale-[0.98]',
@@ -65,6 +70,7 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
         </div>
         <Link
           href={`/clients/${client.id}`}
+          draggable={false}
           className="text-muted-foreground/40 hover:text-primary transition-colors flex-shrink-0 mt-0.5"
           title="View profile"
         >
@@ -96,6 +102,7 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
               href={client.ghl_location_link!}
               target="_blank"
               rel="noopener noreferrer"
+              draggable={false}
               className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 hover:bg-violet-500/20 transition-colors"
             >
               <ExternalLink className="w-2.5 h-2.5" /> GHL
@@ -106,6 +113,7 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
               href={client.campaign_link!}
               target="_blank"
               rel="noopener noreferrer"
+              draggable={false}
               className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
             >
               <ExternalLink className="w-2.5 h-2.5" /> Campaign
@@ -116,6 +124,7 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
               href={client.ad_account_link!}
               target="_blank"
               rel="noopener noreferrer"
+              draggable={false}
               className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
             >
               <ExternalLink className="w-2.5 h-2.5" /> Ads
