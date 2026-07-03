@@ -5,7 +5,9 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { formatCurrency, parseLocalDate, localToday } from '@/lib/utils'
+import { X, ExternalLink } from 'lucide-react'
+import { formatCurrency, parseLocalDate } from '@/lib/utils'
+import Link from 'next/link'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,12 +26,23 @@ interface Client {
 
 interface Payment {
   id: string
+  client_id?: string
   amount: number
   paid_date?: string
+  due_date?: string
   status: string
+  payment_type?: string
 }
 
 type Range = '7d' | '30d' | '90d' | 'ytd' | 'all'
+
+type DrillDown = {
+  title: string
+  subtitle: string
+  type: 'payments' | 'clients' | 'churn'
+  payments?: Payment[]
+  clients?: Client[]
+}
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d',  label: 'Last 7 Days' },
@@ -70,6 +83,102 @@ function ChartTooltip({ active, payload, label, isCurrency }: {
     <div className="bg-[#111116] border border-white/10 rounded-xl px-3 py-2 text-sm shadow-xl">
       <div className="text-muted-foreground text-xs mb-0.5">{label}</div>
       <div className="font-bold text-foreground">{isCurrency ? formatCurrency(val) : val}</div>
+      <div className="text-[10px] text-muted-foreground/50 mt-0.5">Click to see details</div>
+    </div>
+  )
+}
+
+// ─── Drill-down panel ─────────────────────────────────────────────────────────
+
+function DrillDownPanel({
+  drillDown,
+  clients,
+  onClose,
+}: {
+  drillDown: DrillDown
+  clients: Client[]
+  onClose: () => void
+}) {
+  const clientMap = useMemo(() => {
+    const m: Record<string, Client> = {}
+    for (const c of clients) m[c.id] = c
+    return m
+  }, [clients])
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div
+        className="w-full max-w-sm h-full bg-card border-l border-border shadow-2xl flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+          <div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">{drillDown.subtitle}</div>
+            <div className="text-base font-semibold">{drillDown.title}</div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {drillDown.type === 'payments' && drillDown.payments && (
+            drillDown.payments.length === 0
+              ? <div className="text-sm text-muted-foreground text-center py-8">No payments on this day</div>
+              : drillDown.payments.map(p => {
+                  const c = p.client_id ? clientMap[p.client_id] : null
+                  return (
+                    <div key={p.id} className="flex items-center justify-between bg-background/40 border border-border/50 rounded-xl px-4 py-3">
+                      <div className="min-w-0">
+                        {c ? (
+                          <Link href={`/clients/${c.id}`} className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1 group">
+                            {c.business_name || c.name}
+                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </Link>
+                        ) : (
+                          <div className="text-sm font-medium text-muted-foreground">Unknown client</div>
+                        )}
+                        <div className="text-xs text-muted-foreground mt-0.5 capitalize">
+                          {p.payment_type?.replace(/_/g, ' ') ?? 'Payment'} · {p.status}
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-emerald-400 ml-3 flex-shrink-0">{formatCurrency(p.amount)}</div>
+                    </div>
+                  )
+                })
+          )}
+
+          {(drillDown.type === 'clients' || drillDown.type === 'churn') && drillDown.clients && (
+            drillDown.clients.length === 0
+              ? <div className="text-sm text-muted-foreground text-center py-8">No clients on this day</div>
+              : drillDown.clients.map(c => (
+                  <Link
+                    key={c.id}
+                    href={`/clients/${c.id}`}
+                    className="flex items-center justify-between bg-background/40 border border-border/50 rounded-xl px-4 py-3 hover:border-primary/30 transition-colors group"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium group-hover:text-primary transition-colors flex items-center gap-1">
+                        {c.business_name || c.name}
+                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      {c.business_name && c.name !== c.business_name && (
+                        <div className="text-xs text-muted-foreground">{c.name}</div>
+                      )}
+                      {c.market_location && (
+                        <div className="text-xs text-muted-foreground mt-0.5">{c.market_location}</div>
+                      )}
+                    </div>
+                    {c.monthly_retainer ? (
+                      <div className="text-sm font-bold text-emerald-400 ml-3 flex-shrink-0">{formatCurrency(c.monthly_retainer)}/mo</div>
+                    ) : null}
+                  </Link>
+                ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -81,6 +190,7 @@ export default function ReportsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [range, setRange] = useState<Range>('30d')
   const [loading, setLoading] = useState(true)
+  const [drillDown, setDrillDown] = useState<DrillDown | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -98,9 +208,12 @@ export default function ReportsPage() {
   }, [])
 
   const rangeStart = useMemo(() => getRangeStart(range), [range])
-  // Convert rangeStart Date → YYYY-MM-DD in LOCAL time for safe string comparison against date-only fields
-  const rangeStartStr = useMemo(() => rangeStart ? localDateStr(rangeStart) : null, [rangeStart])
 
+  function localDateStr(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  const rangeStartStr = useMemo(() => rangeStart ? localDateStr(rangeStart) : null, [rangeStart])
   const inRange = (dateStr: string) => !rangeStartStr || dateStr.slice(0, 10) >= rangeStartStr
 
   // ── Revenue metrics ──────────────────────────────────────────────────────────
@@ -108,7 +221,6 @@ export default function ReportsPage() {
   const activeClients = useMemo(() => clients.filter(c => c.stage === 'active_client'), [clients])
   const mrr = useMemo(() => activeClients.reduce((s, c) => s + (c.monthly_retainer ?? 0), 0), [activeClients])
 
-  // Paid payments in range
   const paidInRange = useMemo(() =>
     payments.filter(p =>
       (p.status === 'paid' || p.status === 'paid_late') &&
@@ -120,7 +232,7 @@ export default function ReportsPage() {
 
   const totalCollected = useMemo(() => paidInRange.reduce((s, p) => s + p.amount, 0), [paidInRange])
 
-  // ── Deal flow & churn (using updated_at + stage as proxy) ────────────────────
+  // ── Deal flow: use signed_at (set once on first conversion to active_client) ──
 
   const newDeals = useMemo(() =>
     clients.filter(c => c.stage === 'active_client' && inRange(c.signed_at ?? c.created_at)),
@@ -139,11 +251,7 @@ export default function ReportsPage() {
     [clients]
   )
 
-  // ── Helpers to enumerate days/weeks in range ──────────────────────────────────
-
-  function localDateStr(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  }
+  // ── Day/week range helpers ────────────────────────────────────────────────────
 
   function getDaysInRange(start: Date, end: Date): string[] {
     const days: string[] = []
@@ -159,7 +267,7 @@ export default function ReportsPage() {
   function getWeeksInRange(start: Date, end: Date): string[] {
     const weeks: string[] = []
     const cur = new Date(start); cur.setHours(0,0,0,0)
-    cur.setDate(cur.getDate() - cur.getDay()) // back to Sunday (local)
+    cur.setDate(cur.getDate() - cur.getDay())
     const endDay = new Date(end); endDay.setHours(0,0,0,0)
     while (cur <= endDay) {
       weeks.push(localDateStr(cur))
@@ -168,80 +276,84 @@ export default function ReportsPage() {
     return weeks
   }
 
-  // ── Daily cash collected chart ────────────────────────────────────────────────
+  // ── Chart data (each point carries its source items for drill-down) ───────────
 
   const dailyCashData = useMemo(() => {
-    const byDay: Record<string, number> = {}
+    const byDay: Record<string, { amount: number; payments: Payment[] }> = {}
     for (const p of paidInRange) {
       if (!p.paid_date) continue
-      // Use stored date string directly (already YYYY-MM-DD local date)
       const day = p.paid_date.slice(0, 10)
-      byDay[day] = (byDay[day] ?? 0) + p.amount
+      if (!byDay[day]) byDay[day] = { amount: 0, payments: [] }
+      byDay[day].amount += p.amount
+      byDay[day].payments.push(p)
     }
-    // Use localDateStr on the rangeStart Date (local) or parse the earliest paid_date safely
     const earliestPaid = paidInRange.length > 0 ? parseLocalDate(paidInRange.map(p => p.paid_date!).sort()[0]) : null
     const start = rangeStart ?? earliestPaid
     if (!start) return []
     return getDaysInRange(start, new Date()).map(date => ({
-      date, amount: byDay[date] ?? 0, label: fmtDay(date)
+      date, label: fmtDay(date),
+      amount: byDay[date]?.amount ?? 0,
+      payments: byDay[date]?.payments ?? [],
     }))
   }, [paidInRange, rangeStart])
 
-  // ── Weekly cash collected chart ───────────────────────────────────────────────
-
   const weeklyCashData = useMemo(() => {
-    const byWeek: Record<string, number> = {}
+    const byWeek: Record<string, { amount: number; payments: Payment[] }> = {}
     for (const p of paidInRange) {
       if (!p.paid_date) continue
       const date = parseLocalDate(p.paid_date)
       const sun = new Date(date)
       sun.setDate(date.getDate() - date.getDay())
       const key = localDateStr(sun)
-      byWeek[key] = (byWeek[key] ?? 0) + p.amount
+      if (!byWeek[key]) byWeek[key] = { amount: 0, payments: [] }
+      byWeek[key].amount += p.amount
+      byWeek[key].payments.push(p)
     }
     const earliestPaid = paidInRange.length > 0 ? parseLocalDate(paidInRange.map(p => p.paid_date!).sort()[0]) : null
     const start = rangeStart ?? earliestPaid
     if (!start) return []
     return getWeeksInRange(start, new Date()).map(date => ({
-      date, amount: byWeek[date] ?? 0, label: fmtWeek(date)
+      date, label: fmtWeek(date),
+      amount: byWeek[date]?.amount ?? 0,
+      payments: byWeek[date]?.payments ?? [],
     }))
   }, [paidInRange, rangeStart])
 
-  // ── New clients over time (for deal flow chart) ────────────────────────────────
-
   const dealFlowData = useMemo(() => {
-    const byDay: Record<string, number> = {}
+    const byDay: Record<string, Client[]> = {}
     for (const c of newDeals) {
       const day = (c.signed_at ?? c.created_at).slice(0, 10)
-      byDay[day] = (byDay[day] ?? 0) + 1
+      if (!byDay[day]) byDay[day] = []
+      byDay[day].push(c)
     }
     const start = rangeStart ?? (newDeals.length > 0
       ? new Date(Math.min(...newDeals.map(c => new Date(c.signed_at ?? c.created_at).getTime())))
       : null)
     if (!start) return []
     return getDaysInRange(start, new Date()).map(date => ({
-      date, count: byDay[date] ?? 0, label: fmtDay(date)
+      date, label: fmtDay(date),
+      count: byDay[date]?.length ?? 0,
+      clients: byDay[date] ?? [],
     }))
   }, [newDeals, rangeStart])
 
-  // ── Churn over time ────────────────────────────────────────────────────────────
-
   const churnData = useMemo(() => {
-    const byDay: Record<string, number> = {}
+    const byDay: Record<string, Client[]> = {}
     for (const c of churned) {
       const day = c.updated_at.slice(0, 10)
-      byDay[day] = (byDay[day] ?? 0) + 1
+      if (!byDay[day]) byDay[day] = []
+      byDay[day].push(c)
     }
     const start = rangeStart ?? (churned.length > 0
       ? new Date(Math.min(...churned.map(c => new Date(c.updated_at).getTime())))
       : null)
     if (!start) return []
     return getDaysInRange(start, new Date()).map(date => ({
-      date, count: byDay[date] ?? 0, label: fmtDay(date)
+      date, label: fmtDay(date),
+      count: byDay[date]?.length ?? 0,
+      clients: byDay[date] ?? [],
     }))
   }, [churned, rangeStart])
-
-  // ── MRR over time (weekly snapshots using created_at as active date) ───────────
 
   const mrrOverTimeData = useMemo(() => {
     const now = new Date()
@@ -252,13 +364,11 @@ export default function ReportsPage() {
     const weeks = getWeeksInRange(start, now)
     return weeks.map(weekStart => {
       const weekDate = new Date(weekStart + 'T00:00:00')
-      // Clients who were active at this week's start (created before this date, not churned before it)
       const mrr = clients
         .filter(c => {
           if (!c.monthly_retainer) return false
           const created = new Date(c.created_at)
           if (created > weekDate) return false
-          // If churned, use updated_at as proxy for churn date
           if (c.stage === 'churned' || c.stage === 'free_trial_lost') {
             return new Date(c.updated_at) >= weekDate
           }
@@ -268,6 +378,22 @@ export default function ReportsPage() {
       return { date: weekStart, mrr, label: fmtWeek(weekStart) }
     })
   }, [clients, rangeStart])
+
+  // ── Click handlers ────────────────────────────────────────────────────────────
+
+  function handleChartClick(
+    data: any,
+    type: 'payments' | 'clients' | 'churn',
+    chartTitle: string,
+  ) {
+    if (!data?.activePayload?.[0]) return
+    const point = data.activePayload[0].payload
+    if (type === 'payments') {
+      setDrillDown({ title: point.label, subtitle: chartTitle, type: 'payments', payments: point.payments ?? [] })
+    } else {
+      setDrillDown({ title: point.label, subtitle: chartTitle, type, clients: point.clients ?? [] })
+    }
+  }
 
   // ── Pipeline breakdown ─────────────────────────────────────────────────────────
 
@@ -304,6 +430,7 @@ export default function ReportsPage() {
   }
 
   return (
+    <>
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header + range filter */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -340,12 +467,18 @@ export default function ReportsPage() {
           <div className="text-xs text-muted-foreground mt-1">MRR (Current)</div>
           <div className="text-[10px] text-muted-foreground/50 mt-0.5">{activeClients.length} active clients</div>
         </div>
-        <div className="bg-card border border-blue-500/30 bg-blue-500/5 rounded-xl px-4 py-4">
+        <div
+          className="bg-card border border-blue-500/30 bg-blue-500/5 rounded-xl px-4 py-4 cursor-pointer hover:bg-blue-500/10 transition-colors"
+          onClick={() => setDrillDown({ title: 'All Clients Signed', subtitle: RANGE_OPTIONS.find(r => r.value === range)?.label ?? '', type: 'clients', clients: newDeals })}
+        >
           <div className="text-2xl font-bold text-blue-400">{newDeals.length}</div>
           <div className="text-xs text-muted-foreground mt-1">Clients Signed</div>
           <div className="text-[10px] text-muted-foreground/50 mt-0.5">{RANGE_OPTIONS.find(r => r.value === range)?.label}</div>
         </div>
-        <div className="bg-card border border-red-500/30 bg-red-500/5 rounded-xl px-4 py-4">
+        <div
+          className="bg-card border border-red-500/30 bg-red-500/5 rounded-xl px-4 py-4 cursor-pointer hover:bg-red-500/10 transition-colors"
+          onClick={() => setDrillDown({ title: 'All Churned / Paused', subtitle: RANGE_OPTIONS.find(r => r.value === range)?.label ?? '', type: 'churn', clients: churned })}
+        >
           <div className="text-2xl font-bold text-red-400">{churned.length}</div>
           <div className="text-xs text-muted-foreground mt-1">Churned / Paused</div>
           <div className="text-[10px] text-muted-foreground/50 mt-0.5">{RANGE_OPTIONS.find(r => r.value === range)?.label}</div>
@@ -354,15 +487,24 @@ export default function ReportsPage() {
 
       {/* Secondary stat row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+        <div
+          className="bg-card border border-border rounded-xl px-4 py-3 text-center cursor-pointer hover:bg-secondary/30 transition-colors"
+          onClick={() => setDrillDown({ title: 'Active Clients', subtitle: 'Current', type: 'clients', clients: activeClients })}
+        >
           <div className="text-xl font-bold">{activeClients.length}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Active Clients</div>
         </div>
-        <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+        <div
+          className="bg-card border border-border rounded-xl px-4 py-3 text-center cursor-pointer hover:bg-secondary/30 transition-colors"
+          onClick={() => setDrillDown({ title: 'Active Trials', subtitle: 'Current', type: 'clients', clients: trialClients })}
+        >
           <div className="text-xl font-bold">{trialClients.length}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Active Trials</div>
         </div>
-        <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+        <div
+          className="bg-card border border-border rounded-xl px-4 py-3 text-center cursor-pointer hover:bg-secondary/30 transition-colors"
+          onClick={() => setDrillDown({ title: 'Total Churned', subtitle: 'All Time', type: 'churn', clients: clients.filter(c => c.stage === 'churned') })}
+        >
           <div className="text-xl font-bold">{clients.filter(c => c.stage === 'churned').length}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Total Churned</div>
         </div>
@@ -380,7 +522,7 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-emerald-400 mb-4">{formatCurrency(totalCollected)}</div>
               <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={dailyCashData}>
+                <LineChart data={dailyCashData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'payments', 'Cash Collected (Daily)')}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}`} />
@@ -400,7 +542,7 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-emerald-400 mb-4">{formatCurrency(totalCollected)}</div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={weeklyCashData}>
+                <BarChart data={weeklyCashData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'payments', 'Cash Collected (Weekly)')}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}`} />
@@ -423,7 +565,7 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-blue-400 mb-4">{newDeals.length} signed</div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={dealFlowData}>
+                <BarChart data={dealFlowData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'clients', 'Clients Signed')}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
@@ -443,7 +585,7 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-red-400 mb-4">{churned.length} churned</div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={churnData}>
+                <BarChart data={churnData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'churn', 'Churned / Paused')}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
@@ -473,7 +615,16 @@ export default function ReportsPage() {
               {Object.entries(stageGroups)
                 .sort(([, a], [, b]) => b - a)
                 .map(([stage, count]) => (
-                  <tr key={stage} className="hover:bg-secondary/20">
+                  <tr
+                    key={stage}
+                    className="hover:bg-secondary/20 cursor-pointer"
+                    onClick={() => setDrillDown({
+                      title: STAGE_LABELS[stage] ?? stage.replace(/_/g, ' '),
+                      subtitle: 'Pipeline Breakdown',
+                      type: stage === 'churned' || stage === 'paused' ? 'churn' : 'clients',
+                      clients: clients.filter(c => c.stage === stage),
+                    })}
+                  >
                     <td className="px-4 py-2.5">{STAGE_LABELS[stage] ?? stage.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-2.5 text-right font-medium">{count}</td>
                   </tr>
@@ -487,7 +638,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* MRR Over Time — big line graph */}
+      {/* MRR Over Time */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center justify-between mb-1">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">MRR Over Time</div>
@@ -527,7 +678,7 @@ export default function ReportsPage() {
                 {activeClients
                   .sort((a, b) => (b.monthly_retainer ?? 0) - (a.monthly_retainer ?? 0))
                   .map(c => (
-                    <tr key={c.id} className="hover:bg-secondary/20">
+                    <tr key={c.id} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setDrillDown({ title: c.business_name || c.name, subtitle: 'Active Client', type: 'clients', clients: [c] })}>
                       <td className="px-4 py-2.5 font-medium">{c.name}{c.business_name ? <span className="text-muted-foreground font-normal ml-1.5">· {c.business_name}</span> : null}</td>
                       <td className="px-4 py-2.5 text-emerald-400">{formatCurrency(c.monthly_retainer)}</td>
                       <td className="px-4 py-2.5 text-muted-foreground capitalize">{(c.payment_frequency ?? 'monthly').replace(/_/g, '-')}</td>
@@ -540,5 +691,15 @@ export default function ReportsPage() {
         </div>
       )}
     </div>
+
+    {/* Drill-down side panel */}
+    {drillDown && (
+      <DrillDownPanel
+        drillDown={drillDown}
+        clients={clients}
+        onClose={() => setDrillDown(null)}
+      />
+    )}
+    </>
   )
 }
