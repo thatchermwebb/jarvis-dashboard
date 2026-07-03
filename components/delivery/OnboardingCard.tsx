@@ -46,8 +46,6 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
     <div
       draggable={column !== 'completed'}
       onDragStart={e => {
-        // Only fire if the drag originates on the card itself, not a child link/button
-        if ((e.target as HTMLElement).closest('a, button')) { e.preventDefault(); return }
         onDragStart()
         e.dataTransfer.effectAllowed = 'move'
       }}
