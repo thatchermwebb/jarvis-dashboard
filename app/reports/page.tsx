@@ -122,7 +122,7 @@ export default function ReportsPage() {
   // ── Deal flow & churn (using updated_at + stage as proxy) ────────────────────
 
   const newDeals = useMemo(() =>
-    clients.filter(c => c.stage === 'active_client' && inRange(c.created_at)),
+    clients.filter(c => c.stage === 'active_client' && inRange(c.updated_at)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [clients, range, rangeStart]
   )
@@ -211,11 +211,11 @@ export default function ReportsPage() {
   const dealFlowData = useMemo(() => {
     const byDay: Record<string, number> = {}
     for (const c of newDeals) {
-      const day = c.created_at.slice(0, 10)
+      const day = c.updated_at.slice(0, 10)
       byDay[day] = (byDay[day] ?? 0) + 1
     }
     const start = rangeStart ?? (newDeals.length > 0
-      ? new Date(Math.min(...newDeals.map(c => new Date(c.created_at).getTime())))
+      ? new Date(Math.min(...newDeals.map(c => new Date(c.updated_at).getTime())))
       : null)
     if (!start) return []
     return getDaysInRange(start, new Date()).map(date => ({
