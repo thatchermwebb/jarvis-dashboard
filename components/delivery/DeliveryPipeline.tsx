@@ -53,6 +53,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   const [clients, setClients] = useState<ClientWithAds[]>([])
   const [loading, setLoading] = useState(true)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const dragClient = useRef<{ id: string; col: 'new' | 'in_progress' | 'completed' } | null>(null)
 
   const load = useCallback(async () => {
@@ -193,6 +194,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   async function handleDrop(e: React.DragEvent, targetCol: 'new' | 'in_progress' | 'completed') {
     e.preventDefault()
     setDragOverCol(null)
+    setDraggingId(null)
     const drag = dragClient.current
     dragClient.current = null
     if (!drag || drag.col === targetCol) return
@@ -311,7 +313,16 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
                         onStart={handleStartClick}
                         onComplete={handleComplete}
                         onFlag={handleFlag}
-                        onDragStart={() => { dragClient.current = { id: client.id, col: col.id } }}
+                        isDraggingOther={draggingId !== null && draggingId !== client.id}
+                        onDragStart={() => {
+                          dragClient.current = { id: client.id, col: col.id }
+                          setDraggingId(client.id)
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId(null)
+                          setDragOverCol(null)
+                          dragClient.current = null
+                        }}
                       />
                     ))
                   )}

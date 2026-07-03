@@ -19,9 +19,11 @@ interface Props {
   onComplete: (client: ClientWithAds) => Promise<void>
   onFlag: (client: ClientWithAds) => Promise<void>
   onDragStart: () => void
+  onDragEnd: () => void
+  isDraggingOther: boolean
 }
 
-export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag, onDragStart }: Props) {
+export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag, onDragStart, onDragEnd, isDraggingOther }: Props) {
   const [busy, setBusy] = useState<'start' | 'complete' | 'flag' | null>(null)
 
   async function run(action: 'complete' | 'flag') {
@@ -44,12 +46,14 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
 
   return (
     <div
-      draggable={column !== 'completed'}
+      draggable={column !== 'completed' && !isDraggingOther}
       onDragStart={e => {
-        e.dataTransfer.setData('text/plain', client.id)  // required for Chrome to allow drops
+        e.dataTransfer.setData('text/plain', client.id)
         e.dataTransfer.effectAllowed = 'move'
         onDragStart()
       }}
+      onDragEnd={onDragEnd}
+      onDragOver={isDraggingOther ? e => e.preventDefault() : undefined}
       className={cn(
         'bg-card border border-border rounded-xl p-4 space-y-3.5 transition-all hover:border-border/80',
         column !== 'completed' && 'cursor-grab active:cursor-grabbing active:opacity-60 active:scale-[0.98]',
