@@ -61,6 +61,7 @@ export interface Client {
   id: string
   created_at: string
   updated_at: string
+  signed_at?: string
 
   // Core
   name: string
