@@ -407,7 +407,7 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
           {/* Advertised Package + Deal Notes */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Advertised Package</Label>
-            <Input value={form.advertised_package} onChange={(e) => set('advertised_package', e.target.value)} placeholder="e.g. Ads + AI + CRM, Ads Only..." className="bg-secondary/50 h-11 text-base border-border/50" />
+            <Input value={form.advertised_package} onChange={(e) => set('advertised_package', e.target.value)} placeholder="ex: $199 Full Detail - Steam" className="bg-secondary/50 h-11 text-base border-border/50" />
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Deal Notes</Label>
