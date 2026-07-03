@@ -48,7 +48,7 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
     <div
       draggable={column !== 'completed' && !isDraggingOther}
       onDragStart={e => {
-        e.dataTransfer.setData('text/plain', client.id)
+        e.dataTransfer.setData('text/plain', `${client.id}:${column}`)
         e.dataTransfer.effectAllowed = 'move'
         onDragStart()
       }}

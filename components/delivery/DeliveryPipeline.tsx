@@ -105,34 +105,43 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         : [{ id: 'temp', client_id: c.id, status: 'in_progress' as const, ad_name: '', assigned_to: user.name, priority: 'high', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any],
     }))
 
-    if (client.adProductions.length === 0) {
-      await fetch('/api/ad-productions', {
+    try {
+      if (client.adProductions.length === 0) {
+        const res = await fetch('/api/ad-productions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: client.id,
+            ad_name: `${name.replace(/\s+/g, '_')}_Onboarding`,
+            status: 'in_progress',
+            assigned_to: user.name,
+            priority: 'high',
+          }),
+        })
+        if (!res.ok) throw new Error('Failed to create ad production')
+      } else {
+        const res = await fetch(`/api/ad-productions/${client.adProductions[0].id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'in_progress' }),
+        })
+        if (!res.ok) throw new Error('Failed to update ad production')
+      }
+
+      // Slack is best-effort — don't let it block or revert the move
+      fetch('/api/slack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: client.id,
-          ad_name: `${name.replace(/\s+/g, '_')}_Onboarding`,
-          status: 'in_progress',
-          assigned_to: user.name,
-          priority: 'high',
-        }),
-      })
-    } else {
-      await fetch(`/api/ad-productions/${client.adProductions[0].id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'in_progress' }),
-      })
+        body: JSON.stringify({ message }),
+      }).catch(() => {})
+
+      toast.success('Started — Slack notified')
+      load()
+    } catch {
+      toast.error('Failed to start — please try again')
+      // Revert optimistic update
+      load()
     }
-
-    await fetch('/api/slack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    })
-
-    toast.success('Started — Slack notified')
-    load()
   }
 
   // Fire directly from card button — no modal, just move + notify
@@ -195,22 +204,32 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     e.preventDefault()
     setDragOverCol(null)
     setDraggingId(null)
-    const drag = dragClient.current
     dragClient.current = null
-    if (!drag || drag.col === targetCol) return
-    const client = clients.find(c => c.id === drag.id)
+
+    // Read source info from dataTransfer — more reliable than the ref across async renders
+    const raw = e.dataTransfer.getData('text/plain')
+    if (!raw || !raw.includes(':')) return
+    const colonIdx = raw.lastIndexOf(':')
+    const clientId = raw.slice(0, colonIdx)
+    const sourceCol = raw.slice(colonIdx + 1) as 'new' | 'in_progress' | 'completed'
+
+    if (sourceCol === targetCol) return
+    const client = clients.find(c => c.id === clientId)
     if (!client) return
 
-    if (drag.col === 'new' && targetCol === 'in_progress') {
-      // Drag bypasses the preview modal — fires default message directly
+    if (sourceCol === 'new' && targetCol === 'in_progress') {
+      const name = client.business_name || client.name
       const defaultMessage = [
         `<!channel>`,
-        `New Onboarding`,
-        client.name,
-        client.market_location || '',
+        `🚀 *New Onboarding Started — ${name}*`,
+        client.market_location ? `Market: ${client.market_location}` : '',
+        client.trial_start && client.trial_end
+          ? `Trial: ${client.trial_start} – ${client.trial_end}`
+          : '',
+        `Assigned: ${user.name}`,
       ].filter(Boolean).join('\n')
       await handleStartCore(client, defaultMessage)
-    } else if (drag.col === 'in_progress' && targetCol === 'completed') {
+    } else if (sourceCol === 'in_progress' && targetCol === 'completed') {
       await handleComplete(client)
     }
   }
