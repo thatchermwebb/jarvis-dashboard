@@ -432,8 +432,8 @@ const SPREADSHEET_HEADERS: { label: string; sticky?: boolean; sortKey?: TableSor
 
 function sortSpreadsheet(list: Client[], field: TableSortField, dir: 'asc' | 'desc'): Client[] {
   return [...list].sort((a, b) => {
-    const av = (a as Record<string, unknown>)[field] ?? ''
-    const bv = (b as Record<string, unknown>)[field] ?? ''
+    const av = (a as unknown as Record<string, unknown>)[field] ?? ''
+    const bv = (b as unknown as Record<string, unknown>)[field] ?? ''
     let cmp: number
     if (typeof av === 'number' && typeof bv === 'number') {
       cmp = av - bv
