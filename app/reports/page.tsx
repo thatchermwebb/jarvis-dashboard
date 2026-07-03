@@ -381,18 +381,12 @@ export default function ReportsPage() {
 
   // ── Click handlers ────────────────────────────────────────────────────────────
 
-  function handleChartClick(
-    data: any,
-    type: 'payments' | 'clients' | 'churn',
-    chartTitle: string,
-  ) {
-    if (!data?.activePayload?.[0]) return
-    const point = data.activePayload[0].payload
-    if (type === 'payments') {
-      setDrillDown({ title: point.label, subtitle: chartTitle, type: 'payments', payments: point.payments ?? [] })
-    } else {
-      setDrillDown({ title: point.label, subtitle: chartTitle, type, clients: point.clients ?? [] })
-    }
+  function openPayments(point: any, chartTitle: string) {
+    setDrillDown({ title: point.label, subtitle: chartTitle, type: 'payments', payments: point.payments ?? [] })
+  }
+
+  function openClients(point: any, chartTitle: string, type: 'clients' | 'churn' = 'clients') {
+    setDrillDown({ title: point.label, subtitle: chartTitle, type, clients: point.clients ?? [] })
   }
 
   // ── Pipeline breakdown ─────────────────────────────────────────────────────────
@@ -522,12 +516,12 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-emerald-400 mb-4">{formatCurrency(totalCollected)}</div>
               <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={dailyCashData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'payments', 'Cash Collected (Daily)')}>
+                <LineChart data={dailyCashData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}`} />
                   <Tooltip content={<ChartTooltip isCurrency />} />
-                  <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981', cursor: 'pointer' }} activeDot={{ r: 6, cursor: 'pointer', onClick: (_: any, payload: any) => openPayments(payload.payload, 'Cash Collected (Daily)') }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -542,12 +536,12 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-emerald-400 mb-4">{formatCurrency(totalCollected)}</div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={weeklyCashData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'payments', 'Cash Collected (Weekly)')}>
+                <BarChart data={weeklyCashData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}`} />
                   <Tooltip content={<ChartTooltip isCurrency />} />
-                  <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(p: any) => openPayments(p, 'Cash Collected (Weekly)')} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -565,12 +559,12 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-blue-400 mb-4">{newDeals.length} signed</div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={dealFlowData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'clients', 'Clients Signed')}>
+                <BarChart data={dealFlowData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(p: any) => openClients(p, 'Clients Signed', 'clients')} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -585,12 +579,12 @@ export default function ReportsPage() {
             <div>
               <div className="text-2xl font-bold text-red-400 mb-4">{churned.length} churned</div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={churnData} style={{ cursor: 'pointer' }} onClick={d => handleChartClick(d, 'churn', 'Churned / Paused')}>
+                <BarChart data={churnData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#666' }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(p: any) => openClients(p, 'Churned / Paused', 'churn')} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
