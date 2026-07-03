@@ -46,8 +46,9 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
     <div
       draggable={column !== 'completed'}
       onDragStart={e => {
-        onDragStart()
+        e.dataTransfer.setData('text/plain', client.id)  // required for Chrome to allow drops
         e.dataTransfer.effectAllowed = 'move'
+        onDragStart()
       }}
       className={cn(
         'bg-card border border-border rounded-xl p-4 space-y-3.5 transition-all hover:border-border/80',

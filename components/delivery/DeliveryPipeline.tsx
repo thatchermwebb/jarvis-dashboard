@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { RefreshCw } from 'lucide-react'
 import { OnboardingCard } from './OnboardingCard'
-import { StartFulfillmentModal } from './StartFulfillmentModal'
 import type { Client, AdProduction } from '@/types'
 import type { AppUser } from '@/lib/auth'
 import { localToday } from '@/lib/utils'
@@ -54,7 +53,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   const [clients, setClients] = useState<ClientWithAds[]>([])
   const [loading, setLoading] = useState(true)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
-  const [startModalClient, setStartModalClient] = useState<ClientWithAds | null>(null)
   const dragClient = useRef<{ id: string; col: 'new' | 'in_progress' | 'completed' } | null>(null)
 
   const load = useCallback(async () => {
@@ -136,9 +134,19 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     load()
   }
 
-  // Opens the preview modal (called from card button click)
+  // Fire directly from card button — no modal, just move + notify
   function handleStartClick(client: ClientWithAds) {
-    setStartModalClient(client)
+    const name = client.business_name || client.name
+    const defaultMessage = [
+      `<!channel>`,
+      `🚀 *New Onboarding Started — ${name}*`,
+      client.market_location ? `Market: ${client.market_location}` : '',
+      client.trial_start && client.trial_end
+        ? `Trial: ${client.trial_start} – ${client.trial_end}`
+        : '',
+      `Assigned: ${user.name}`,
+    ].filter(Boolean).join('\n')
+    handleStartCore(client, defaultMessage)
   }
 
   async function handleComplete(client: ClientWithAds) {
@@ -314,16 +322,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         )}
       </div>
 
-      {/* Start Fulfillment preview modal */}
-      {startModalClient && (
-        <StartFulfillmentModal
-          client={startModalClient}
-          onConfirm={async (message) => {
-            await handleStartCore(startModalClient, message)
-          }}
-          onClose={() => setStartModalClient(null)}
-        />
-      )}
     </>
   )
 }
