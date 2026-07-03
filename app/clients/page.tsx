@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
+import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, Table2, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -301,6 +301,153 @@ function KanbanColumn({
   )
 }
 
+function stageBadge(stage: ClientStage): { label: string; cls: string } {
+  const map: Partial<Record<ClientStage, { label: string; cls: string }>> = {
+    active_client:      { label: 'Active',         cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+    won_back:           { label: 'Won Back',        cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+    free_trial:         { label: 'Free Trial',      cls: 'bg-violet-500/15 text-violet-400 border-violet-500/30' },
+    trial_ending_soon:  { label: 'Trial Ending',    cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+    trial_concluded:    { label: 'Trial Complete',  cls: 'bg-teal-500/15 text-teal-400 border-teal-500/30' },
+    free_trial_pending: { label: 'Trial Pending',   cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+    onboarding:         { label: 'Onboarding',      cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+    overdue:            { label: 'Overdue',         cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+    payment_issue:      { label: 'Payment Issue',   cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+    churn_risk:         { label: 'Churn Risk',      cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+    paused:             { label: 'Paused',          cls: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
+    churned:            { label: 'Churned',         cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
+    free_trial_lost:    { label: 'Trial Lost',      cls: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+  }
+  return map[stage] ?? { label: stage.replace(/_/g, ' '), cls: 'bg-secondary text-muted-foreground border-border' }
+}
+
+function SpreadsheetRow({ c, onClick }: { c: Client; onClick: () => void }) {
+  const today = localToday()
+  const badge = stageBadge(c.stage)
+  const followupOverdue = c.next_followup_date && c.next_followup_date < today
+
+  function fmtDate(d?: string | null) {
+    if (!d) return '—'
+    return new Date(d.slice(0, 10) + 'T00:00:00').toLocaleDateString()
+  }
+  function fmtDateTime(d?: string | null) {
+    if (!d) return '—'
+    return new Date(d).toLocaleDateString()
+  }
+
+  const tdBase = 'px-3 py-2 text-xs whitespace-nowrap border-r border-border/40 last:border-r-0'
+  const tdMuted = cn(tdBase, 'text-muted-foreground')
+
+  return (
+    <tr onClick={onClick} className="hover:bg-secondary/30 cursor-pointer transition-colors border-b border-border/50 group">
+      {/* Name — sticky */}
+      <td className={cn(tdBase, 'sticky left-0 z-10 bg-card group-hover:bg-secondary/30 font-medium min-w-[140px]')}>
+        <div className="flex items-center gap-1.5">
+          {c.name}
+          {isAtRisk(c) && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+        </div>
+      </td>
+      <td className={tdMuted} style={{ minWidth: 160 }}>{c.business_name || '—'}</td>
+      <td className={cn(tdBase, 'min-w-[120px]')}>
+        <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold border', badge.cls)}>
+          {badge.label}
+        </span>
+      </td>
+      <td className={cn(tdBase, 'text-emerald-400 font-medium min-w-[100px]')}>{c.monthly_retainer ? formatCurrency(c.monthly_retainer) : '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 130 }}>{c.phone || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 200 }}>{c.email || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 140 }}>{c.market_location || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 100 }}>{c.payment_frequency || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 100 }}>{c.payment_status || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 180 }}>{c.advertised_package || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 90 }}>{c.timezone || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 110 }}>{c.assigned_va || '—'}</td>
+      <td className={cn(tdBase, 'min-w-[110px]', followupOverdue ? 'text-red-400' : 'text-muted-foreground')}>
+        {c.next_followup_date ? fmtDate(c.next_followup_date) : '—'}
+      </td>
+      <td className={tdMuted} style={{ minWidth: 110 }}>{c.last_contact_date ? fmtDate(c.last_contact_date) : '—'}</td>
+      <td className={cn(tdBase, 'text-base min-w-[60px]')}>{sentimentEmoji(c.last_client_sentiment)}</td>
+      <td className={tdMuted} style={{ minWidth: 100 }}>{c.trial_start ? fmtDate(c.trial_start) : '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 100 }}>{c.trial_end ? fmtDate(c.trial_end) : '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 90 }}>{c.signed_at ? fmtDate(c.signed_at) : '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 110 }}>{c.ad_status || '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 80 }}>{c.budget ? formatCurrency(c.budget) : '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 80 }}>{c.spend ? formatCurrency(c.spend) : '—'}</td>
+      <td className={tdMuted} style={{ minWidth: 70 }}>{c.cpl ? `$${c.cpl}` : '—'}</td>
+      <td className={cn(tdBase, 'min-w-[80px]')}>
+        <div className="flex items-center gap-1.5">
+          {c.ghl_location_link && (
+            <a href={c.ghl_location_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/30 hover:bg-violet-500/25 inline-flex items-center gap-0.5">
+              GHL <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          )}
+          {c.campaign_link && (
+            <a href={c.campaign_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 inline-flex items-center gap-0.5">
+              Ads <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          )}
+          {!c.ghl_location_link && !c.campaign_link && <span className="text-muted-foreground">—</span>}
+        </div>
+      </td>
+      <td className={tdMuted} style={{ minWidth: 110 }}>{fmtDateTime(c.created_at)}</td>
+    </tr>
+  )
+}
+
+const SPREADSHEET_HEADERS = [
+  { label: 'Name',         sticky: true },
+  { label: 'Business' },
+  { label: 'Status' },
+  { label: 'Monthly ($)' },
+  { label: 'Phone' },
+  { label: 'Email' },
+  { label: 'Location' },
+  { label: 'Payment Freq' },
+  { label: 'Payment Status' },
+  { label: 'Package / Services' },
+  { label: 'Timezone' },
+  { label: 'Assigned VA' },
+  { label: 'Next Follow-Up' },
+  { label: 'Last Contact' },
+  { label: 'Mood' },
+  { label: 'Trial Start' },
+  { label: 'Trial End' },
+  { label: 'Signed / Live' },
+  { label: 'Ad Status' },
+  { label: 'Budget' },
+  { label: 'Spend' },
+  { label: 'CPL' },
+  { label: 'Links' },
+  { label: 'Created' },
+]
+
+function SpreadsheetView({ clients, onClientClick }: { clients: Client[]; onClientClick: (id: string) => void }) {
+  const thBase = 'px-3 py-2.5 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap border-r border-border/40 last:border-r-0'
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="text-sm">
+          <thead>
+            <tr className="border-b border-border bg-secondary/20">
+              {SPREADSHEET_HEADERS.map(h => (
+                <th key={h.label} className={cn(thBase, h.sticky && 'sticky left-0 z-20 bg-secondary/20')}>
+                  {h.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map(c => (
+              <SpreadsheetRow key={c.id} c={c} onClick={() => onClientClick(c.id)} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 type SortField = 'last_contact' | 'followup' | 'retainer' | 'mood'
 type SortDir = 'asc' | 'desc'
 
@@ -366,9 +513,9 @@ function ClientsContent() {
 
   const urlFilter = searchParams.get('filter') ?? ''
   const urlStage  = searchParams.get('stage') ?? ''
-  const view = (searchParams.get('view') ?? 'list') as 'list' | 'kanban'
+  const view = (searchParams.get('view') ?? 'list') as 'list' | 'kanban' | 'table'
 
-  function setView(v: 'list' | 'kanban') {
+  function setView(v: 'list' | 'kanban' | 'table') {
     const params = new URLSearchParams(searchParams.toString())
     params.set('view', v)
     router.replace(`/clients?${params}`)
@@ -482,6 +629,9 @@ function ClientsContent() {
             <button onClick={() => setView('kanban')} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all', view === 'kanban' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
               <LayoutGrid className="w-3.5 h-3.5" /> Board
             </button>
+            <button onClick={() => setView('table')} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all', view === 'table' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <Table2 className="w-3.5 h-3.5" /> Table
+            </button>
           </div>
           {!isVA && (
             <>
@@ -513,6 +663,8 @@ function ClientsContent() {
           <p className="text-muted-foreground mb-3">No clients found.</p>
           {!isVA && <Button size="sm" onClick={() => setFormOpen(true)}>Add First Client</Button>}
         </div>
+      ) : view === 'table' ? (
+        <SpreadsheetView clients={visible} onClientClick={id => router.push(`/clients/${id}`)} />
       ) : view === 'list' ? (
         <div className="space-y-4">
           {visibleGroups.map(group => {
