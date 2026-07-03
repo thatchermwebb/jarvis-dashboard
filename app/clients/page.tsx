@@ -395,35 +395,71 @@ function SpreadsheetRow({ c, onClick }: { c: Client; onClick: () => void }) {
   )
 }
 
-const SPREADSHEET_HEADERS = [
-  { label: 'Name',         sticky: true },
-  { label: 'Business' },
-  { label: 'Status' },
-  { label: 'Monthly ($)' },
+type TableSortField =
+  | 'name' | 'business_name' | 'stage' | 'monthly_retainer'
+  | 'market_location' | 'payment_frequency' | 'payment_status'
+  | 'advertised_package' | 'timezone' | 'assigned_va'
+  | 'next_followup_date' | 'last_contact_date' | 'last_client_sentiment'
+  | 'trial_start' | 'trial_end' | 'signed_at'
+  | 'ad_status' | 'budget' | 'spend' | 'cpl' | 'created_at'
+
+const SPREADSHEET_HEADERS: { label: string; sticky?: boolean; sortKey?: TableSortField }[] = [
+  { label: 'Name',              sticky: true, sortKey: 'name' },
+  { label: 'Business',                        sortKey: 'business_name' },
+  { label: 'Status',                          sortKey: 'stage' },
+  { label: 'Monthly ($)',                     sortKey: 'monthly_retainer' },
   { label: 'Phone' },
   { label: 'Email' },
-  { label: 'Location' },
-  { label: 'Payment Freq' },
-  { label: 'Payment Status' },
-  { label: 'Package / Services' },
-  { label: 'Timezone' },
-  { label: 'Assigned VA' },
-  { label: 'Next Follow-Up' },
-  { label: 'Last Contact' },
-  { label: 'Mood' },
-  { label: 'Trial Start' },
-  { label: 'Trial End' },
-  { label: 'Signed / Live' },
-  { label: 'Ad Status' },
-  { label: 'Budget' },
-  { label: 'Spend' },
-  { label: 'CPL' },
+  { label: 'Location',                        sortKey: 'market_location' },
+  { label: 'Payment Freq',                    sortKey: 'payment_frequency' },
+  { label: 'Payment Status',                  sortKey: 'payment_status' },
+  { label: 'Package / Services',              sortKey: 'advertised_package' },
+  { label: 'Timezone',                        sortKey: 'timezone' },
+  { label: 'Assigned VA',                     sortKey: 'assigned_va' },
+  { label: 'Next Follow-Up',                  sortKey: 'next_followup_date' },
+  { label: 'Last Contact',                    sortKey: 'last_contact_date' },
+  { label: 'Mood',                            sortKey: 'last_client_sentiment' },
+  { label: 'Trial Start',                     sortKey: 'trial_start' },
+  { label: 'Trial End',                       sortKey: 'trial_end' },
+  { label: 'Signed / Live',                   sortKey: 'signed_at' },
+  { label: 'Ad Status',                       sortKey: 'ad_status' },
+  { label: 'Budget',                          sortKey: 'budget' },
+  { label: 'Spend',                           sortKey: 'spend' },
+  { label: 'CPL',                             sortKey: 'cpl' },
   { label: 'Links' },
-  { label: 'Created' },
+  { label: 'Created',                         sortKey: 'created_at' },
 ]
 
-function SpreadsheetView({ clients, onClientClick }: { clients: Client[]; onClientClick: (id: string) => void }) {
+function sortSpreadsheet(list: Client[], field: TableSortField, dir: 'asc' | 'desc'): Client[] {
+  return [...list].sort((a, b) => {
+    const av = (a as Record<string, unknown>)[field] ?? ''
+    const bv = (b as Record<string, unknown>)[field] ?? ''
+    let cmp: number
+    if (typeof av === 'number' && typeof bv === 'number') {
+      cmp = av - bv
+    } else {
+      cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' })
+    }
+    return dir === 'asc' ? cmp : -cmp
+  })
+}
+
+function SpreadsheetView({
+  clients,
+  onClientClick,
+  sortField,
+  sortDir,
+  onSort,
+}: {
+  clients: Client[]
+  onClientClick: (id: string) => void
+  sortField: TableSortField | null
+  sortDir: 'asc' | 'desc'
+  onSort: (field: TableSortField) => void
+}) {
+  const sorted = sortField ? sortSpreadsheet(clients, sortField, sortDir) : clients
   const thBase = 'px-3 py-2.5 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap border-r border-border/40 last:border-r-0'
+
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
@@ -432,13 +468,25 @@ function SpreadsheetView({ clients, onClientClick }: { clients: Client[]; onClie
             <tr className="border-b border-border bg-secondary/20">
               {SPREADSHEET_HEADERS.map(h => (
                 <th key={h.label} className={cn(thBase, h.sticky && 'sticky left-0 z-20 bg-secondary/20')}>
-                  {h.label}
+                  {h.sortKey ? (
+                    <button
+                      onClick={() => onSort(h.sortKey!)}
+                      className="flex items-center gap-1 hover:text-foreground transition-colors"
+                    >
+                      {h.label}
+                      {sortField === h.sortKey
+                        ? sortDir === 'desc'
+                          ? <ArrowDown className="w-3 h-3 text-primary" />
+                          : <ArrowUp className="w-3 h-3 text-primary" />
+                        : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+                    </button>
+                  ) : h.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {clients.map(c => (
+            {sorted.map(c => (
               <SpreadsheetRow key={c.id} c={c} onClick={() => onClientClick(c.id)} />
             ))}
           </tbody>
@@ -470,7 +518,15 @@ function ClientsContent() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [tableSortField, setTableSortField] = useState<TableSortField | null>(null)
+  const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
   const dragId = useRef<string | null>(null)
+
+  function cycleTableSort(field: TableSortField) {
+    if (tableSortField !== field) { setTableSortField(field); setTableSortDir('asc') }
+    else if (tableSortDir === 'asc') setTableSortDir('desc')
+    else { setTableSortField(null); setTableSortDir('asc') }
+  }
 
   function toggleGroup(label: string) {
     setCollapsedGroups(prev => {
@@ -664,7 +720,13 @@ function ClientsContent() {
           {!isVA && <Button size="sm" onClick={() => setFormOpen(true)}>Add First Client</Button>}
         </div>
       ) : view === 'table' ? (
-        <SpreadsheetView clients={visible} onClientClick={id => router.push(`/clients/${id}`)} />
+        <SpreadsheetView
+          clients={visible}
+          onClientClick={id => router.push(`/clients/${id}`)}
+          sortField={tableSortField}
+          sortDir={tableSortDir}
+          onSort={cycleTableSort}
+        />
       ) : view === 'list' ? (
         <div className="space-y-4">
           {visibleGroups.map(group => {
