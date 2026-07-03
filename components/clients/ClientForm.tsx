@@ -275,6 +275,7 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
     slack_thread: client?.slack_thread ?? '',
     google_drive_folder: client?.google_drive_folder ?? '',
     deal_notes: client?.deal_notes ?? '',
+    advertised_package: client?.advertised_package ?? '',
   })
 
   useEffect(() => {
@@ -403,7 +404,11 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
             </div>
           </div>
 
-          {/* Deal Notes */}
+          {/* Advertised Package + Deal Notes */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Advertised Package</Label>
+            <Input value={form.advertised_package} onChange={(e) => set('advertised_package', e.target.value)} placeholder="e.g. Ads + AI + CRM, Ads Only..." className="bg-secondary/50 h-11 text-base border-border/50" />
+          </div>
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Deal Notes</Label>
             <Textarea value={form.deal_notes} onChange={(e) => set('deal_notes', e.target.value)} placeholder="Special pricing, discounts, custom deal notes..." className="bg-secondary/50 h-24 text-base border-border/50 resize-none" />

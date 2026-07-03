@@ -379,6 +379,12 @@ export default function ClientWarRoom() {
               <Separator className="bg-border" />
 
               <Section title="Deal">
+                {client.advertised_package && (
+                  <>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Advertised Package</div>
+                    <div className="text-sm font-medium text-foreground mb-3">{client.advertised_package}</div>
+                  </>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Monthly Retainer" value={client.monthly_retainer ? formatCurrency(client.monthly_retainer) : null} />
                   <Field label="Payment" value={client.payment_frequency} />

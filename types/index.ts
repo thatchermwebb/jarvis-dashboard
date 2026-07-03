@@ -79,6 +79,7 @@ export interface Client {
   payment_frequency?: string
   payment_status?: PaymentStatus
   deal_notes?: string
+  advertised_package?: string
 
   // Trial
   trial_start?: string
