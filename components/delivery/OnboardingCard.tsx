@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ExternalLink, Play, CheckCircle2, AlertTriangle, User, MapPin, Calendar } from 'lucide-react'
+import { ExternalLink, Play, CheckCircle2, AlertTriangle, User, MapPin, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import type { Client, AdProduction } from '@/types'
 import type { AppUser } from '@/lib/auth'
@@ -18,12 +18,11 @@ interface Props {
   onStart: (client: ClientWithAds) => void
   onComplete: (client: ClientWithAds) => Promise<void>
   onFlag: (client: ClientWithAds) => Promise<void>
-  onDragStart: () => void
-  onDragEnd: () => void
-  isDraggingOther: boolean
+  onMoveLeft?: () => void
+  onMoveRight?: () => void
 }
 
-export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag, onDragStart, onDragEnd, isDraggingOther }: Props) {
+export function OnboardingCard({ client, column, user, onStart, onComplete, onFlag, onMoveLeft, onMoveRight }: Props) {
   const [busy, setBusy] = useState<'start' | 'complete' | 'flag' | null>(null)
 
   async function run(action: 'complete' | 'flag') {
@@ -46,21 +45,12 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
 
   return (
     <div
-      draggable={column !== 'completed' && !isDraggingOther}
-      onDragStart={e => {
-        e.dataTransfer.setData('text/plain', `${client.id}:${column}`)
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart()
-      }}
-      onDragEnd={onDragEnd}
-      onDragOver={isDraggingOther ? e => e.preventDefault() : undefined}
       className={cn(
         'bg-card border border-border rounded-xl p-4 space-y-3.5 transition-all hover:border-border/80',
-        column !== 'completed' && 'cursor-grab active:cursor-grabbing active:opacity-60 active:scale-[0.98]',
         column === 'completed' && 'opacity-70'
       )}
     >
-      {/* Name + link */}
+      {/* Name + nav */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-foreground leading-tight truncate">{businessName}</div>
@@ -71,14 +61,33 @@ export function OnboardingCard({ client, column, user, onStart, onComplete, onFl
             </div>
           )}
         </div>
-        <Link
-          href={`/clients/${client.id}`}
-          draggable={false}
-          className="text-muted-foreground/40 hover:text-primary transition-colors flex-shrink-0 mt-0.5"
-          title="View profile"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
+        <div className="flex items-center gap-0.5 flex-shrink-0 mt-0.5">
+          {onMoveLeft && (
+            <button
+              onClick={onMoveLeft}
+              className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors"
+              title="Move left"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onMoveRight && (
+            <button
+              onClick={onMoveRight}
+              className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors"
+              title="Move right"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <Link
+            href={`/clients/${client.id}`}
+            className="p-1 rounded text-muted-foreground/40 hover:text-primary transition-colors"
+            title="View profile"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
 
       {/* Details */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { RefreshCw } from 'lucide-react'
 import { OnboardingCard } from './OnboardingCard'
@@ -52,9 +52,6 @@ const COLUMN_CONFIG = [
 export function DeliveryPipeline({ user }: { user: AppUser }) {
   const [clients, setClients] = useState<ClientWithAds[]>([])
   const [loading, setLoading] = useState(true)
-  const [dragOverCol, setDragOverCol] = useState<string | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const dragClient = useRef<{ id: string; col: 'new' | 'in_progress' | 'completed' } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -93,8 +90,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
 
   useEffect(() => { load() }, [load])
 
-  // Core execution — called after message is confirmed (either from modal or direct drag)
-  async function handleStartCore(client: ClientWithAds, message: string) {
+  async function handleStartCore(client: ClientWithAds, message?: string) {
     const name = client.business_name || client.name
 
     // Optimistic update — move card to In Progress immediately
@@ -128,14 +124,16 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         if (!res.ok) throw new Error('Failed to update ad production')
       }
 
-      // Slack is best-effort — don't let it block or revert the move
-      fetch('/api/slack', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      }).catch(() => {})
-
-      toast.success('Started — Slack notified')
+      if (message) {
+        fetch('/api/slack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        }).catch(() => {})
+        toast.success('Started — Slack notified')
+      } else {
+        toast.success('Moved to In Progress')
+      }
       load()
     } catch {
       toast.error('Failed to start — please try again')
@@ -144,7 +142,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     }
   }
 
-  // Fire directly from card button — no modal, just move + notify
   function handleStartClick(client: ClientWithAds) {
     const name = client.business_name || client.name
     const defaultMessage = [
@@ -160,9 +157,6 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   }
 
   async function handleComplete(client: ClientWithAds) {
-    const name = client.business_name || client.name
-
-    // Optimistic update — move card to Completed immediately
     setClients(prev => prev.map(c => c.id !== client.id ? c : {
       ...c,
       stage: 'free_trial' as const,
@@ -184,53 +178,59 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
       )
     )
 
-    const slackText = [
-      `✅ *Onboarding Complete — ${name}*`,
-      `Completed by: ${user.name}`,
-      `Client is now in Free Trial.`,
-    ].join('\n')
-
-    await fetch('/api/slack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: slackText }),
-    })
-
     toast.success('Onboarding marked complete')
     load()
   }
 
-  async function handleDrop(e: React.DragEvent, targetCol: 'new' | 'in_progress' | 'completed') {
-    e.preventDefault()
-    setDragOverCol(null)
-    setDraggingId(null)
-    dragClient.current = null
+  async function handleMoveBackToNew(client: ClientWithAds) {
+    setClients(prev => prev.map(c => c.id !== client.id ? c : {
+      ...c,
+      adProductions: c.adProductions.map(a => ({ ...a, status: 'not_started' as const })),
+    }))
+    try {
+      await Promise.all(
+        client.adProductions.map(ad =>
+          fetch(`/api/ad-productions/${ad.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'not_started' }),
+          })
+        )
+      )
+      toast.success('Moved back to New')
+      load()
+    } catch {
+      toast.error('Failed to move — please try again')
+      load()
+    }
+  }
 
-    // Read source info from dataTransfer — more reliable than the ref across async renders
-    const raw = e.dataTransfer.getData('text/plain')
-    if (!raw || !raw.includes(':')) return
-    const colonIdx = raw.lastIndexOf(':')
-    const clientId = raw.slice(0, colonIdx)
-    const sourceCol = raw.slice(colonIdx + 1) as 'new' | 'in_progress' | 'completed'
-
-    if (sourceCol === targetCol) return
-    const client = clients.find(c => c.id === clientId)
-    if (!client) return
-
-    if (sourceCol === 'new' && targetCol === 'in_progress') {
-      const name = client.business_name || client.name
-      const defaultMessage = [
-        `<!channel>`,
-        `🚀 *New Onboarding Started — ${name}*`,
-        client.market_location ? `Market: ${client.market_location}` : '',
-        client.trial_start && client.trial_end
-          ? `Trial: ${client.trial_start} – ${client.trial_end}`
-          : '',
-        `Assigned: ${user.name}`,
-      ].filter(Boolean).join('\n')
-      await handleStartCore(client, defaultMessage)
-    } else if (sourceCol === 'in_progress' && targetCol === 'completed') {
-      await handleComplete(client)
+  async function handleMoveBackToInProgress(client: ClientWithAds) {
+    setClients(prev => prev.map(c => c.id !== client.id ? c : {
+      ...c,
+      stage: 'onboarding' as const,
+      adProductions: c.adProductions.map((a, i) => i === 0 ? { ...a, status: 'in_progress' as const } : a),
+    }))
+    try {
+      await fetch(`/api/clients/${client.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: 'onboarding' }),
+      })
+      await Promise.all(
+        client.adProductions.map(ad =>
+          fetch(`/api/ad-productions/${ad.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'in_progress' }),
+          })
+        )
+      )
+      toast.success('Moved back to In Progress')
+      load()
+    } catch {
+      toast.error('Failed to move — please try again')
+      load()
     }
   }
 
@@ -300,12 +300,9 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
               <div
                 key={col.id}
                 className="space-y-3"
-                onDragOver={e => { e.preventDefault(); setDragOverCol(col.id) }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null) }}
-                onDrop={e => handleDrop(e, col.id as 'new' | 'in_progress' | 'completed')}
               >
                 {/* Column header */}
-                <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-colors ${dragOverCol === col.id ? `${col.border} ${col.bg} ring-2 ring-inset ring-current opacity-80` : `${col.border} ${col.bg}`}`}>
+                <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${col.border} ${col.bg}`}>
                   <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm font-semibold ${col.headerColor}`}>{col.label}</div>
@@ -332,16 +329,16 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
                         onStart={handleStartClick}
                         onComplete={handleComplete}
                         onFlag={handleFlag}
-                        isDraggingOther={draggingId !== null && draggingId !== client.id}
-                        onDragStart={() => {
-                          dragClient.current = { id: client.id, col: col.id }
-                          setDraggingId(client.id)
-                        }}
-                        onDragEnd={() => {
-                          setDraggingId(null)
-                          setDragOverCol(null)
-                          dragClient.current = null
-                        }}
+                        onMoveLeft={
+                          col.id === 'in_progress' ? () => handleMoveBackToNew(client) :
+                          col.id === 'completed' ? () => handleMoveBackToInProgress(client) :
+                          undefined
+                        }
+                        onMoveRight={
+                          col.id === 'new' ? () => handleStartCore(client) :
+                          col.id === 'in_progress' ? () => handleComplete(client) :
+                          undefined
+                        }
                       />
                     ))
                   )}
