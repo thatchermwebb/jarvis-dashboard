@@ -6,11 +6,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const body = await req.json()
 
-  // Auto-set paid_date; determine paid vs paid_late based on whether paid on or after due date
+  // paid_date must come from the client (browser local time) — never auto-generate server-side (UTC mismatch)
   if (body.status === 'paid' || body.status === 'paid_late') {
     if (!body.paid_date) {
-      const now = new Date()
-      body.paid_date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+      // Fallback only: shouldn't reach here; client should always send paid_date
+      body.paid_date = new Date().toISOString().slice(0, 10)
     }
     // If caller sent status='paid' but we need to check due_date
     if (body.status === 'paid' && body.due_date) {

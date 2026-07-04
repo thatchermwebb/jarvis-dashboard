@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ChevronDown, Search, ChevronLeft, ChevronRight, Repeat } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, localToday } from '@/lib/utils'
 import type { Client, Payment, PaymentType, PaymentEntryStatus, PaymentSource, PaymentFrequency } from '@/types'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -336,11 +336,16 @@ interface Props {
 }
 
 const FREQUENCIES = [
-  { value: 'weekly',    label: 'Weekly' },
-  { value: 'biweekly', label: 'Bi-weekly' },
   { value: 'monthly',  label: 'Monthly' },
-  { value: 'one_time', label: 'One-time' },
+  { value: 'biweekly', label: 'Bi-weekly' },
+  { value: 'weekly',   label: 'Weekly' },
 ]
+
+const FREQUENCY_TO_TYPE: Record<string, PaymentType> = {
+  monthly:  'retainer_monthly',
+  biweekly: 'retainer_biweekly',
+  weekly:   'retainer_weekly',
+}
 
 export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Props) {
   const [clients, setClients] = useState<Client[]>([])
@@ -354,6 +359,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
     description: '',
     amount: '',
     due_date: '',
+    paid_date: '',
     status: 'pending' as PaymentEntryStatus,
     source: '' as PaymentSource | '',
     notes: '',
@@ -363,9 +369,8 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
   const [plan, setPlan] = useState({
     client_id: '',
     label: '',
-    payment_type: 'retainer_biweekly' as PaymentType,
     amount: '',
-    frequency: 'biweekly' as PaymentFrequency,
+    frequency: 'monthly' as PaymentFrequency,
     start_date: '',
     end_date: '',
     notes: '',
@@ -382,6 +387,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
           description: payment.description ?? '',
           amount: String(payment.amount),
           due_date: payment.due_date,
+          paid_date: payment.paid_date ?? '',
           status: payment.status,
           source: payment.source ?? '',
           notes: payment.notes ?? '',
@@ -397,8 +403,8 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
         }))
         setPlan(p => ({ ...p, client_id: prefill.client_id ?? '' }))
       } else {
-        setForm({ client_id: '', payment_type: 'retainer_monthly', description: '', amount: '', due_date: '', status: 'pending', source: '', notes: '' })
-        setPlan({ client_id: '', label: '', payment_type: 'retainer_biweekly', amount: '', frequency: 'biweekly', start_date: '', end_date: '', notes: '' })
+        setForm({ client_id: '', payment_type: 'retainer_monthly', description: '', amount: '', due_date: '', paid_date: '', status: 'pending', source: '', notes: '' })
+        setPlan({ client_id: '', label: '', amount: '', frequency: 'monthly', start_date: '', end_date: '', notes: '' })
       }
     }
   }, [open, payment, prefill])
@@ -421,6 +427,9 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
         source: form.source || undefined,
         notes: form.notes || undefined,
       }
+      if (form.status === 'paid' || form.status === 'paid_late') {
+        body.paid_date = form.paid_date || localToday()
+      }
       const url = payment ? `/api/payments/${payment.id}` : '/api/payments'
       const method = payment ? 'PATCH' : 'POST'
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -439,7 +448,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
       const res = await fetch('/api/payment-schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...plan, amount: Number(plan.amount), end_date: plan.end_date || undefined }),
+        body: JSON.stringify({ ...plan, amount: Number(plan.amount), end_date: plan.end_date || undefined, payment_type: FREQUENCY_TO_TYPE[plan.frequency] ?? 'retainer_monthly' }),
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Failed to create plan'); return }
@@ -501,13 +510,31 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className={labelClass}>Status</label>
-                <StatusSelect value={form.status} onChange={v => set('status', v)} />
+                <StatusSelect value={form.status} onChange={v => {
+                  set('status', v)
+                  if ((v === 'paid' || v === 'paid_late') && !form.paid_date) {
+                    set('paid_date', localToday())
+                  }
+                }} />
               </div>
               <div className="space-y-1.5">
                 <label className={labelClass}>Source</label>
                 <SourceSelect value={form.source} onChange={v => set('source', v)} />
               </div>
             </div>
+            {(form.status === 'paid' || form.status === 'paid_late') && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">
+                  Paid Date <span className="font-normal normal-case">(override)</span>
+                </label>
+                <input
+                  type="date"
+                  value={form.paid_date}
+                  onChange={e => set('paid_date', e.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className={labelClass}>Notes</label>
               <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
@@ -528,17 +555,24 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
               <label className={labelClass}>Client</label>
               <ClientSelect value={plan.client_id} clients={clients} onChange={id => setPlanField('client_id', id)} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className={labelClass}>Type</label>
-                <TypeSelect value={plan.payment_type} onChange={v => setPlanField('payment_type', v)} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelClass}>Frequency</label>
-                <select value={plan.frequency} onChange={e => setPlanField('frequency', e.target.value)}
-                  className="w-full h-9 rounded-md border border-border bg-secondary/50 px-3 text-sm text-foreground outline-none focus:border-primary/50 cursor-pointer">
-                  {FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                </select>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Frequency</label>
+              <div className="grid grid-cols-3 gap-2">
+                {FREQUENCIES.map(f => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => setPlanField('frequency', f.value)}
+                    className={cn(
+                      'h-9 rounded-md border text-sm font-medium transition-colors',
+                      plan.frequency === f.value
+                        ? 'bg-primary/15 text-primary border-primary/40'
+                        : 'bg-secondary/50 text-muted-foreground border-border hover:border-border/80 hover:text-foreground'
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="space-y-1.5">
