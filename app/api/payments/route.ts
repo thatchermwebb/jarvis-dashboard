@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('payments')
-    .select('*, client:clients(id, name, business_name)')
+    .select('*, client:clients(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))')
     .order('due_date', { ascending: true })
 
   if (clientId) query = query.eq('client_id', clientId)

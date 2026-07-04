@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronLeft, ChevronRight, Check, Calendar } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Check, Calendar, Plus, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import type { Client, ClientStage } from '@/types'
+import type { Client, ClientStage, Affiliate } from '@/types'
 
 interface Props {
   open: boolean
@@ -252,10 +252,143 @@ function DatePicker({ value, onChange, placeholder }: { value: string; onChange:
   )
 }
 
+// ─── Affiliate Select ─────────────────────────────────────────────────────────
+
+function AffiliateSelect({
+  value, affiliates, onChange, onAdd, onDelete,
+}: {
+  value: string
+  affiliates: Affiliate[]
+  onChange: (id: string) => void
+  onAdd: (name: string) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false); setAdding(false); setNewName('')
+      }
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const selected = affiliates.find(a => a.id === value)
+
+  async function handleAdd() {
+    if (!newName.trim()) return
+    setSaving(true)
+    try { await onAdd(newName.trim()) } finally { setSaving(false) }
+    setNewName(''); setAdding(false)
+  }
+
+  async function handleDelete(id: string) {
+    setDeletingId(id)
+    try { await onDelete(id) } finally { setDeletingId(null) }
+    if (value === id) onChange('')
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full h-11 flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/50 px-3 text-base cursor-pointer hover:border-border/80 transition-colors"
+      >
+        {selected ? (
+          <>
+            <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-[9px] font-bold text-violet-400">{selected.initials}</span>
+            </span>
+            <span className="text-foreground flex-1 text-left">{selected.name}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground flex-1 text-left">No affiliate</span>
+        )}
+        <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-[#111116] border border-border/60 rounded-xl shadow-2xl overflow-hidden">
+          {/* Clear option */}
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false) }}
+            className="w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/20 transition-colors"
+          >
+            No affiliate
+          </button>
+          {affiliates.length > 0 && <div className="border-t border-border/30" />}
+          {affiliates.map(a => (
+            <div key={a.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors group/item">
+              <button type="button" className="flex items-center gap-2 flex-1 min-w-0" onClick={() => { onChange(a.id); setOpen(false) }}>
+                <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[9px] font-bold text-violet-400">{a.initials}</span>
+                </span>
+                <span className={cn('text-sm flex-1 text-left', a.id === value ? 'text-foreground font-medium' : 'text-muted-foreground')}>{a.name}</span>
+                {a.id === value && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(a.id)}
+                disabled={deletingId === a.id}
+                className="opacity-0 group-hover/item:opacity-100 p-1 rounded text-muted-foreground/40 hover:text-red-400 transition-all"
+                title="Remove affiliate"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          <div className="border-t border-border/30" />
+          {adding ? (
+            <div className="flex items-center gap-2 px-3 py-2">
+              <input
+                autoFocus
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } if (e.key === 'Escape') { setAdding(false); setNewName('') } }}
+                placeholder="Affiliate name..."
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={saving || !newName.trim()}
+                className="text-[10px] text-primary hover:text-primary/80 font-medium disabled:opacity-40"
+              >
+                {saving ? '...' : 'Save'}
+              </button>
+              <button type="button" onClick={() => { setAdding(false); setNewName('') }} className="text-[10px] text-muted-foreground hover:text-foreground">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add affiliate
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
 export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Props) {
   const [loading, setLoading] = useState(false)
+  const [affiliates, setAffiliates] = useState<Affiliate[]>([])
   const [form, setForm] = useState({
     name: client?.name ?? '',
     business_name: client?.business_name ?? '',
@@ -276,11 +409,31 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
     google_drive_folder: client?.google_drive_folder ?? '',
     deal_notes: client?.deal_notes ?? '',
     advertised_package: client?.advertised_package ?? '',
+    affiliate_id: client?.affiliate_id ?? '',
   })
 
   useEffect(() => {
     if (open && defaultStage && !client) setForm(f => ({ ...f, stage: defaultStage }))
   }, [open, defaultStage, client])
+
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/affiliates').then(r => r.json()).then(data => setAffiliates(Array.isArray(data) ? data : []))
+  }, [open])
+
+  async function handleAddAffiliate(name: string) {
+    const res = await fetch('/api/affiliates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+    const newAffiliate = await res.json()
+    if (res.ok) {
+      setAffiliates(prev => [...prev, newAffiliate].sort((a, b) => a.name.localeCompare(b.name)))
+      setForm(f => ({ ...f, affiliate_id: newAffiliate.id }))
+    }
+  }
+
+  async function handleDeleteAffiliate(id: string) {
+    await fetch(`/api/affiliates/${id}`, { method: 'DELETE' })
+    setAffiliates(prev => prev.filter(a => a.id !== id))
+  }
 
   function set(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -404,10 +557,22 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
             </div>
           </div>
 
-          {/* Advertised Package + Deal Notes */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Advertised Package</Label>
-            <Input value={form.advertised_package} onChange={(e) => set('advertised_package', e.target.value)} placeholder="ex: $199 Full Detail - Steam" className="bg-secondary/50 h-11 text-base border-border/50" />
+          {/* Advertised Package + Affiliate */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Advertised Package</Label>
+              <Input value={form.advertised_package} onChange={(e) => set('advertised_package', e.target.value)} placeholder="ex: $199 Full Detail - Steam" className="bg-secondary/50 h-11 text-base border-border/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Affiliate</Label>
+              <AffiliateSelect
+                value={form.affiliate_id}
+                affiliates={affiliates}
+                onChange={id => set('affiliate_id', id)}
+                onAdd={handleAddAffiliate}
+                onDelete={handleDeleteAffiliate}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Deal Notes</Label>

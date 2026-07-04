@@ -529,6 +529,7 @@ function PaymentRow({
   const st = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending
   const isPaid = ['paid','paid_late','waived','voided'].includes(p.status)
   const clientName = (p.client as any)?.name ?? 'Unknown'
+  const affiliate = (p.client as any)?.affiliate
   const isDeleting = deleteConfirm === p.id
 
   return (
@@ -538,6 +539,11 @@ function PaymentRow({
           <button onClick={onClientClick} className="font-semibold text-foreground hover:text-primary transition-colors text-sm">
             {clientName}
           </button>
+          {affiliate && (
+            <span title={affiliate.name} className="w-5 h-5 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-[8px] font-bold text-violet-400">{affiliate.initials}</span>
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">{paymentLabel(p)}</span>
           <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border whitespace-nowrap', st.badge)}>{st.label}</span>
           {p.source && <span className="text-[10px] text-muted-foreground/50">{SOURCE_LABELS[p.source]}</span>}

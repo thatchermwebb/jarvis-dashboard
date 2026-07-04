@@ -57,6 +57,13 @@ export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low'
 
 export type TaskStatus = 'open' | 'in_progress' | 'done' | 'blocked'
 
+export interface Affiliate {
+  id: string
+  name: string
+  initials: string
+  created_at: string
+}
+
 export interface Client {
   id: string
   created_at: string
@@ -80,6 +87,8 @@ export interface Client {
   payment_status?: PaymentStatus
   deal_notes?: string
   advertised_package?: string
+  affiliate_id?: string
+  affiliate?: Affiliate
 
   // Trial
   trial_start?: string

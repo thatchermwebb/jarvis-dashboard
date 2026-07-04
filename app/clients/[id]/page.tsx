@@ -385,6 +385,17 @@ export default function ClientWarRoom() {
                     <div className="text-sm font-medium text-foreground mb-3">{client.advertised_package}</div>
                   </>
                 )}
+                {client.affiliate && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-7 h-7 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[10px] font-bold text-violet-400">{client.affiliate.initials}</span>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Affiliate</div>
+                      <div className="text-sm font-medium text-foreground">{client.affiliate.name}</div>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Monthly Retainer" value={client.monthly_retainer ? formatCurrency(client.monthly_retainer) : null} />
                   <Field label="Payment" value={client.payment_frequency} />
