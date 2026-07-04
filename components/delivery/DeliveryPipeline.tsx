@@ -52,6 +52,7 @@ const COLUMN_CONFIG = [
 export function DeliveryPipeline({ user }: { user: AppUser }) {
   const [clients, setClients] = useState<ClientWithAds[]>([])
   const [loading, setLoading] = useState(true)
+  const [slackPreview, setSlackPreview] = useState<{ client: ClientWithAds; message: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,14 +147,12 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
     const name = client.business_name || client.name
     const defaultMessage = [
       `<!channel>`,
-      `🚀 *New Onboarding Started — ${name}*`,
+      `⚡ *New Onboarding — ${name}*`,
       client.market_location ? `Market: ${client.market_location}` : '',
-      client.trial_start && client.trial_end
-        ? `Trial: ${client.trial_start} – ${client.trial_end}`
-        : '',
-      `Assigned: ${user.name}`,
+      client.advertised_package ? `Ad: ${client.advertised_package}` : '',
+      client.trial_start ? `Trial Start Date: ${client.trial_start}` : '',
     ].filter(Boolean).join('\n')
-    handleStartCore(client, defaultMessage)
+    setSlackPreview({ client, message: defaultMessage })
   }
 
   async function handleComplete(client: ClientWithAds) {
@@ -349,6 +348,42 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         )}
       </div>
 
+      {/* Slack preview modal */}
+      {slackPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="px-5 py-4 border-b border-border/50">
+              <div className="text-sm font-semibold text-foreground">Preview Slack Message</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Edit before sending</div>
+            </div>
+            <div className="p-5">
+              <textarea
+                className="w-full h-40 bg-[#1a1d21] border border-border/50 rounded-xl px-4 py-3 text-sm text-foreground font-mono resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
+                value={slackPreview.message}
+                onChange={e => setSlackPreview(p => p ? { ...p, message: e.target.value } : null)}
+              />
+            </div>
+            <div className="px-5 pb-5 flex justify-end gap-3">
+              <button
+                onClick={() => setSlackPreview(null)}
+                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border/50 hover:border-border rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { client, message } = slackPreview
+                  setSlackPreview(null)
+                  handleStartCore(client, message)
+                }}
+                className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors"
+              >
+                Send + Start
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
