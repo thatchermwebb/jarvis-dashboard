@@ -70,6 +70,7 @@ export default function PaymentsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [clientFilter, setClientFilter] = useState<string>('all')
+  const [showVoided, setShowVoided] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Payment | null>(null)
   const [prefill, setPrefill] = useState<Partial<{ client_id: string; payment_type: PaymentType; amount: number; due_date: string }> | undefined>()
@@ -176,9 +177,10 @@ export default function PaymentsPage() {
     return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]))
   }, [payments])
 
-  // Date-filtered payments (applied to all views)
+  // Date-filtered payments (applied to all views) — voided payments hidden unless toggled on
   const dateBoundPayments = useMemo(() => {
-    if (datePreset === 'all') return payments
+    const visible = showVoided ? payments : payments.filter(p => p.status !== 'voided')
+    if (datePreset === 'all') return visible
     const now = new Date()
     let from = '', to = ''
     if (datePreset === 'this_month') {
@@ -192,8 +194,8 @@ export default function PaymentsPage() {
     } else {
       from = dateFrom; to = dateTo
     }
-    return payments.filter(p => (!from || p.due_date >= from) && (!to || p.due_date <= to))
-  }, [payments, datePreset, dateFrom, dateTo])
+    return visible.filter(p => (!from || p.due_date >= from) && (!to || p.due_date <= to))
+  }, [payments, datePreset, dateFrom, dateTo, showVoided])
 
   // Client-filtered (table view only)
   const visiblePayments = useMemo(() =>
@@ -258,6 +260,17 @@ export default function PaymentsPage() {
             ))}
           </select>
         )}
+        <button
+          onClick={() => setShowVoided(v => !v)}
+          className={cn(
+            'px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
+            showVoided
+              ? 'bg-secondary text-foreground border-border'
+              : 'bg-card text-muted-foreground/60 border-border hover:text-foreground'
+          )}
+        >
+          {showVoided ? 'Hide Voided' : 'Show Voided'}
+        </button>
         {(datePreset !== 'all' || clientFilter !== 'all') && (
           <button onClick={() => { setDatePreset('all'); setDateFrom(''); setDateTo(''); setClientFilter('all') }} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-3 h-3" /> Clear
