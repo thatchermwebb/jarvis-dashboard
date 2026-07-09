@@ -100,7 +100,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   messagesRef.current = messages
 
   const appendMessage = useCallback((m: JarvisMessage) => {
-    setMessages(prev => [...prev, m])
+    // Sync the ref immediately — callAgent reads it in the same tick,
+    // before React re-renders
+    messagesRef.current = [...messagesRef.current, m]
+    setMessages(messagesRef.current)
   }, [])
 
   // Speak (if voice on) + always add to transcript. Mutes recognition around speech.
@@ -279,23 +282,25 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
           hint,
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       for (const action of data.actions ?? []) {
         toast.success(action.summary)
       }
-      await say(data.reply ?? 'Done, sir.')
-      // If JARVIS asked a question, keep listening; otherwise go passive
+      // Never mask an error response as success
+      const reply = data.reply ?? (res.ok ? 'Done, sir.' : 'I hit a snag, sir. Do try again.')
+      await say(reply)
+      // Keep a follow-up window open — the command deadline returns us to
+      // passive wake mode automatically if the user says nothing.
       if (voiceEnabledRef.current) {
-        if (String(data.reply ?? '').includes('?')) {
-          managerRef.current?.enterCommandMode()
-          setStatus('listening')
-        } else {
-          returnToWake()
-        }
+        managerRef.current?.enterCommandMode()
+        setStatus('listening')
       }
     } catch {
       await say('I hit a snag reaching the server, sir.')
-      returnToWake()
+      if (voiceEnabledRef.current) {
+        managerRef.current?.enterCommandMode()
+        setStatus('listening')
+      }
     } finally {
       setBusy(false)
     }

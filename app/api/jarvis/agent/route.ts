@@ -261,6 +261,12 @@ VOICE MODE RULES:
     return NextResponse.json({ reply: "I'm afraid that took too many steps, sir. Could you rephrase?", actions })
   } catch (err) {
     console.error('[jarvis/agent]', err)
-    return NextResponse.json({ reply: 'I hit a snag, sir. Do try again.', actions, error: String(err) }, { status: 500 })
+    const msg = String(err)
+    const reply = /401|authentication|api[-_ ]?key|invalid x-api-key/i.test(msg)
+      ? 'My Anthropic API key appears to be missing or invalid on this deployment, sir.'
+      : /timeout|timed out|504|ETIMEDOUT/i.test(msg)
+        ? 'That took too long, sir. Do try again.'
+        : 'I hit a snag, sir. Do try again.'
+    return NextResponse.json({ reply, actions, error: msg }, { status: 500 })
   }
 }

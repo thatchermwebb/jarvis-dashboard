@@ -145,7 +145,19 @@ export class WakeWordManager {
         this.handleWakeScan(combined)
       } else {
         if (combined) this.lastResultAt = Date.now()
-        if (finals.trim()) this.commandBuffer = (this.commandBuffer + ' ' + finals).trim()
+        let f = finals.trim()
+        if (f) {
+          // The final transcript of a "Hey JARVIS, <command>" breath re-includes
+          // the wake phrase the interim already triggered on — strip it and
+          // replace the interim-derived buffer instead of appending a duplicate.
+          const wm = WAKE_RE.exec(f)
+          if (wm && Date.now() - this.lastWakeAt < 4000) {
+            f = f.slice((wm.index ?? 0) + wm[0].length).replace(/^[,.\s]+/, '').trim()
+            this.commandBuffer = f
+          } else {
+            this.commandBuffer = (this.commandBuffer + ' ' + f).trim()
+          }
+        }
         const preview = (this.commandBuffer + ' ' + interim).trim()
         if (preview) this.cb.onInterim(preview)
         this.bumpSilenceTimer()
