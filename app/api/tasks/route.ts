@@ -28,19 +28,31 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const body = await req.json()
 
-  const { data, error } = await supabase
+  const row: Record<string, unknown> = {
+    title:       body.title       || null,
+    task_type:   body.task_type   || null,
+    client_id:   body.client_id   || null,
+    assigned_to: body.assigned_to || null,
+    assigned_va: body.assigned_va || null,
+    due_date:    body.due_date    || null,
+    due_time:    body.due_time    || null,
+    priority:    body.priority    || null,
+    notes:       body.notes       || null,
+    status:      body.status      || 'open',
+  }
+
+  let { data, error } = await supabase
     .from('tasks')
-    .insert({
-      title:       body.title       || null,
-      task_type:   body.task_type   || null,
-      client_id:   body.client_id   || null,
-      assigned_to: body.assigned_to || null,
-      due_date:    body.due_date    || null,
-      notes:       body.notes       || null,
-      status:      body.status      || 'open',
-    })
+    .insert(row)
     .select('*, client:clients(id, name, stage)')
     .single()
+
+  if (error && /due_time/.test(error.message)) {
+    // DB migration 006 not applied yet — fold the time into notes and retry
+    delete row.due_time
+    if (body.due_time) row.notes = [`Time: ${body.due_time}`, body.notes].filter(Boolean).join(' — ')
+    ;({ data, error } = await supabase.from('tasks').insert(row).select('*, client:clients(id, name, stage)').single())
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

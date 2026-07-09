@@ -1,28 +1,29 @@
 'use client'
 
-import { useState } from 'react'
-import { Bot, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { JARVISPanel } from './JARVISPanel'
+import { ArcReactorOrb } from './ArcReactorOrb'
+import { useJarvis } from './JarvisProvider'
 
 export function JARVISWidget({ mobile = false }: { mobile?: boolean }) {
-  const [open, setOpen] = useState(false)
+  const { status, panelOpen, setPanelOpen } = useJarvis()
 
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => setPanelOpen(true)}
         className={cn(
-          'fixed right-4 z-50 w-12 h-12 rounded-full bg-card border border-border shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all hover:shadow-primary/20 hover:shadow-xl',
+          'fixed right-4 z-50 w-12 h-12 rounded-full bg-card border border-border shadow-lg flex items-center justify-center transition-all hover:border-primary/50 hover:shadow-primary/20 hover:shadow-xl',
+          status === 'listening' && 'border-primary/60 shadow-primary/30 shadow-xl',
           mobile ? 'right-4' : 'right-6'
         )}
         style={mobile ? { bottom: 'calc(env(safe-area-inset-bottom) + 76px)' } : { bottom: '1.5rem' }}
-        title="Ask JARVIS"
+        title="JARVIS"
       >
-        <Bot className="w-5 h-5" />
+        <ArcReactorOrb status={status} size={34} />
       </button>
 
-      <JARVISPanel open={open} onClose={() => setOpen(false)} />
+      <JARVISPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
     </>
   )
 }
