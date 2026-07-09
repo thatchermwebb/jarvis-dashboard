@@ -113,3 +113,57 @@
 /* JARVIS cursor blink */
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .cursor-blink::after { content: '▋'; animation: blink 1s step-end infinite; margin-left: 1px; }
+/* ─── JARVIS Arc Reactor Orb ─────────────────────────────────────────────── */
+
+.jarvis-orb .orb-ring,
+.jarvis-orb .orb-mid,
+.jarvis-orb .orb-spokes line { stroke: var(--primary); }
+.jarvis-orb .orb-core { fill: var(--primary); }
+.jarvis-orb .orb-core-glow { fill: var(--primary); filter: blur(3px); }
+.jarvis-orb .orb-ripple { stroke: var(--primary); opacity: 0; }
+
+.jarvis-orb .orb-spokes,
+.jarvis-orb .orb-ripple {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+/* off — dormant but still unmistakably JARVIS: gold, dimmed, breathing slowly */
+.jarvis-orb--off .orb-ring,
+.jarvis-orb--off .orb-mid,
+.jarvis-orb--off .orb-spokes line { opacity: 0.35; }
+.jarvis-orb--off .orb-core { opacity: 0.6; animation: orb-pulse 4s ease-in-out infinite; }
+.jarvis-orb--off .orb-core-glow { opacity: 0.15; animation: orb-pulse 4s ease-in-out infinite; }
+
+/* wake — slow idle pulse */
+.jarvis-orb--wake .orb-core,
+.jarvis-orb--wake .orb-core-glow { animation: orb-pulse 2.6s ease-in-out infinite; }
+.jarvis-orb--wake .orb-ring { filter: drop-shadow(0 0 2px var(--primary)); }
+.jarvis-orb--wake .orb-spokes { opacity: 0.6; }
+
+/* listening — spin the spokes, glow hard */
+.jarvis-orb--listening .orb-spokes { animation: orb-spin 1.2s linear infinite; }
+.jarvis-orb--listening .orb-ring { filter: drop-shadow(0 0 5px var(--primary)); }
+.jarvis-orb--listening .orb-core { animation: orb-pulse 0.9s ease-in-out infinite; }
+.jarvis-orb--listening .orb-core-glow { animation: orb-pulse 0.9s ease-in-out infinite; }
+
+/* thinking — shimmer the dashed ring */
+.jarvis-orb--thinking .orb-ring { animation: orb-dash 1s linear infinite; }
+.jarvis-orb--thinking .orb-spokes { opacity: 0.4; }
+
+/* speaking — ripples radiating out */
+.jarvis-orb--speaking .orb-ripple-1 { animation: orb-ripple 1.4s ease-out infinite; }
+.jarvis-orb--speaking .orb-ripple-2 { animation: orb-ripple 1.4s ease-out 0.7s infinite; }
+.jarvis-orb--speaking .orb-core { animation: orb-pulse 0.7s ease-in-out infinite; }
+.jarvis-orb--speaking .orb-ring { filter: drop-shadow(0 0 4px var(--primary)); }
+
+@keyframes orb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+@keyframes orb-dash { to { stroke-dashoffset: -26; } }
+@keyframes orb-ripple {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
