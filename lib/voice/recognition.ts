@@ -6,14 +6,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const WAKE_RE = /\b(?:hey\s+)?(?:jarvis|jarvys|jervis|jarves|travis|drivers)\b/i
+// Barge-in requires the full "hey jarvis" so JARVIS's own speech (which never
+// says that phrase) can't interrupt itself, and stray noise won't either.
+const BARGE_RE = /\bhey\s+(?:jarvis|jarvys|jervis|jarves|travis|drivers)\b/i
 
-export type RecognitionMode = 'wake' | 'command'
+export type RecognitionMode = 'wake' | 'command' | 'speaking'
 
 export interface WakeWordCallbacks {
   onWake: (trailingCommand: string) => void
   onUtterance: (transcript: string) => void
   onInterim: (transcript: string) => void
   onTimeout: () => void
+  onBargeIn: (trailingCommand: string) => void
   onPermissionDenied: () => void
   onStateChange: (listening: boolean) => void
 }
@@ -38,6 +42,8 @@ export class WakeWordManager {
   private startedAt = 0        // when the current session's start() succeeded
   private backoffMs = 300      // restart delay, grows on rapid failures
   private starting = false     // guard against overlapping spinUp() calls
+  private speakingSince = 0    // when speaking mode began (barge-in grace window)
+  private prevMode: 'wake' | 'command' = 'wake' // mode to restore after speaking
   private cb: WakeWordCallbacks
 
   constructor(callbacks: WakeWordCallbacks) {
@@ -64,18 +70,39 @@ export class WakeWordManager {
     this.cb.onStateChange(false)
   }
 
-  /** Abort recognition while JARVIS speaks (prevents self-hearing). */
+  /**
+   * JARVIS is about to speak. Keep the mic HOT but in speaking mode, where the
+   * only thing we react to is a full "Hey JARVIS" barge-in. Everything else
+   * (including JARVIS's own voice bleeding into the mic) is ignored, so the
+   * command buffer stays clean without fully deafening ourselves.
+   */
+  enterSpeakingMode(): void {
+    if (this.mode !== 'speaking') this.prevMode = this.mode === 'command' ? 'command' : 'wake'
+    this.mode = 'speaking'
+    this.commandBuffer = ''
+    this.speakingSince = Date.now()
+    this.clearTimers()
+    if (this.enabled && !this.recognition) this.spinUp()
+  }
+
+  /** JARVIS finished speaking normally — restore the mode we were in before. */
+  endSpeaking(): void {
+    if (this.mode !== 'speaking') return
+    if (this.prevMode === 'command') this.enterCommandMode()
+    else this.enterWakeMode()
+  }
+
+  /** Fully pause recognition (tab hidden). */
   mute(): void {
     this.muted = true
     this.clearTimers()
     try { this.recognition?.abort() } catch { /* noop */ }
   }
 
-  /** Resume after speech, with a grace delay so trailing audio isn't captured. */
   unmute(): void {
     if (!this.muted) return
     this.muted = false
-    this.backoffMs = 300 // resuming after our own speech — try immediately
+    this.backoffMs = 300
     if (!this.enabled) return
     setTimeout(() => { if (this.enabled && !this.muted) this.spinUp() }, 250)
   }
@@ -148,6 +175,25 @@ export class WakeWordManager {
       }
       const combined = (finals + interim).trim()
 
+      if (this.mode === 'speaking') {
+        // Only react to a full "Hey JARVIS" barge-in; ignore all else (incl. our
+        // own voice). A short grace window avoids catching residual audio.
+        if (Date.now() - this.speakingSince < 400) return
+        const bm = BARGE_RE.exec(combined)
+        if (bm) {
+          const now = Date.now()
+          if (now - this.lastWakeAt < 1500) return
+          this.lastWakeAt = now
+          const trailing = combined.slice((bm.index ?? 0) + bm[0].length).replace(/^[,.\s]+/, '').trim()
+          this.mode = 'command'
+          this.commandBuffer = ''
+          this.armDeadline(12000)
+          this.cb.onBargeIn(trailing)
+          if (trailing) { this.commandBuffer = trailing; this.bumpSilenceTimer() }
+        }
+        return
+      }
+
       if (this.mode === 'wake') {
         this.handleWakeScan(combined)
       } else {
@@ -173,6 +219,14 @@ export class WakeWordManager {
 
     rec.onerror = (event: any) => {
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        // Site permission denied, OR Chrome lacks OS-level mic permission
+        // (macOS System Settings › Privacy › Microphone › Chrome).
+        this.enabled = false
+        this.recognition = null
+        this.cb.onPermissionDenied()
+        this.cb.onStateChange(false)
+      } else if (event.error === 'audio-capture') {
+        // No mic found, or another app/tab is holding it exclusively.
         this.enabled = false
         this.recognition = null
         this.cb.onPermissionDenied()

@@ -3,10 +3,10 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { WakeWordManager, speechRecognitionSupported } from '@/lib/voice/recognition'
-import { speak, stopSpeaking, initVoices, ttsSupported } from '@/lib/voice/tts'
+import { speak, stopSpeaking, initVoices, ttsSupported, prewarm } from '@/lib/voice/tts'
 import {
   initWizard, handleUtterance as wizardHandle, resolveClientUtterance, applyClientById,
-  applyFallbackValue, afterSave, afterSaveError, onSilenceTimeout,
+  applyFallbackValue, afterSave, afterSaveError, onSilenceTimeout, STEP_PROMPTS,
   type WizardState, type WizardResult, type WizardEffect,
 } from '@/lib/voice/logCallMachine'
 import type { ClientCandidate, StatusFlags } from '@/lib/voice/localParsers'
@@ -92,6 +92,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const wizardRef = useRef<WizardState | null>(null)
   const voiceEnabledRef = useRef(false)
   const busyRef = useRef(false)
+  const bargedRef = useRef(false)
   const clientsRef = useRef<ClientCandidate[]>([])
   const messagesRef = useRef<JarvisMessage[]>([])
 
@@ -106,18 +107,18 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     setMessages(messagesRef.current)
   }, [])
 
-  // Speak (if voice on) + always add to transcript. Mutes recognition around speech.
+  // Speak (if voice on) + always add to transcript. Mic stays HOT in speaking
+  // mode so "Hey JARVIS" can barge in; everything else is ignored meanwhile.
   const say = useCallback(async (text: string) => {
     appendMessage({ role: 'assistant', content: text })
     if (voiceEnabledRef.current && ttsSupported()) {
       setStatus('speaking')
-      managerRef.current?.mute()
+      bargedRef.current = false
+      managerRef.current?.enterSpeakingMode()
       await speak(text)
-      managerRef.current?.unmute()
-      // Muting cleared the command deadline — re-arm so we never get stuck listening
-      managerRef.current?.refreshDeadline()
+      if (bargedRef.current) return // barge-in handler already took over
+      managerRef.current?.endSpeaking()
     }
-    // Restore listening status
     const mode = managerRef.current?.currentMode
     if (!voiceEnabledRef.current) setStatus('off')
     else setStatus(mode === 'command' ? 'listening' : 'wake')
@@ -352,6 +353,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const startLogWizard = useCallback(async (prefillType?: string) => {
     setPanelOpen(true)
     void ensureClients()
+    // Warm the TTS cache for the fixed prompts so each step speaks instantly
+    prewarm(Object.values(STEP_PROMPTS).filter(Boolean))
     if (voiceEnabledRef.current) {
       managerRef.current?.enterCommandMode()
       setStatus('listening')
@@ -425,6 +428,15 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       },
       onUtterance: (transcript) => {
         void handleInputRef.current(transcript, 'voice')
+      },
+      onBargeIn: (trailing) => {
+        // "Hey JARVIS" while it's talking — shut up and listen. Recognition is
+        // already in command mode and will dispatch the command via onUtterance.
+        stopSpeaking()
+        bargedRef.current = true
+        setWizard(null); wizardRef.current = null
+        setInterim(trailing || '')
+        setStatus('listening')
       },
       onInterim: (transcript) => setInterim(transcript),
       onTimeout: () => {

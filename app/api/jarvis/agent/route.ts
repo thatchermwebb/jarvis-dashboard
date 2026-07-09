@@ -208,12 +208,14 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createClient()
+  // Trimmed columns + fewer rows keeps the prompt small so the model responds
+  // faster; search_clients / get_client_details fetch full detail on demand.
   const { data: clients } = await supabase
     .from('clients')
-    .select('*')
+    .select('id, name, business_name, stage, trial_end, cpl, leads, bookings, last_client_sentiment, payment_issue, next_followup_date, thatcher_needed')
     .neq('stage', 'churned')
     .order('updated_at', { ascending: false })
-    .limit(50)
+    .limit(30)
 
   const system = `${buildJARVISSystemPrompt((clients ?? []) as Client[])}
 
@@ -238,8 +240,10 @@ VOICE MODE RULES:
   try {
     for (let i = 0; i < 6; i++) {
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        // Haiku: dramatically lower latency, still handles tool use + date math.
+        // Replies are 1-2 sentences so the small model is plenty.
+        model: 'claude-haiku-4-5',
+        max_tokens: 400,
         system,
         messages: conversation,
         tools: TOOLS,

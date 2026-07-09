@@ -20,8 +20,10 @@ export async function POST(req: NextRequest) {
   const voiceId = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID
 
   try {
+    // /stream + optimize_streaming_latency gives the lowest time-to-first-byte;
+    // mp3_22050_32 is a smaller payload that transfers faster than 44.1k.
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_22050_32&optimize_streaming_latency=3`,
       {
         method: 'POST',
         headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
@@ -29,7 +31,8 @@ export async function POST(req: NextRequest) {
           text,
           // Flash: ~75ms model latency and half the credit cost of multilingual
           model_id: 'eleven_flash_v2_5',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          // speed 1.2 is ElevenLabs' max — ~20% quicker delivery
+          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.2 },
         }),
       },
     )

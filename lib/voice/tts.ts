@@ -9,6 +9,47 @@ let voicesLoaded = false
 let elevenAvailable: boolean | null = null
 let currentAudio: HTMLAudioElement | null = null
 
+// Cache generated audio by text so repeated lines (wizard prompts, "Sir?",
+// confirmations) play instantly on subsequent use — zero network latency.
+const audioCache = new Map<string, string>() // text -> object URL
+const inflight = new Map<string, Promise<string | null>>()
+
+async function fetchAudioURL(text: string): Promise<string | null> {
+  const cached = audioCache.get(text)
+  if (cached) return cached
+  const pending = inflight.get(text)
+  if (pending) return pending
+
+  const p = (async () => {
+    try {
+      const res = await fetch('/api/jarvis/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      if (res.status === 503) { elevenAvailable = false; return null }
+      if (!res.ok) return null
+      const blob = await res.blob()
+      elevenAvailable = true
+      const url = URL.createObjectURL(blob)
+      audioCache.set(text, url)
+      return url
+    } catch {
+      return null
+    } finally {
+      inflight.delete(text)
+    }
+  })()
+  inflight.set(text, p)
+  return p
+}
+
+/** Warm the cache for lines JARVIS is about to say (fire-and-forget, parallel). */
+export function prewarm(texts: string[]): void {
+  if (elevenAvailable === false) return
+  for (const t of texts) if (t?.trim()) void fetchAudioURL(t.trim())
+}
+
 function rankVoice(v: SpeechSynthesisVoice): number {
   const name = v.name.toLowerCase()
   const isGB = v.lang.startsWith('en-GB') || v.lang.startsWith('en_GB')
@@ -50,42 +91,28 @@ export function ttsSupported(): boolean {
 
 async function speakEleven(text: string): Promise<boolean> {
   if (elevenAvailable === false) return false
-  try {
-    const res = await fetch('/api/jarvis/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-    if (res.status === 503) { elevenAvailable = false; return false } // not configured
-    if (!res.ok) return false // transient failure — fall back this once, try again next time
-    const blob = await res.blob()
-    elevenAvailable = true
+  const url = await fetchAudioURL(text)
+  if (!url) return false
 
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      currentAudio = audio
-      let done = false
-      const finish = () => {
-        if (done) return
-        done = true
-        URL.revokeObjectURL(url)
-        if (currentAudio === audio) currentAudio = null
-        resolve()
-      }
-      audio.onended = finish
-      audio.onerror = finish
-      // Safety net in case ended never fires
-      audio.onloadedmetadata = () => {
-        const ms = isFinite(audio.duration) ? audio.duration * 1000 + 2000 : 30000
-        setTimeout(finish, ms)
-      }
-      audio.play().catch(finish)
-    })
-    return true
-  } catch {
-    return false
-  }
+  await new Promise<void>((resolve) => {
+    const audio = new Audio(url)
+    currentAudio = audio
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      if (currentAudio === audio) currentAudio = null
+      resolve()
+    }
+    audio.onended = finish
+    audio.onerror = finish
+    audio.onloadedmetadata = () => {
+      const ms = isFinite(audio.duration) ? audio.duration * 1000 + 1500 : 30000
+      setTimeout(finish, ms)
+    }
+    audio.play().catch(finish)
+  })
+  return true
 }
 
 // ─── Browser fallback ────────────────────────────────────────────────────────
@@ -98,7 +125,7 @@ function speakBrowser(text: string): Promise<void> {
     const u = new SpeechSynthesisUtterance(text)
     const voice = pickBritishVoice()
     if (voice) u.voice = voice
-    u.rate = 1.12
+    u.rate = 1.4 // ~25% quicker than before
     u.pitch = 1.0
 
     let done = false
