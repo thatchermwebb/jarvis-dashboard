@@ -35,6 +35,9 @@ export class WakeWordManager {
   private lastWakeAt = 0
   private lastResultAt = 0
   private silenceMs = 900
+  private startedAt = 0        // when the current session's start() succeeded
+  private backoffMs = 300      // restart delay, grows on rapid failures
+  private starting = false     // guard against overlapping spinUp() calls
   private cb: WakeWordCallbacks
 
   constructor(callbacks: WakeWordCallbacks) {
@@ -47,6 +50,7 @@ export class WakeWordManager {
   start(): boolean {
     if (!speechRecognitionSupported()) return false
     this.enabled = true
+    this.backoffMs = 300 // deliberate start — try immediately
     this.spinUp()
     return true
   }
@@ -71,6 +75,7 @@ export class WakeWordManager {
   unmute(): void {
     if (!this.muted) return
     this.muted = false
+    this.backoffMs = 300 // resuming after our own speech — try immediately
     if (!this.enabled) return
     setTimeout(() => { if (this.enabled && !this.muted) this.spinUp() }, 250)
   }
@@ -122,7 +127,7 @@ export class WakeWordManager {
   // ─── Internals ─────────────────────────────────────────────────────────────
 
   private spinUp(): void {
-    if (this.recognition) return
+    if (this.recognition || this.starting) return
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) return
 
@@ -132,6 +137,8 @@ export class WakeWordManager {
     rec.lang = 'en-US'
 
     rec.onresult = (event: any) => {
+      // A healthy session that's producing results — reset the failure backoff
+      this.backoffMs = 300
       let interim = ''
       let finals = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -176,22 +183,35 @@ export class WakeWordManager {
 
     rec.onend = () => {
       this.recognition = null
+      this.starting = false
       if (this.enabled && !this.muted) {
+        // If the session died almost immediately it's failing (mic contention,
+        // audio-capture errors, Chrome throttling). Back off progressively so we
+        // don't thrash the mic at 5x/second; a healthy session resets this.
+        const uptime = Date.now() - this.startedAt
+        if (uptime < 1000) this.backoffMs = Math.min(this.backoffMs * 2, 5000)
+        else this.backoffMs = 300
+        if (this.restartTimer) clearTimeout(this.restartTimer)
         this.restartTimer = setTimeout(() => {
           if (this.enabled && !this.muted) this.spinUp()
-        }, 250)
+        }, this.backoffMs)
       } else {
         this.cb.onStateChange(false)
       }
     }
 
+    this.starting = true
     try {
       rec.start()
       this.recognition = rec
+      this.starting = false
+      this.startedAt = Date.now()
       this.cb.onStateChange(true)
     } catch {
       // start() throws if called while already started — retry shortly
-      this.restartTimer = setTimeout(() => { if (this.enabled && !this.muted) this.spinUp() }, 400)
+      this.starting = false
+      if (this.restartTimer) clearTimeout(this.restartTimer)
+      this.restartTimer = setTimeout(() => { if (this.enabled && !this.muted) this.spinUp() }, 500)
     }
   }
 
