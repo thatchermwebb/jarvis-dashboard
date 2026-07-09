@@ -1,7 +1,13 @@
-// British-voice TTS via the browser's speechSynthesis. No external API.
+// JARVIS voice output. Prefers ElevenLabs (via /api/jarvis/tts) for the
+// cinematic British voice; falls back to the browser's speechSynthesis
+// en-GB voice when ElevenLabs is not configured or errors.
 
 let cachedVoice: SpeechSynthesisVoice | null = null
 let voicesLoaded = false
+
+// null = untested, true/false = known state (503 marks it unavailable for the session)
+let elevenAvailable: boolean | null = null
+let currentAudio: HTMLAudioElement | null = null
 
 function rankVoice(v: SpeechSynthesisVoice): number {
   const name = v.name.toLowerCase()
@@ -37,21 +43,56 @@ export function initVoices(): void {
 }
 
 export function ttsSupported(): boolean {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window
+  return typeof window !== 'undefined' && ('speechSynthesis' in window || elevenAvailable !== false)
 }
 
-/**
- * Speak text with the British voice. Cancels anything already queued.
- * onStart/onEnd hooks let the caller mute/unmute recognition around speech.
- * Resolves when the utterance finishes (or errors/cancels).
- */
-export function speak(
-  text: string,
-  opts?: { onStart?: () => void; onEnd?: () => void },
-): Promise<void> {
-  return new Promise(resolve => {
-    if (!ttsSupported() || !text.trim()) { opts?.onEnd?.(); resolve(); return }
+// ─── ElevenLabs playback ─────────────────────────────────────────────────────
 
+async function speakEleven(text: string): Promise<boolean> {
+  if (elevenAvailable === false) return false
+  try {
+    const res = await fetch('/api/jarvis/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (res.status === 503) { elevenAvailable = false; return false } // not configured
+    if (!res.ok) return false // transient failure — fall back this once, try again next time
+    const blob = await res.blob()
+    elevenAvailable = true
+
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      currentAudio = audio
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        URL.revokeObjectURL(url)
+        if (currentAudio === audio) currentAudio = null
+        resolve()
+      }
+      audio.onended = finish
+      audio.onerror = finish
+      // Safety net in case ended never fires
+      audio.onloadedmetadata = () => {
+        const ms = isFinite(audio.duration) ? audio.duration * 1000 + 2000 : 30000
+        setTimeout(finish, ms)
+      }
+      audio.play().catch(finish)
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ─── Browser fallback ────────────────────────────────────────────────────────
+
+function speakBrowser(text: string): Promise<void> {
+  return new Promise(resolve => {
+    if (!('speechSynthesis' in window)) { resolve(); return }
     window.speechSynthesis.cancel()
 
     const u = new SpeechSynthesisUtterance(text)
@@ -64,14 +105,10 @@ export function speak(
     const finish = () => {
       if (done) return
       done = true
-      opts?.onEnd?.()
       resolve()
     }
-
-    u.onstart = () => opts?.onStart?.()
     u.onend = finish
     u.onerror = finish
-    // Safety net: Chrome occasionally drops onend
     const est = Math.max(2000, text.length * 90)
     setTimeout(finish, est + 3000)
 
@@ -79,6 +116,33 @@ export function speak(
   })
 }
 
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * Speak text with the JARVIS voice (ElevenLabs first, browser fallback).
+ * Cancels anything already playing. Resolves when the utterance finishes.
+ */
+export async function speak(
+  text: string,
+  opts?: { onStart?: () => void; onEnd?: () => void },
+): Promise<void> {
+  if (typeof window === 'undefined' || !text.trim()) { opts?.onEnd?.(); return }
+  stopSpeaking()
+  opts?.onStart?.()
+  try {
+    const ok = await speakEleven(text)
+    if (!ok) await speakBrowser(text)
+  } finally {
+    opts?.onEnd?.()
+  }
+}
+
 export function stopSpeaking(): void {
-  if (ttsSupported()) window.speechSynthesis.cancel()
+  if (typeof window === 'undefined') return
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio.src = ''
+    currentAudio = null
+  }
 }

@@ -154,10 +154,12 @@ function spokenDate(dateStr: string): string {
 // parser had produced it. `value: null` means Claude couldn't parse it either.
 export function applyFallbackValue(state: WizardState, value: unknown, clarify?: string): WizardResult {
   if (clarify) {
-    return { state, effects: [{ type: 'speak', text: clarify }] }
+    // Clarifies are spoken — anything long gets replaced with a simple re-ask
+    const text = clarify.length <= 100 ? clarify : 'Sorry sir, could you say that again?'
+    return { state, effects: [{ type: 'speak', text }] }
   }
   if (value == null) {
-    return { state, effects: [{ type: 'speak', text: `I didn't quite catch that, sir. ${currentPrompt(state)}` }] }
+    return { state, effects: [{ type: 'speak', text: 'Sorry sir, could you say that again?' }] }
   }
   return applyValue(state, value)
 }

@@ -33,6 +33,7 @@ export class WakeWordManager {
   private initialSilenceTimer: ReturnType<typeof setTimeout> | null = null
   private commandBuffer = ''
   private lastWakeAt = 0
+  private lastResultAt = 0
   private silenceMs = 900
   private cb: WakeWordCallbacks
 
@@ -78,22 +79,44 @@ export class WakeWordManager {
   enterCommandMode(opts?: { initialSilenceTimeoutMs?: number; silenceMs?: number }): void {
     this.mode = 'command'
     this.commandBuffer = ''
+    this.lastResultAt = 0
     this.silenceMs = opts?.silenceMs ?? 900
     this.clearTimers()
-    if (opts?.initialSilenceTimeoutMs) {
-      this.initialSilenceTimer = setTimeout(() => {
-        this.mode = 'wake'
-        this.commandBuffer = ''
-        this.cb.onTimeout()
-      }, opts.initialSilenceTimeoutMs)
-    }
+    // Every command window gets a deadline — JARVIS must never get stuck listening.
+    this.armDeadline(opts?.initialSilenceTimeoutMs ?? 12000)
     if (this.enabled && !this.muted && !this.recognition) this.spinUp()
+  }
+
+  /**
+   * Hard timeout for a command window. Noise and interim results do NOT cancel
+   * it — it only extends while there is genuinely recent speech, and clears
+   * when a real utterance is dispatched.
+   */
+  private armDeadline(ms: number): void {
+    if (this.initialSilenceTimer) clearTimeout(this.initialSilenceTimer)
+    this.initialSilenceTimer = setTimeout(() => {
+      const speakingRecently = Date.now() - this.lastResultAt < 2000
+      if (this.commandBuffer.trim() || speakingRecently) {
+        // User is mid-answer — give them a short extension rather than cutting off
+        this.armDeadline(3000)
+        return
+      }
+      this.initialSilenceTimer = null
+      this.mode = 'wake'
+      this.commandBuffer = ''
+      this.cb.onTimeout()
+    }, ms)
   }
 
   enterWakeMode(): void {
     this.mode = 'wake'
     this.commandBuffer = ''
     this.clearTimers()
+  }
+
+  /** Re-arm the command deadline (e.g. after TTS finished speaking a prompt). */
+  refreshDeadline(ms = 12000): void {
+    if (this.mode === 'command') this.armDeadline(ms)
   }
 
   // ─── Internals ─────────────────────────────────────────────────────────────
@@ -121,11 +144,7 @@ export class WakeWordManager {
       if (this.mode === 'wake') {
         this.handleWakeScan(combined)
       } else {
-        // Any speech cancels the initial-silence window
-        if (this.initialSilenceTimer && combined) {
-          clearTimeout(this.initialSilenceTimer)
-          this.initialSilenceTimer = null
-        }
+        if (combined) this.lastResultAt = Date.now()
         if (finals.trim()) this.commandBuffer = (this.commandBuffer + ' ' + finals).trim()
         const preview = (this.commandBuffer + ' ' + interim).trim()
         if (preview) this.cb.onInterim(preview)
@@ -174,6 +193,8 @@ export class WakeWordManager {
     const trailing = transcript.slice((m.index ?? 0) + m[0].length).replace(/^[,.\s]+/, '').trim()
     this.mode = 'command'
     this.commandBuffer = ''
+    this.lastResultAt = Date.now()
+    this.armDeadline(12000)
     this.cb.onWake(trailing)
     if (trailing) {
       // The command came in the same breath — treat it as buffered speech
@@ -188,6 +209,8 @@ export class WakeWordManager {
       const utterance = this.commandBuffer.trim()
       this.commandBuffer = ''
       if (utterance) {
+        // Real utterance dispatched — the deadline has served its purpose
+        if (this.initialSilenceTimer) { clearTimeout(this.initialSilenceTimer); this.initialSilenceTimer = null }
         this.cb.onUtterance(utterance)
       }
     }, this.silenceMs)

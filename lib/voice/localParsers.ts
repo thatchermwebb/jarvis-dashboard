@@ -256,7 +256,8 @@ export interface StatusFlags {
 
 const FLAG_MAP: [RegExp, keyof StatusFlags, StatusFlags[keyof StatusFlags]][] = [
   [/\bchurn( risk)?\b/, 'stage', 'churn_risk'],
-  [/\bthatcher\b/, 'thatcher_needed', true],
+  // "thatcher" gets misheard constantly: "that sure", "that chair", "hatcher"...
+  [/\b(thatchers?|that sure|that chair|thatch her|hatcher|fatcher|the thatcher)\b/, 'thatcher_needed', true],
   [/\bpayment( issue)?\b/, 'payment_issue', true],
   [/\b(urgent|urgency|high priority|needs attention)\b/, 'urgency_level', 'high'],
   [/\b(va|coaching|needs coaching)\b/, 'va_needed', true],

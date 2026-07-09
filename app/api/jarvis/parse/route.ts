@@ -107,7 +107,7 @@ const FIELD_INSTRUCTIONS: Record<string, string> = {
   date: 'Convert the spoken follow-up timing into a concrete date (and time if mentioned). "In a couple weeks" = 14 days. If they clearly want no follow-up, use date "none".',
   yes_no: 'Determine whether the user is confirming (true) or declining (false).',
   client: 'Match the transcript to one client from the provided list (names may be misheard by speech recognition — match phonetically similar names). Return the id.',
-  status_flags: 'The user was asked if any client statuses should be flagged. Extract which flags they want set.',
+  status_flags: 'The user was asked if any client statuses should be flagged. Extract which flags they want set. Speech recognition mishears "Thatcher" as "that sure", "that chair", or "hatcher" — all of those mean thatcher_needed.',
   field_name: 'The user wants to edit a field of a call log. Determine which field.',
 }
 
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 300,
-      system: `You parse a single voice-transcribed answer from a busy sales operator into structured data. ${FIELD_INSTRUCTIONS[field]} Be decisive — pick the closest match with confidence "high" unless genuinely ambiguous. Only use confidence "low" with a "clarify" question when you truly cannot decide. ${contextBits.join(' ')}`,
+      system: `You parse a single voice-transcribed answer from a busy sales operator into structured data. ${FIELD_INSTRUCTIONS[field]} Be decisive — pick the closest match with confidence "high" unless genuinely ambiguous. Only use confidence "low" with a "clarify" question when you truly cannot decide. A clarify question is SPOKEN OUT LOUD, so it must be ONE short sentence of at most 10 words (e.g. "Sorry sir, which status was that?"). Never write paragraphs or lists. ${contextBits.join(' ')}`,
       messages: [{ role: 'user', content: `Transcript: "${transcript}"` }],
       tools: [{ name: 'submit_parse', description: 'Submit the parsed value', input_schema: schema as never }],
       tool_choice: { type: 'tool', name: 'submit_parse' },

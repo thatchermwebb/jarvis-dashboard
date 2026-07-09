@@ -111,6 +111,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       managerRef.current?.mute()
       await speak(text)
       managerRef.current?.unmute()
+      // Muting cleared the command deadline — re-arm so we never get stuck listening
+      managerRef.current?.refreshDeadline()
     }
     // Restore listening status
     const mode = managerRef.current?.currentMode
