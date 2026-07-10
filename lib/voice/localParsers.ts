@@ -23,9 +23,20 @@ export function parseGlobalCommand(text: string): GlobalCommand {
   const t = normalize(text)
   if (/^(skip( it| this)?( please)?|none|nothing|no thanks|nope|pass)$/.test(t)) return 'skip'
   if (/^(go back|back( up)?|previous( question)?)$/.test(t)) return 'back'
-  if (/^(cancel( it| that)?|never ?mind|stop|forget it|abort)$/.test(t)) return 'cancel'
+  if (isCancel(text)) return 'cancel'
   if (/^(repeat( that)?( please)?|what|say (that )?again|pardon|come again|huh)$/.test(t)) return 'repeat'
   return null
+}
+
+/**
+ * Cancel detection tolerant of natural phrasing: "cancel the whole thing",
+ * "none, delete it", "scrap that", "just stop". Requires a short utterance so
+ * a long dictated summary that merely contains "stop" isn't treated as cancel.
+ */
+export function isCancel(text: string): boolean {
+  const t = normalize(text)
+  if (t.split(' ').length > 6) return false
+  return /\b(cancel|scrap|abort|nevermind|never mind|delete (it|that|this|the log|everything)?|forget (it|this|the whole thing)|start over|stop (it|this|the log|logging)|dont save|do not save)\b/.test(t)
 }
 
 // ─── Log type ────────────────────────────────────────────────────────────────
@@ -205,7 +216,38 @@ export interface ClientCandidate {
   business_name?: string
 }
 
-/** Token-prefix fuzzy match against client name + business name. Returns ranked matches. */
+/** Bounded edit distance — returns Infinity once it exceeds `max`. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return Infinity
+  const prev = new Array(b.length + 1).fill(0).map((_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let cur = [i]
+    let rowMin = i
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+      rowMin = Math.min(rowMin, cur[j])
+    }
+    if (rowMin > max) return Infinity
+    prev.splice(0, prev.length, ...cur)
+  }
+  return prev[b.length] <= max ? prev[b.length] : Infinity
+}
+
+/** Do two tokens plausibly refer to the same spoken name? ("shepard"/"shepherd") */
+function tokenMatches(spoken: string, target: string): 0 | 1 | 2 {
+  if (spoken === target) return 2
+  if (target.startsWith(spoken) || spoken.startsWith(target)) return 1
+  // Speech recognition swaps homophones/spellings — tolerate small edit
+  // distance on longer tokens so "Shepard" matches "Shepherd" etc.
+  if (spoken.length >= 4 && target.length >= 4) {
+    const max = spoken.length >= 6 ? 2 : 1
+    if (editDistance(spoken, target, max) !== Infinity) return 2
+  }
+  return 0
+}
+
+/** Fuzzy match against client name + business name. Returns ranked matches. */
 export function matchClients(text: string, clients: ClientCandidate[]): ClientCandidate[] {
   const t = normalize(text)
   if (!t) return []
@@ -217,8 +259,9 @@ export function matchClients(text: string, clients: ClientCandidate[]): ClientCa
     const hayTokens = hay.split(' ')
     let score = 0
     for (const tok of tokens) {
-      if (hayTokens.some(h => h === tok)) score += 2
-      else if (hayTokens.some(h => h.startsWith(tok))) score += 1
+      let best = 0
+      for (const h of hayTokens) best = Math.max(best, tokenMatches(tok, h))
+      score += best
     }
     // Full-phrase containment is the strongest signal
     if (hay.includes(t)) score += 3
@@ -226,8 +269,10 @@ export function matchClients(text: string, clients: ClientCandidate[]): ClientCa
   }).filter(s => s.score > 0)
 
   scored.sort((a, b) => b.score - a.score)
-  // Keep only candidates within striking distance of the top score
   const top = scored[0]?.score ?? 0
+  // A clear winner (beats runner-up by 2+) is taken alone — "just go off of
+  // that" rather than asking, unless it's genuinely ambiguous.
+  if (scored.length > 1 && top >= 2 && top - scored[1].score >= 2) return [scored[0].c]
   return scored.filter(s => s.score >= Math.max(2, top - 1)).map(s => s.c).slice(0, 4)
 }
 

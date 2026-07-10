@@ -98,6 +98,23 @@ const FIELD_SCHEMAS: Record<string, object> = {
     },
     required: ['value', 'confidence'],
   },
+  // The mid-wizard "brain": decides what an ambiguous utterance means in the
+  // middle of the guided call-log flow.
+  wizard: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['answer', 'edit', 'goto', 'cancel', 'save', 'skip', 'clarify'],
+        description: 'answer = the utterance answers the CURRENT question; edit = user wants a specific field set to a specific value (possibly a different field than the current question); goto = user wants to change a field but gave no value; cancel = abandon the whole log; save = confirm/save it; skip = no value for this optional field; clarify = genuinely cannot tell',
+      },
+      field: { type: ['string', 'null'], enum: ['log_type', 'outcome', 'summary', 'followup_date', 'sentiment', 'next_step', 'promises_made', 'client_id', null], description: 'For edit/goto: which field' },
+      value: { type: ['string', 'null'], description: 'For answer/edit: the value. Enum fields must use their exact allowed value. Dates as YYYY-MM-DD (or "none" for no follow-up).' },
+      time: { type: ['string', 'null'], description: 'HH:MM 24h if a time was mentioned with a date' },
+      clarify: { type: ['string', 'null'], description: 'ONE short spoken question, max 10 words' },
+    },
+    required: ['action'],
+  },
 }
 
 const FIELD_INSTRUCTIONS: Record<string, string> = {
@@ -109,6 +126,7 @@ const FIELD_INSTRUCTIONS: Record<string, string> = {
   client: 'Match the transcript to one client from the provided list (names may be misheard by speech recognition — match phonetically similar names). Return the id.',
   status_flags: 'The user was asked if any client statuses should be flagged. Extract which flags they want set. Speech recognition mishears "Thatcher" as "that sure", "that chair", or "hatcher" — all of those mean thatcher_needed.',
   field_name: 'The user wants to edit a field of a call log. Determine which field.',
+  wizard: 'Decide what the operator means. Be decisive — prefer answer/edit/cancel over clarify. Any variant of stop/scrap/delete/cancel/never mind means cancel.',
 }
 
 export async function POST(req: NextRequest) {
@@ -122,6 +140,14 @@ export async function POST(req: NextRequest) {
   const contextBits: string[] = [`Today's date: ${context?.today ?? localToday()}.`]
   if (field === 'client' && context?.clientNames?.length) {
     contextBits.push(`Clients: ${JSON.stringify(context.clientNames)}`)
+  }
+  if (field === 'wizard') {
+    contextBits.push(
+      `The operator is mid-way through logging a client call. Current question: "${context?.prompt ?? ''}" (field: ${context?.step ?? 'unknown'}).`,
+      `Draft so far: ${JSON.stringify(context?.draft ?? {})}.`,
+      'Allowed values — log_type: call|text|meeting|email|voicemail|note; outcome: answered|voicemail|texted|no_answer|meeting_booked; sentiment: happy|neutral|confused|concerned|frustrated|angry|ghosting|close_ready; followup_date: YYYY-MM-DD or "none".',
+      'Examples: "switch it to text" → edit log_type=text. "actually make the follow-up next monday" → edit followup_date. "none, delete it" / "scrap the whole thing" → cancel. "yeah save" → save. A description of what happened on the call → answer (verbatim) when the current field is summary/next_step/promises_made.',
+    )
   }
 
   try {

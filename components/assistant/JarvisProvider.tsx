@@ -6,8 +6,9 @@ import { WakeWordManager, speechRecognitionSupported } from '@/lib/voice/recogni
 import { speak, stopSpeaking, initVoices, ttsSupported, prewarm } from '@/lib/voice/tts'
 import {
   initWizard, handleUtterance as wizardHandle, resolveClientUtterance, applyClientById,
-  applyFallbackValue, afterSave, afterSaveError, onSilenceTimeout, STEP_PROMPTS,
-  type WizardState, type WizardResult, type WizardEffect,
+  applyFallbackValue, applyWizardAction, afterSave, afterSaveError, onSilenceTimeout,
+  STEP_PROMPTS, currentPrompt,
+  type WizardState, type WizardResult, type WizardEffect, type WizardBrainAction,
 } from '@/lib/voice/logCallMachine'
 import type { ClientCandidate, StatusFlags } from '@/lib/voice/localParsers'
 import { getUserById } from '@/lib/auth'
@@ -71,9 +72,11 @@ function chime() {
   } catch { /* audio blocked — fine */ }
 }
 
-const LOG_INTENT_RE = /\blog (?:a |another |the )?(call|text|meeting|note|voicemail|email)?\b/
+// Captures type and optional client: "log a call for Kelly Goforth"
+const LOG_INTENT_RE = /\blog (?:a |another |the )?(call|text|meeting|note|voicemail|email)?(?:\s+(?:for|with|on)\s+(.+?))?[.!?]?$/
 const TASK_INTENT_RE = /\b(?:add|create|put in|make)\b.*\btask\b|\btask\b.*\bfor (?:diego|thatcher|trepp)\b/
 const DISMISS_RE = /^(?:cancel|stop|never ?mind|go to sleep|goodbye|thats all|dismiss(ed)?)[.!]?$/
+const POWER_DOWN_RE = /\bpower (?:down|off)\b/
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
@@ -93,6 +96,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const voiceEnabledRef = useRef(false)
   const busyRef = useRef(false)
   const bargedRef = useRef(false)
+  const disableVoiceRef = useRef<(() => void) | null>(null)
   const clientsRef = useRef<ClientCandidate[]>([])
   const messagesRef = useRef<JarvisMessage[]>([])
 
@@ -185,12 +189,17 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
                 context: {
                   today: localToday(),
                   clientNames: clients?.map(c => ({ id: c.id, name: `${c.name}${c.business_name ? ` (${c.business_name})` : ''}` })),
+                  step: state.step,
+                  prompt: currentPrompt(state),
+                  draft: effect.field === 'wizard' ? state.draft : undefined,
                 },
               }),
             })
             const parsed = await res.json()
             let r: WizardResult
-            if (effect.field === 'client' && parsed.value) {
+            if (effect.field === 'wizard') {
+              r = applyWizardAction(state, parsed as WizardBrainAction)
+            } else if (effect.field === 'client' && parsed.value) {
               r = applyClientById(state, String(parsed.value), await ensureClients())
             } else if (effect.field === 'date' && parsed.value?.date === 'none') {
               r = applyFallbackValue(state, 'none', parsed.confidence === 'low' ? parsed.clarify : undefined)
@@ -350,15 +359,23 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Wizard entry ──────────────────────────────────────────────────────────
 
-  const startLogWizard = useCallback(async (prefillType?: string) => {
+  const startLogWizard = useCallback(async (prefillType?: string, clientText?: string) => {
     setPanelOpen(true)
-    void ensureClients()
     // Warm the TTS cache for the fixed prompts so each step speaks instantly
     prewarm(Object.values(STEP_PROMPTS).filter(Boolean))
     if (voiceEnabledRef.current) {
       managerRef.current?.enterCommandMode()
       setStatus('listening')
     }
+    if (clientText) {
+      // "log a call for Kelly Goforth" — resolve the client up front and jump
+      // straight past the client question
+      const clients = await ensureClients()
+      const init = initWizard(prefillType)
+      await processResult(resolveClientUtterance(init.state, clientText, clients))
+      return
+    }
+    void ensureClients()
     await processResult(initWizard(prefillType))
   }, [ensureClients, processResult])
 
@@ -370,7 +387,15 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     setInterim('')
     appendMessage({ role: 'user', content: trimmed })
 
-    // Active wizard consumes everything
+    // "Power down" wins over everything, including an active wizard
+    if (POWER_DOWN_RE.test(trimmed.toLowerCase())) {
+      setWizard(null); wizardRef.current = null
+      await say('Powering down, sir.')
+      disableVoiceRef.current?.()
+      return
+    }
+
+    // Active wizard consumes everything else
     if (wizardRef.current) {
       await processResult(wizardHandle(wizardRef.current, trimmed))
       return
@@ -386,8 +411,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
     const logMatch = LOG_INTENT_RE.exec(t)
     if (logMatch && /\blog\b/.test(t)) {
-      const typeMap: Record<string, string> = { call: 'call', text: 'text', meeting: 'meeting', note: 'note', voicemail: 'voicemail', email: 'email' }
-      await startLogWizard(logMatch[1] ? typeMap[logMatch[1]] : undefined)
+      // "log a call for Kelly Goforth" → prefill type AND client
+      await startLogWizard(logMatch[1] || undefined, logMatch[2]?.trim() || undefined)
       return
     }
 
@@ -506,6 +531,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     setStatus('off')
     localStorage.removeItem('jarvis_voice_enabled')
   }, [])
+  disableVoiceRef.current = disableVoice
 
   const sendText = useCallback((text: string) => {
     void handleInputRef.current(text, 'text')

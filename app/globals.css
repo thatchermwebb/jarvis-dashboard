@@ -113,14 +113,16 @@
 /* JARVIS cursor blink */
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .cursor-blink::after { content: '▋'; animation: blink 1s step-end infinite; margin-left: 1px; }
+:root { --jarvis-blue: #22ccff; }
+
 /* ─── JARVIS Arc Reactor Orb ─────────────────────────────────────────────── */
 
 .jarvis-orb .orb-ring,
 .jarvis-orb .orb-mid,
-.jarvis-orb .orb-spokes line { stroke: var(--primary); }
-.jarvis-orb .orb-core { fill: var(--primary); }
-.jarvis-orb .orb-core-glow { fill: var(--primary); filter: blur(3px); }
-.jarvis-orb .orb-ripple { stroke: var(--primary); opacity: 0; }
+.jarvis-orb .orb-spokes line { stroke: var(--jarvis-blue); }
+.jarvis-orb .orb-core { fill: var(--jarvis-blue); }
+.jarvis-orb .orb-core-glow { fill: var(--jarvis-blue); filter: blur(3px); }
+.jarvis-orb .orb-ripple { stroke: var(--jarvis-blue); opacity: 0; }
 
 .jarvis-orb .orb-spokes,
 .jarvis-orb .orb-ripple {
@@ -138,12 +140,12 @@
 /* wake — slow idle pulse */
 .jarvis-orb--wake .orb-core,
 .jarvis-orb--wake .orb-core-glow { animation: orb-pulse 2.6s ease-in-out infinite; }
-.jarvis-orb--wake .orb-ring { filter: drop-shadow(0 0 2px var(--primary)); }
+.jarvis-orb--wake .orb-ring { filter: drop-shadow(0 0 2px var(--jarvis-blue)); }
 .jarvis-orb--wake .orb-spokes { opacity: 0.6; }
 
 /* listening — spin the spokes, glow hard */
 .jarvis-orb--listening .orb-spokes { animation: orb-spin 1.2s linear infinite; }
-.jarvis-orb--listening .orb-ring { filter: drop-shadow(0 0 5px var(--primary)); }
+.jarvis-orb--listening .orb-ring { filter: drop-shadow(0 0 5px var(--jarvis-blue)); }
 .jarvis-orb--listening .orb-core { animation: orb-pulse 0.9s ease-in-out infinite; }
 .jarvis-orb--listening .orb-core-glow { animation: orb-pulse 0.9s ease-in-out infinite; }
 
@@ -155,7 +157,7 @@
 .jarvis-orb--speaking .orb-ripple-1 { animation: orb-ripple 1.4s ease-out infinite; }
 .jarvis-orb--speaking .orb-ripple-2 { animation: orb-ripple 1.4s ease-out 0.7s infinite; }
 .jarvis-orb--speaking .orb-core { animation: orb-pulse 0.7s ease-in-out infinite; }
-.jarvis-orb--speaking .orb-ring { filter: drop-shadow(0 0 4px var(--primary)); }
+.jarvis-orb--speaking .orb-ring { filter: drop-shadow(0 0 4px var(--jarvis-blue)); }
 
 @keyframes orb-pulse {
   0%, 100% { opacity: 1; }

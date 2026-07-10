@@ -6,7 +6,7 @@
 import {
   parseGlobalCommand, parseLogType, parseOutcome, parseSentiment, parseYesNo,
   parseRelativeDate, parseTime, matchClients, parseDisambiguation,
-  parseStatusFlags, parseFieldName, sentenceCase, flagsSummary, normalize,
+  parseStatusFlags, parseFieldName, sentenceCase, flagsSummary, normalize, isCancel,
   type ClientCandidate, type StatusFlags,
 } from './localParsers'
 import { localToday } from '@/lib/utils'
@@ -170,6 +170,80 @@ export function currentPrompt(state: WizardState): string {
   return STEP_PROMPTS[state.step]
 }
 
+const FIELD_TO_STEP: Record<string, WizardStep> = {
+  client_id: 'client', log_type: 'log_type', outcome: 'outcome', summary: 'summary',
+  followup_date: 'followup', sentiment: 'sentiment', next_step: 'next_step', promises_made: 'promises',
+}
+
+function gotoField(state: WizardState, field: string): WizardResult {
+  const step = FIELD_TO_STEP[field]
+  if (!step) return { state, effects: [{ type: 'speak', text: 'Which field shall I change, sir?' }] }
+  const newState = { ...state, step, editReturn: state.step === 'confirm', candidates: [] }
+  return { state: newState, effects: [{ type: 'speak', text: STEP_PROMPTS[step] }] }
+}
+
+// ─── AI wizard interpreter (the "brain" mid-wizard) ──────────────────────────
+
+export interface WizardBrainAction {
+  action: 'answer' | 'edit' | 'goto' | 'cancel' | 'save' | 'skip' | 'clarify'
+  field?: string | null
+  value?: string | null
+  time?: string | null
+  clarify?: string | null
+}
+
+/** Apply the AI interpreter's decision about an ambiguous mid-wizard utterance. */
+export function applyWizardAction(state: WizardState, a: WizardBrainAction): WizardResult {
+  switch (a.action) {
+    case 'cancel':
+      return { state: { ...state, step: 'done' }, effects: [{ type: 'speak', text: 'Very well, sir. Scrapped.' }, { type: 'abort' }] }
+
+    case 'save':
+      return { state, effects: [{ type: 'save_log' }] }
+
+    case 'skip': {
+      if (state.step === 'confirm') return { state, effects: [{ type: 'speak', text: currentPrompt(state) }] }
+      return handleUtterance(state, 'skip')
+    }
+
+    case 'goto':
+      return a.field ? gotoField(state, a.field) : { state, effects: [{ type: 'speak', text: 'Which field shall I change, sir?' }] }
+
+    case 'edit': {
+      // Set a field in place ("switch it to text") without derailing the flow
+      if (!a.field || a.value == null) return { state, effects: [{ type: 'speak', text: currentPrompt(state) }] }
+      const draft = { ...state.draft }
+      switch (a.field) {
+        case 'log_type': draft.log_type = a.value; break
+        case 'outcome': draft.outcome = a.value; break
+        case 'summary': draft.summary = sentenceCase(a.value); break
+        case 'followup_date': draft.followup_date = a.value === 'none' ? null : a.value; if (a.time) draft.followup_time = a.time; break
+        case 'sentiment': draft.sentiment = a.value; break
+        case 'next_step': draft.next_step = sentenceCase(a.value); break
+        case 'promises_made': draft.promises_made = sentenceCase(a.value); break
+        default: return { state, effects: [{ type: 'speak', text: currentPrompt(state) }] }
+      }
+      const newState = { ...state, draft }
+      const prompt = newState.step === 'confirm' ? confirmPrompt(draft) : currentPrompt(newState)
+      return { state: newState, effects: [{ type: 'speak', text: `Done. ${prompt}` }] }
+    }
+
+    case 'answer': {
+      if (a.value == null) return { state, effects: [{ type: 'speak', text: `Sorry sir, could you say that again?` }] }
+      if (state.step === 'followup') {
+        return applyFallbackValue(state, a.value === 'none' ? 'none' : { date: a.value, time: a.time ?? undefined })
+      }
+      return applyFallbackValue(state, a.value)
+    }
+
+    case 'clarify':
+    default: {
+      const text = a.clarify && a.clarify.length <= 100 ? a.clarify : 'Sorry sir, could you say that again?'
+      return { state, effects: [{ type: 'speak', text }] }
+    }
+  }
+}
+
 function applyValue(state: WizardState, value: unknown): WizardResult {
   const draft = { ...state.draft }
   switch (state.step) {
@@ -254,18 +328,23 @@ export function handleUtterance(state: WizardState, transcript: string): WizardR
     case 'log_type': {
       const v = parseLogType(text)
       if (v) return applyValue(state, v)
-      return { state, effects: [{ type: 'parse_fallback', field: 'log_type', transcript: text }] }
+      return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
     }
 
     case 'outcome': {
       const v = parseOutcome(text)
       if (v) return applyValue(state, v)
-      return { state, effects: [{ type: 'parse_fallback', field: 'outcome', transcript: text }] }
+      return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
     }
 
     case 'summary': {
       if (normalize(text).split(' ').length < 2) {
         return { state, effects: [{ type: 'speak', text: 'A bit more detail, sir — give me the summary.' }] }
+      }
+      // Long dictation is the answer; short odd phrases might be a command
+      // ("switch it to text") — let the brain decide those.
+      if (normalize(text).split(' ').length <= 5 && (parseFieldName(text) || parseLogType(text))) {
+        return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
       }
       return applyValue(state, text)
     }
@@ -274,39 +353,36 @@ export function handleUtterance(state: WizardState, transcript: string): WizardR
       const date = parseRelativeDate(text)
       if (date === 'none') return applyValue(state, 'none')
       if (date) return applyValue(state, { date, time: parseTime(text) ?? undefined })
-      return { state, effects: [{ type: 'parse_fallback', field: 'date', transcript: text }] }
+      return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
     }
 
     case 'sentiment': {
       const v = parseSentiment(text)
       if (v) return applyValue(state, v)
-      return { state, effects: [{ type: 'parse_fallback', field: 'sentiment', transcript: text }] }
+      return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
     }
 
     case 'next_step':
     case 'promises':
+      // Short command-shaped phrases go to the brain; real content is applied
+      if (normalize(text).split(' ').length <= 5 && (parseFieldName(text) || isCancel(text))) {
+        return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
+      }
       return applyValue(state, text)
 
     case 'confirm': {
+      if (isCancel(text)) {
+        return { state: { ...state, step: 'done' }, effects: [{ type: 'speak', text: 'Very well, sir. Scrapped.' }, { type: 'abort' }] }
+      }
       const yn = parseYesNo(text)
       if (yn === true) {
         return { state, effects: [{ type: 'save_log' }] }
       }
       // "change the outcome" / "edit the summary"
       const field = parseFieldName(text)
-      if (yn === false || field) {
-        if (field) {
-          const stepMap: Record<string, WizardStep> = {
-            client_id: 'client', log_type: 'log_type', outcome: 'outcome', summary: 'summary',
-            followup_date: 'followup', sentiment: 'sentiment', next_step: 'next_step', promises_made: 'promises',
-          }
-          const step = stepMap[field]
-          const newState = { ...state, step, editReturn: true, candidates: [] }
-          return { state: newState, effects: [{ type: 'speak', text: STEP_PROMPTS[step] }] }
-        }
-        return { state, effects: [{ type: 'speak', text: 'Which field shall I change, sir?' }] }
-      }
-      return { state, effects: [{ type: 'parse_fallback', field: 'yes_no', transcript: text }] }
+      if (field) return gotoField(state, field)
+      // Anything else — including "no, change X to Y" — goes to the brain
+      return { state, effects: [{ type: 'parse_fallback', field: 'wizard', transcript: text }] }
     }
 
     case 'status_flags': {
