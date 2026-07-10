@@ -3,7 +3,8 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { WakeWordManager, speechRecognitionSupported } from '@/lib/voice/recognition'
-import { speak, stopSpeaking, initVoices, ttsSupported, prewarm } from '@/lib/voice/tts'
+import { speak, stopSpeaking, initVoices, ttsSupported, prewarm, setLevelListener } from '@/lib/voice/tts'
+import { openLogCallForm, driveLogField, closeLogCallForm } from '@/lib/voice/formDriver'
 import {
   initWizard, handleUtterance as wizardHandle, resolveClientUtterance, applyClientById,
   applyFallbackValue, applyWizardAction, afterSave, afterSaveError, onSilenceTimeout,
@@ -93,10 +94,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
   const managerRef = useRef<WakeWordManager | null>(null)
   const wizardRef = useRef<WizardState | null>(null)
+  const formDrivenRef = useRef(false) // JARVIS is driving the on-screen dialog
   const voiceEnabledRef = useRef(false)
   const busyRef = useRef(false)
   const bargedRef = useRef(false)
-  const disableVoiceRef = useRef<(() => void) | null>(null)
   const clientsRef = useRef<ClientCandidate[]>([])
   const messagesRef = useRef<JarvisMessage[]>([])
 
@@ -112,13 +113,14 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Speak (if voice on) + always add to transcript. Mic stays HOT in speaking
-  // mode so "Hey JARVIS" can barge in; everything else is ignored meanwhile.
+  // mode so "JARVIS" can barge in and "power down" kills it instantly;
+  // everything else (incl. JARVIS's own voice) is ignored meanwhile.
   const say = useCallback(async (text: string) => {
     appendMessage({ role: 'assistant', content: text })
     if (voiceEnabledRef.current && ttsSupported()) {
       setStatus('speaking')
       bargedRef.current = false
-      managerRef.current?.enterSpeakingMode()
+      managerRef.current?.enterSpeakingMode(text)
       await speak(text)
       if (bargedRef.current) return // barge-in handler already took over
       managerRef.current?.endSpeaking()
@@ -132,6 +134,26 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     managerRef.current?.enterWakeMode()
     setStatus(voiceEnabledRef.current ? 'wake' : 'off')
   }, [])
+
+  // "Power down" / "power off" — IMMEDIATE. Kills speech mid-word, aborts any
+  // wizard, closes everything. Stays dormant listening only for "JARVIS".
+  const powerDown = useCallback(() => {
+    stopSpeaking()
+    setWizard(null)
+    wizardRef.current = null
+    if (formDrivenRef.current) {
+      closeLogCallForm(false)
+      formDrivenRef.current = false
+    }
+    setInterim('')
+    setBusy(false)
+    setPanelOpen(false)
+    appendMessage({ role: 'assistant', content: '⏻ Powered down. Say "JARVIS" to wake me.' })
+    managerRef.current?.enterWakeMode()
+    setStatus(voiceEnabledRef.current ? 'wake' : 'off')
+  }, [appendMessage])
+  const powerDownRef = useRef(powerDown)
+  powerDownRef.current = powerDown
 
   // ─── Wizard effect processor ───────────────────────────────────────────────
 
@@ -150,8 +172,22 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const processResult = useCallback(async (result: WizardResult): Promise<void> => {
+    const prevDraft = wizardRef.current?.draft
     setWizard(result.state)
     wizardRef.current = result.state
+
+    // Mirror every captured field into the on-screen Log Call dialog so the
+    // user watches JARVIS fill the real form.
+    if (formDrivenRef.current && result.state) {
+      const d = result.state.draft as unknown as Record<string, string | undefined>
+      const p = (prevDraft ?? {}) as unknown as Record<string, string | undefined>
+      if (d.client_id && d.client_id !== p.client_id) {
+        driveLogField({ field: 'client', value: d.client_id, label: d.client_name })
+      }
+      for (const f of ['log_type', 'outcome', 'summary', 'sentiment', 'promises_made', 'next_step', 'followup_date', 'followup_time'] as const) {
+        if (d[f] !== undefined && d[f] !== p[f]) driveLogField({ field: f, value: d[f] ?? '' })
+      }
+    }
 
     for (const effect of result.effects) {
       await runEffect(effect, result.state)
@@ -240,6 +276,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
             if (!res.ok) throw new Error('save failed')
             const saved = await res.json()
             toast.success(`Call logged for ${d.client_name}`)
+            if (formDrivenRef.current) {
+              closeLogCallForm(true)
+              formDrivenRef.current = false
+            }
             await processResult(afterSave(state, saved?.id ?? null))
           } catch {
             toast.error('Failed to save call log')
@@ -268,6 +308,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
         case 'abort':
         case 'finished': {
+          if (formDrivenRef.current) {
+            closeLogCallForm(false)
+            formDrivenRef.current = false
+          }
           setWizard(null)
           wizardRef.current = null
           returnToWake()
@@ -361,6 +405,9 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
   const startLogWizard = useCallback(async (prefillType?: string, clientText?: string) => {
     setPanelOpen(true)
+    // JARVIS controls the real on-screen dialog — open it and drive it live
+    formDrivenRef.current = true
+    openLogCallForm()
     // Warm the TTS cache for the fixed prompts so each step speaks instantly
     prewarm(Object.values(STEP_PROMPTS).filter(Boolean))
     if (voiceEnabledRef.current) {
@@ -387,11 +434,9 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     setInterim('')
     appendMessage({ role: 'user', content: trimmed })
 
-    // "Power down" wins over everything, including an active wizard
+    // "Power down" wins over everything, including an active wizard — instant
     if (POWER_DOWN_RE.test(trimmed.toLowerCase())) {
-      setWizard(null); wizardRef.current = null
-      await say('Powering down, sir.')
-      disableVoiceRef.current?.()
+      powerDownRef.current()
       return
     }
 
@@ -441,13 +486,20 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     setSupported(speechRecognitionSupported())
     initVoices()
 
+    // Waveform level → CSS var; the orb scales with JARVIS's actual voice
+    setLevelListener((level) => {
+      document.documentElement.style.setProperty('--jarvis-level', level.toFixed(3))
+    })
+
     const manager = new WakeWordManager({
       onWake: (trailing) => {
         chime()
         setPanelOpen(true)
         setStatus('listening')
         if (!trailing) {
-          // Acknowledge and wait for the command
+          // Acknowledge and wait for the command. noteEcho keeps the command
+          // window open while filtering "Sir?" out of the mic feed.
+          manager.noteEcho('Sir?')
           void speak('Sir?')
         }
       },
@@ -473,7 +525,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
             setWizard(r.state)
             wizardRef.current = r.state
             for (const e of r.effects) {
-              if (e.type === 'speak') await speak(e.text)
+              if (e.type === 'speak') { manager.noteEcho(e.text); await speak(e.text) }
               if (e.type === 'finished') { setWizard(null); wizardRef.current = null }
             }
             setStatus(voiceEnabledRef.current ? 'wake' : 'off')
@@ -481,6 +533,9 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         } else {
           setStatus(voiceEnabledRef.current ? 'wake' : 'off')
         }
+      },
+      onPowerDown: () => {
+        powerDownRef.current()
       },
       onPermissionDenied: () => {
         setPermissionDenied(true)
@@ -510,6 +565,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', onVisibility)
       manager.stop()
       stopSpeaking()
+      setLevelListener(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -531,7 +587,6 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     setStatus('off')
     localStorage.removeItem('jarvis_voice_enabled')
   }, [])
-  disableVoiceRef.current = disableVoice
 
   const sendText = useCallback((text: string) => {
     void handleInputRef.current(text, 'text')

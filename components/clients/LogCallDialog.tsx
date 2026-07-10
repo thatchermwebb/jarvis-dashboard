@@ -245,6 +245,79 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
   const effectiveStage = preselectedClient?.stage ?? editLog?.client?.stage ?? selectedClient?.stage ?? ''
   const isTrialStage = TRIAL_STAGES.has(effectiveStage)
 
+  // ─── JARVIS autonomous control ──────────────────────────────────────────────
+  // JARVIS drives this dialog directly: selects the client, types into fields
+  // character-by-character (fast), and closes it when the log is saved.
+  const typeTimersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
+  const [jarvisField, setJarvisField] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    function animateType(field: string, value: string) {
+      const timers = typeTimersRef.current
+      const existing = timers.get(field)
+      if (existing) clearInterval(existing)
+      setJarvisField(field)
+      if (!value) {
+        setForm(prev => ({ ...prev, [field]: '' }))
+        return
+      }
+      let i = 0
+      const timer = setInterval(() => {
+        i += 3 // 3 chars / 12ms ≈ 250 chars per second
+        setForm(prev => ({ ...prev, [field]: value.slice(0, i) }))
+        if (i >= value.length) {
+          clearInterval(timer)
+          timers.delete(field)
+          setTimeout(() => setJarvisField(f => (f === field ? null : f)), 400)
+        }
+      }, 12)
+      timers.set(field, timer)
+    }
+
+    function onDrive(e: Event) {
+      const { field, value, label, stage } = (e as CustomEvent).detail ?? {}
+      if (!field) return
+      if (field === 'client') {
+        setSelectedClient({ id: value, name: label ?? '', stage: stage ?? '' } as Client)
+        setSearch(''); setShowDropdown(false)
+        setJarvisField('client')
+        setTimeout(() => setJarvisField(f => (f === 'client' ? null : f)), 600)
+        return
+      }
+      if (['summary', 'promises_made', 'next_step', 'trial_notes'].includes(field)) {
+        animateType(field, String(value ?? ''))
+      } else {
+        // selects + dates apply instantly with a highlight flash
+        setForm(prev => ({ ...prev, [field]: String(value ?? '') }))
+        setJarvisField(field)
+        setTimeout(() => setJarvisField(f => (f === field ? null : f)), 600)
+      }
+    }
+
+    function onJarvisClose(e: Event) {
+      const saved = (e as CustomEvent).detail?.saved
+      if (saved) toast.success('JARVIS logged the call')
+      onClose()
+    }
+
+    window.addEventListener('jarvis:drive-log', onDrive)
+    window.addEventListener('jarvis:close-log-call', onJarvisClose)
+    const timers = typeTimersRef.current
+    return () => {
+      window.removeEventListener('jarvis:drive-log', onDrive)
+      window.removeEventListener('jarvis:close-log-call', onJarvisClose)
+      timers.forEach(t => clearInterval(t))
+      timers.clear()
+      setJarvisField(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const driveGlow = (field: string) =>
+    jarvisField === field ? 'ring-2 ring-[#22ccff]/70 shadow-[0_0_12px_rgba(34,204,255,0.35)] transition-shadow' : ''
+
   useEffect(() => {
     if (open && editLog) {
       setForm({
@@ -387,7 +460,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                   <Label className="text-sm font-medium">Client</Label>
                   <div className="relative">
                     <div
-                      className={cn('flex items-center gap-2 bg-secondary/50 border border-border rounded-xl px-3 h-11 cursor-text', showDropdown && 'border-primary/50')}
+                      className={cn('flex items-center gap-2 bg-secondary/50 border border-border rounded-xl px-3 h-11 cursor-text', showDropdown && 'border-primary/50', driveGlow('client'))}
                       onClick={() => { setShowDropdown(true); setTimeout(() => searchRef.current?.focus(), 50) }}
                     >
                       {selectedClient && !showDropdown ? (
@@ -438,7 +511,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Type</Label>
                   <Select value={form.log_type} onValueChange={v => v && set('log_type', v)}>
-                    <SelectTrigger className="bg-secondary/50 h-10 text-sm">
+                    <SelectTrigger className={cn('bg-secondary/50 h-10 text-sm', driveGlow('log_type'))}>
                       <span>{LOG_TYPE_LABELS[form.log_type] ?? form.log_type}</span>
                     </SelectTrigger>
                     <SelectContent>
@@ -449,7 +522,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Outcome <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                   <Select value={form.outcome || 'none'} onValueChange={(v: string | null) => set('outcome', !v || v === 'none' ? '' : v)}>
-                    <SelectTrigger className="bg-secondary/50 h-10 text-sm">
+                    <SelectTrigger className={cn('bg-secondary/50 h-10 text-sm', driveGlow('outcome'))}>
                       <span className={form.outcome ? undefined : 'text-muted-foreground'}>
                         {form.outcome ? (OUTCOME_LABELS[form.outcome as LogOutcome] ?? form.outcome) : 'Select outcome...'}
                       </span>
@@ -471,7 +544,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                   value={form.summary}
                   onChange={e => set('summary', e.target.value)}
                   placeholder="What happened? What did they say? Key points..."
-                  className="bg-secondary/50 min-h-[100px] text-sm resize-none"
+                  className={cn('bg-secondary/50 min-h-[100px] text-sm resize-none', driveGlow('summary'))}
                 />
               </div>
 
@@ -489,7 +562,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Client Sentiment <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
                 <Select value={form.sentiment} onValueChange={v => v && set('sentiment', v)}>
-                  <SelectTrigger className="bg-secondary/50 h-10 text-sm">
+                  <SelectTrigger className={cn('bg-secondary/50 h-10 text-sm', driveGlow('sentiment'))}>
                     <span className={form.sentiment ? undefined : 'text-muted-foreground'}>
                       {form.sentiment ? (SENTIMENT_LABELS[form.sentiment] ?? form.sentiment) : 'Mood...'}
                     </span>
@@ -503,7 +576,9 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
               {/* Follow-Up Date + Time */}
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Follow-Up Date <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                <InlineCalendar value={form.followup_date} onChange={v => set('followup_date', v)} />
+                <div className={cn('rounded-xl', driveGlow('followup_date'))}>
+                  <InlineCalendar value={form.followup_date} onChange={v => set('followup_date', v)} />
+                </div>
                 {form.followup_date && (
                   <div className="space-y-1 pt-1">
                     <Label className="text-xs text-muted-foreground">Time (optional)</Label>
@@ -516,7 +591,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
               <div className="space-y-3">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Action Item <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised / needs to happen?" className="bg-secondary/50 h-10 text-sm" />
+                  <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised / needs to happen?" className={cn('bg-secondary/50 h-10 text-sm', driveGlow('promises_made'))} />
 
                   {/* Create Task toggle — only on new logs */}
                   {!editLog && (
@@ -584,7 +659,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Next Step <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Input value={form.next_step} onChange={e => set('next_step', e.target.value)} placeholder="What needs to happen next?" className="bg-secondary/50 h-10 text-sm" />
+                  <Input value={form.next_step} onChange={e => set('next_step', e.target.value)} placeholder="What needs to happen next?" className={cn('bg-secondary/50 h-10 text-sm', driveGlow('next_step'))} />
                 </div>
               </div>
 

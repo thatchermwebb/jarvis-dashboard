@@ -9,6 +9,65 @@ let voicesLoaded = false
 let elevenAvailable: boolean | null = null
 let currentAudio: HTMLAudioElement | null = null
 
+// ─── Waveform level (drives the orb) ────────────────────────────────────────
+// Real analyser data for ElevenLabs playback; simulated envelope for the
+// browser-speechSynthesis fallback. Level is 0..1.
+
+let levelListener: ((level: number) => void) | null = null
+let audioCtx: AudioContext | null = null
+let levelRaf = 0
+let fakeLevelTimer: ReturnType<typeof setInterval> | null = null
+
+export function setLevelListener(cb: ((level: number) => void) | null): void {
+  levelListener = cb
+}
+
+function stopLevel(): void {
+  if (levelRaf) { cancelAnimationFrame(levelRaf); levelRaf = 0 }
+  if (fakeLevelTimer) { clearInterval(fakeLevelTimer); fakeLevelTimer = null }
+  levelListener?.(0)
+}
+
+function startAnalyser(audio: HTMLAudioElement): void {
+  if (!levelListener) return
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    audioCtx ??= new Ctx()
+    if (audioCtx.state === 'suspended') void audioCtx.resume()
+    const src = audioCtx.createMediaElementSource(audio)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 256
+    src.connect(analyser)
+    analyser.connect(audioCtx.destination)
+    const data = new Uint8Array(analyser.frequencyBinCount)
+    const tick = () => {
+      if (currentAudio !== audio) { stopLevel(); return }
+      analyser.getByteTimeDomainData(data)
+      let sum = 0
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128
+        sum += v * v
+      }
+      const rms = Math.sqrt(sum / data.length)
+      levelListener?.(Math.min(1, rms * 3.2))
+      levelRaf = requestAnimationFrame(tick)
+    }
+    levelRaf = requestAnimationFrame(tick)
+  } catch {
+    startFakeLevel() // analyser blocked — approximate
+  }
+}
+
+function startFakeLevel(): void {
+  if (!levelListener || fakeLevelTimer) return
+  let t = 0
+  fakeLevelTimer = setInterval(() => {
+    t += 0.09
+    const level = 0.28 + 0.22 * Math.abs(Math.sin(t * 2.1)) + Math.random() * 0.18
+    levelListener?.(Math.min(1, level))
+  }, 50)
+}
+
 // Cache generated audio by text so repeated lines (wizard prompts, "Sir?",
 // confirmations) play instantly on subsequent use — zero network latency.
 const audioCache = new Map<string, string>() // text -> object URL
@@ -102,6 +161,7 @@ async function speakEleven(text: string): Promise<boolean> {
       if (done) return
       done = true
       if (currentAudio === audio) currentAudio = null
+      stopLevel()
       resolve()
     }
     audio.onended = finish
@@ -110,6 +170,7 @@ async function speakEleven(text: string): Promise<boolean> {
       const ms = isFinite(audio.duration) ? audio.duration * 1000 + 1500 : 30000
       setTimeout(finish, ms)
     }
+    audio.onplay = () => startAnalyser(audio)
     audio.play().catch(finish)
   })
   return true
@@ -132,6 +193,7 @@ function speakBrowser(text: string): Promise<void> {
     const finish = () => {
       if (done) return
       done = true
+      stopLevel()
       resolve()
     }
     u.onend = finish
@@ -139,6 +201,7 @@ function speakBrowser(text: string): Promise<void> {
     const est = Math.max(2000, text.length * 90)
     setTimeout(finish, est + 3000)
 
+    u.onstart = () => startFakeLevel()
     window.speechSynthesis.speak(u)
   })
 }
@@ -172,4 +235,5 @@ export function stopSpeaking(): void {
     currentAudio.src = ''
     currentAudio = null
   }
+  stopLevel()
 }

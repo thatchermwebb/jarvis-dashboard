@@ -80,7 +80,19 @@ export default function ClientWarRoom() {
   const [adStarted, setAdStarted] = useState(false)
   const [startingAds, setStartingAds] = useState(false)
   const [startModalOpen, setStartModalOpen] = useState(false)
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const stagePickerRef = useRef<HTMLDivElement>(null)
+
+  const refreshSummary = useCallback(async (clientId: string) => {
+    setSummaryLoading(true)
+    try {
+      const res = await fetch(`/api/clients/${clientId}/situation`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok && data.summary) setAiSummary(data.summary)
+    } catch { /* keep whatever we have */ }
+    finally { setSummaryLoading(false) }
+  }, [])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -104,7 +116,19 @@ export default function ClientWarRoom() {
     setLogs(Array.isArray(logsData) ? logsData : [])
     const ads = Array.isArray(adsData) ? adsData : []
     setAdStarted(ads.some((a: any) => a.status === 'in_progress' || a.status === 'done'))
-  }, [id, router])
+
+    // AI situation summary: use the cached one if it's newer than the last
+    // contact; otherwise regenerate in the background.
+    const cached = clientData.ai_situation_summary as string | null
+    const cachedAt = clientData.ai_summary_updated_at ? new Date(clientData.ai_summary_updated_at).getTime() : 0
+    const lastContact = clientData.last_contact_date ? new Date(clientData.last_contact_date).getTime() : 0
+    if (cached && cachedAt >= lastContact) {
+      setAiSummary(cached)
+    } else if (clientData.last_contact_date) {
+      setAiSummary(cached ?? null)
+      void refreshSummary(clientData.id)
+    }
+  }, [id, router, refreshSummary])
 
   useEffect(() => { load() }, [load])
 
@@ -329,6 +353,13 @@ export default function ClientWarRoom() {
             ‼️ Needs Attention
           </button>
           <button
+            onClick={() => quickUpdate({ trepp_needed: !client.trepp_needed })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.trepp_needed ? 'bg-violet-500/20 border-violet-500/30 text-violet-300' : 'border-border text-muted-foreground hover:border-violet-500/30 hover:text-violet-300')}
+            disabled={updating}
+          >
+            🔧 Trepp Needed
+          </button>
+          <button
             onClick={() => quickUpdate({ va_needed: !client.va_needed })}
             className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.va_needed ? 'bg-blue-500/20 border-blue-500/30 text-blue-300' : 'border-border text-muted-foreground hover:border-blue-500/30 hover:text-blue-300')}
             disabled={updating}
@@ -428,7 +459,7 @@ export default function ClientWarRoom() {
                   <>
                     <div className="border-t border-border my-2" />
                     <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Deal Notes</div>
-                    <div className="text-xs text-muted-foreground bg-secondary/30 rounded-md px-3 py-2">
+                    <div className="text-sm text-foreground bg-secondary/30 rounded-md px-3 py-2 whitespace-pre-wrap">
                       {client.deal_notes}
                     </div>
                   </>
@@ -572,12 +603,33 @@ export default function ClientWarRoom() {
                     <div className="text-sm text-foreground">{timeAgo(client.last_contact_date)}</div>
                   </div>
                 </div>
-                {client.last_call_summary && (
+                {(aiSummary || summaryLoading || client.last_call_summary) && (
                   <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Last Summary</div>
-                    <div className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2">
-                      {client.last_call_summary}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Bot className="w-3 h-3" /> Situation Summary
+                      </div>
+                      <button
+                        onClick={() => refreshSummary(client.id)}
+                        disabled={summaryLoading}
+                        className="text-[10px] text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
+                      >
+                        {summaryLoading ? 'Updating…' : 'Refresh'}
+                      </button>
                     </div>
+                    {aiSummary ? (
+                      <div className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2 whitespace-pre-wrap">
+                        {aiSummary}
+                      </div>
+                    ) : summaryLoading ? (
+                      <div className="text-sm text-muted-foreground bg-secondary/30 rounded-md px-3 py-2 animate-pulse">
+                        Summarizing recent activity…
+                      </div>
+                    ) : (
+                      <div className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2">
+                        {client.last_call_summary}
+                      </div>
+                    )}
                   </div>
                 )}
                 {client.promises_made && (

@@ -113,7 +113,76 @@
 /* JARVIS cursor blink */
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .cursor-blink::after { content: '▋'; animation: blink 1s step-end infinite; margin-left: 1px; }
-:root { --jarvis-blue: #22ccff; }
+:root { --jarvis-blue: #22ccff; --jarvis-level: 0; }
+
+/* ─── JARVIS HUD (widget button + popup panel) ───────────────────────────── */
+
+.jarvis-widget-btn {
+  background: radial-gradient(circle at 50% 40%, rgba(10, 30, 45, 0.95), rgba(4, 12, 20, 0.98));
+  border: 1px solid rgba(34, 204, 255, 0.35);
+  box-shadow:
+    0 0 12px rgba(34, 204, 255, 0.18),
+    inset 0 0 18px rgba(34, 204, 255, 0.08);
+  animation: hud-breathe 3.2s ease-in-out infinite;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.jarvis-widget-btn--hot {
+  border-color: rgba(34, 204, 255, 0.8);
+  box-shadow: 0 0 22px rgba(34, 204, 255, 0.45), inset 0 0 22px rgba(34, 204, 255, 0.15);
+  animation: none;
+}
+.jarvis-widget-btn--speaking {
+  animation: none;
+  border-color: rgba(34, 204, 255, calc(0.4 + var(--jarvis-level) * 0.6));
+  box-shadow:
+    0 0 calc(14px + var(--jarvis-level) * 34px) rgba(34, 204, 255, calc(0.25 + var(--jarvis-level) * 0.5)),
+    inset 0 0 20px rgba(34, 204, 255, 0.12);
+}
+
+/* Prominent breathing — glow AND scale */
+@keyframes hud-breathe {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(34, 204, 255, 0.12), inset 0 0 14px rgba(34, 204, 255, 0.06);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(34, 204, 255, 0.4), inset 0 0 24px rgba(34, 204, 255, 0.14);
+    transform: scale(1.06);
+  }
+}
+
+.jarvis-hud {
+  background:
+    linear-gradient(160deg, rgba(8, 22, 34, 0.96), rgba(3, 10, 18, 0.98));
+  border: 1px solid rgba(34, 204, 255, 0.28);
+  box-shadow:
+    0 0 30px rgba(34, 204, 255, 0.12),
+    0 12px 40px rgba(0, 0, 0, 0.6),
+    inset 0 0 40px rgba(34, 204, 255, 0.03);
+  backdrop-filter: blur(14px);
+  position: fixed;
+}
+.jarvis-hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(34, 204, 255, 0.015) 3px 4px);
+  border-radius: inherit;
+}
+.jarvis-hud::after {
+  /* corner brackets */
+  content: '';
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  border-radius: 10px;
+  background:
+    linear-gradient(to right, rgba(34,204,255,0.5) 14px, transparent 14px) top left / 100% 1px no-repeat,
+    linear-gradient(to left,  rgba(34,204,255,0.5) 14px, transparent 14px) top right / 100% 1px no-repeat;
+  opacity: 0.35;
+}
 
 /* ─── JARVIS Arc Reactor Orb ─────────────────────────────────────────────── */
 
@@ -125,7 +194,10 @@
 .jarvis-orb .orb-ripple { stroke: var(--jarvis-blue); opacity: 0; }
 
 .jarvis-orb .orb-spokes,
-.jarvis-orb .orb-ripple {
+.jarvis-orb .orb-ripple,
+.jarvis-orb .orb-core,
+.jarvis-orb .orb-core-glow,
+.jarvis-orb .orb-mid {
   transform-box: view-box;
   transform-origin: 50% 50%;
 }
@@ -153,15 +225,31 @@
 .jarvis-orb--thinking .orb-ring { animation: orb-dash 1s linear infinite; }
 .jarvis-orb--thinking .orb-spokes { opacity: 0.4; }
 
-/* speaking — ripples radiating out */
+/* speaking — the orb rides the actual voice waveform (--jarvis-level 0..1) */
 .jarvis-orb--speaking .orb-ripple-1 { animation: orb-ripple 1.4s ease-out infinite; }
 .jarvis-orb--speaking .orb-ripple-2 { animation: orb-ripple 1.4s ease-out 0.7s infinite; }
-.jarvis-orb--speaking .orb-core { animation: orb-pulse 0.7s ease-in-out infinite; }
-.jarvis-orb--speaking .orb-ring { filter: drop-shadow(0 0 4px var(--jarvis-blue)); }
+.jarvis-orb--speaking .orb-core {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: scale(calc(1 + var(--jarvis-level) * 0.65));
+  opacity: calc(0.65 + var(--jarvis-level) * 0.35);
+}
+.jarvis-orb--speaking .orb-core-glow {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: scale(calc(1 + var(--jarvis-level) * 1.1));
+  opacity: calc(0.25 + var(--jarvis-level) * 0.55);
+}
+.jarvis-orb--speaking .orb-mid {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: scale(calc(1 + var(--jarvis-level) * 0.3));
+}
+.jarvis-orb--speaking .orb-ring { filter: drop-shadow(0 0 calc(3px + var(--jarvis-level) * 9px) var(--jarvis-blue)); }
 
 @keyframes orb-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.88); }
 }
 @keyframes orb-spin { to { transform: rotate(360deg); } }
 @keyframes orb-dash { to { stroke-dashoffset: -26; } }

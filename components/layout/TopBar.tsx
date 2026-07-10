@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,18 @@ export function TopBar() {
   const router = useRouter()
   const { user } = useAuth()
   const isVA = user?.userType === 'va'
+
+  // JARVIS opens/closes the Log Call dialog to drive it on-screen
+  useEffect(() => {
+    const onOpen = () => setLogCallOpen(true)
+    const onClose = () => setLogCallOpen(false)
+    window.addEventListener('jarvis:open-log-call', onOpen)
+    window.addEventListener('jarvis:close-log-call', onClose)
+    return () => {
+      window.removeEventListener('jarvis:open-log-call', onOpen)
+      window.removeEventListener('jarvis:close-log-call', onClose)
+    }
+  }, [])
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()

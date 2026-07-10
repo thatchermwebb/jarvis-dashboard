@@ -6,9 +6,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const WAKE_RE = /\b(?:hey\s+)?(?:jarvis|jarvys|jervis|jarves|travis|drivers)\b/i
-// Barge-in requires the full "hey jarvis" so JARVIS's own speech (which never
-// says that phrase) can't interrupt itself, and stray noise won't either.
+// Barge-in with the full "hey jarvis" is always safe; a bare "jarvis" barge is
+// allowed too unless JARVIS's own current speech contains the word.
 const BARGE_RE = /\bhey\s+(?:jarvis|jarvys|jervis|jarves|travis|drivers)\b/i
+const POWER_RE = /\bpower\s+(?:down|off)\b/i
 
 export type RecognitionMode = 'wake' | 'command' | 'speaking'
 
@@ -18,8 +19,15 @@ export interface WakeWordCallbacks {
   onInterim: (transcript: string) => void
   onTimeout: () => void
   onBargeIn: (trailingCommand: string) => void
+  onPowerDown: () => void
   onPermissionDenied: () => void
   onStateChange: (listening: boolean) => void
+}
+
+// Loose text normalization for comparing what the mic heard against what
+// JARVIS just said (self-echo detection).
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 export function speechRecognitionSupported(): boolean {
@@ -44,6 +52,8 @@ export class WakeWordManager {
   private starting = false     // guard against overlapping spinUp() calls
   private speakingSince = 0    // when speaking mode began (barge-in grace window)
   private prevMode: 'wake' | 'command' = 'wake' // mode to restore after speaking
+  private echoText = ''        // normalized text JARVIS is saying / just said
+  private echoUntil = 0        // echo filter stays active until this timestamp
   private cb: WakeWordCallbacks
 
   constructor(callbacks: WakeWordCallbacks) {
@@ -76,20 +86,45 @@ export class WakeWordManager {
    * (including JARVIS's own voice bleeding into the mic) is ignored, so the
    * command buffer stays clean without fully deafening ourselves.
    */
-  enterSpeakingMode(): void {
+  enterSpeakingMode(echoText?: string): void {
     if (this.mode !== 'speaking') this.prevMode = this.mode === 'command' ? 'command' : 'wake'
     this.mode = 'speaking'
     this.commandBuffer = ''
     this.speakingSince = Date.now()
+    if (echoText) this.echoText = normalize(echoText)
+    this.echoUntil = Number.MAX_SAFE_INTEGER // active for the whole utterance
     this.clearTimers()
     if (this.enabled && !this.recognition) this.spinUp()
   }
 
   /** JARVIS finished speaking normally — restore the mode we were in before. */
   endSpeaking(): void {
+    // Recognition results lag real audio — keep filtering echoes for a bit
+    this.echoUntil = Date.now() + 2500
     if (this.mode !== 'speaking') return
     if (this.prevMode === 'command') this.enterCommandMode()
     else this.enterWakeMode()
+  }
+
+  /**
+   * Register text JARVIS is about to say WITHOUT switching to speaking mode
+   * (used for short prompts spoken while a command window stays open, e.g.
+   * "Sir?" after a wake — the user's answer must still be captured).
+   */
+  noteEcho(text: string): void {
+    this.echoText = normalize(text)
+    this.echoUntil = Date.now() + Math.max(2500, text.length * 90 + 1500)
+  }
+
+  /** True when a transcript is (mostly) JARVIS's own voice bleeding back in. */
+  private isEcho(transcript: string): boolean {
+    if (Date.now() > this.echoUntil || !this.echoText) return false
+    const t = normalize(transcript)
+    if (!t) return true
+    if (this.echoText.includes(t)) return true
+    const words = t.split(' ')
+    const hits = words.filter(w => w.length > 2 && this.echoText.includes(w)).length
+    return words.length >= 3 && hits / words.length >= 0.7
   }
 
   /** Fully pause recognition (tab hidden). */
@@ -175,11 +210,26 @@ export class WakeWordManager {
       }
       const combined = (finals + interim).trim()
 
+      // "Power down" / "power off" reacts IMMEDIATELY in every mode — even
+      // mid-speech, even mid-wizard. Guarded against JARVIS's own voice.
+      if (POWER_RE.test(combined) && !POWER_RE.test(this.echoText)) {
+        this.clearTimers()
+        this.mode = 'wake'
+        this.commandBuffer = ''
+        this.echoText = ''
+        this.echoUntil = 0
+        this.cb.onPowerDown()
+        return
+      }
+
       if (this.mode === 'speaking') {
-        // Only react to a full "Hey JARVIS" barge-in; ignore all else (incl. our
-        // own voice). A short grace window avoids catching residual audio.
+        // React only to a wake-word barge-in; ignore all else (incl. our own
+        // voice). Bare "JARVIS" barges unless JARVIS's own speech contains the
+        // word — then the full "hey jarvis" is required so it can't
+        // interrupt itself.
         if (Date.now() - this.speakingSince < 400) return
-        const bm = BARGE_RE.exec(combined)
+        const bargeRe = this.echoText.includes('jarvis') ? BARGE_RE : WAKE_RE
+        const bm = bargeRe.exec(combined)
         if (bm) {
           const now = Date.now()
           if (now - this.lastWakeAt < 1500) return
@@ -195,10 +245,13 @@ export class WakeWordManager {
       }
 
       if (this.mode === 'wake') {
+        if (this.isEcho(combined)) return
         this.handleWakeScan(combined)
       } else {
         if (combined) this.lastResultAt = Date.now()
         let f = finals.trim()
+        // Drop finals that are just JARVIS's own voice arriving late
+        if (f && this.isEcho(f)) f = ''
         if (f) {
           // The final transcript of a "Hey JARVIS, <command>" breath re-includes
           // the wake phrase the interim already triggered on — strip it and
@@ -212,7 +265,7 @@ export class WakeWordManager {
           }
         }
         const preview = (this.commandBuffer + ' ' + interim).trim()
-        if (preview) this.cb.onInterim(preview)
+        if (preview && !this.isEcho(preview)) this.cb.onInterim(preview)
         this.bumpSilenceTimer()
       }
     }
@@ -294,7 +347,7 @@ export class WakeWordManager {
     this.silenceTimer = setTimeout(() => {
       const utterance = this.commandBuffer.trim()
       this.commandBuffer = ''
-      if (utterance) {
+      if (utterance && !this.isEcho(utterance)) {
         // Real utterance dispatched — the deadline has served its purpose
         if (this.initialSilenceTimer) { clearTimeout(this.initialSilenceTimer); this.initialSilenceTimer = null }
         this.cb.onUtterance(utterance)

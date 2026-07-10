@@ -148,8 +148,13 @@ export interface Client {
   save_action?: string
   thatcher_needed?: boolean
   va_needed?: boolean
+  trepp_needed?: boolean
   payment_issue?: boolean
   urgency_level?: UrgencyLevel
+
+  // AI situation summary (cached)
+  ai_situation_summary?: string | null
+  ai_summary_updated_at?: string | null
 
   // Links
   slack_thread?: string
