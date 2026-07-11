@@ -95,6 +95,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const managerRef = useRef<WakeWordManager | null>(null)
   const wizardRef = useRef<WizardState | null>(null)
   const formDrivenRef = useRef(false) // JARVIS is driving the on-screen dialog
+  const wizardGenRef = useRef(0)      // wizard session counter — stale effects can't close a newer session's dialog
   const voiceEnabledRef = useRef(false)
   const busyRef = useRef(false)
   const bargedRef = useRef(false)
@@ -171,22 +172,34 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     return clientsRef.current
   }, [])
 
+  // Push draft fields into the on-screen dialog. Pass `full` to re-drive
+  // everything (used when the dialog (re)opens mid-wizard).
+  const driveDraft = useCallback((draft: Record<string, string | undefined>, prev?: Record<string, string | undefined>) => {
+    const p = prev ?? {}
+    if (draft.client_id && draft.client_id !== p.client_id) {
+      driveLogField({ field: 'client', value: draft.client_id, label: draft.client_name })
+    }
+    for (const f of ['log_type', 'outcome', 'summary', 'sentiment', 'promises_made', 'next_step', 'followup_date', 'followup_time'] as const) {
+      if (draft[f] !== undefined && draft[f] !== p[f]) driveLogField({ field: f, value: draft[f] ?? '' })
+    }
+  }, [])
+
   const processResult = useCallback(async (result: WizardResult): Promise<void> => {
+    const gen = wizardGenRef.current
     const prevDraft = wizardRef.current?.draft
     setWizard(result.state)
     wizardRef.current = result.state
 
     // Mirror every captured field into the on-screen Log Call dialog so the
-    // user watches JARVIS fill the real form.
+    // user watches JARVIS fill the real form. openLogCallForm() is idempotent —
+    // if the dialog got closed (manually, or by a stale event) it reopens and
+    // resyncs via the jarvis:log-dialog-state handshake.
     if (formDrivenRef.current && result.state) {
-      const d = result.state.draft as unknown as Record<string, string | undefined>
-      const p = (prevDraft ?? {}) as unknown as Record<string, string | undefined>
-      if (d.client_id && d.client_id !== p.client_id) {
-        driveLogField({ field: 'client', value: d.client_id, label: d.client_name })
-      }
-      for (const f of ['log_type', 'outcome', 'summary', 'sentiment', 'promises_made', 'next_step', 'followup_date', 'followup_time'] as const) {
-        if (d[f] !== undefined && d[f] !== p[f]) driveLogField({ field: f, value: d[f] ?? '' })
-      }
+      openLogCallForm()
+      driveDraft(
+        result.state.draft as unknown as Record<string, string | undefined>,
+        prevDraft as unknown as Record<string, string | undefined> | undefined,
+      )
     }
 
     for (const effect of result.effects) {
@@ -276,7 +289,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
             if (!res.ok) throw new Error('save failed')
             const saved = await res.json()
             toast.success(`Call logged for ${d.client_name}`)
-            if (formDrivenRef.current) {
+            if (formDrivenRef.current && gen === wizardGenRef.current) {
               closeLogCallForm(true)
               formDrivenRef.current = false
             }
@@ -308,13 +321,18 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
         case 'abort':
         case 'finished': {
-          if (formDrivenRef.current) {
+          // Only close the dialog if a NEWER wizard hasn't taken over —
+          // otherwise a slow abort from the old session would slam the
+          // window shut right after the new session opened it.
+          if (formDrivenRef.current && gen === wizardGenRef.current) {
             closeLogCallForm(false)
             formDrivenRef.current = false
           }
-          setWizard(null)
-          wizardRef.current = null
-          returnToWake()
+          if (gen === wizardGenRef.current) {
+            setWizard(null)
+            wizardRef.current = null
+            returnToWake()
+          }
           break
         }
       }
@@ -405,7 +423,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
   const startLogWizard = useCallback(async (prefillType?: string, clientText?: string) => {
     setPanelOpen(true)
-    // JARVIS controls the real on-screen dialog — open it and drive it live
+    // JARVIS controls the real on-screen dialog — open it and drive it live.
+    // Bump the session counter so any stale close from a previous wizard is
+    // ignored.
+    wizardGenRef.current++
     formDrivenRef.current = true
     openLogCallForm()
     // Warm the TTS cache for the fixed prompts so each step speaks instantly
@@ -479,6 +500,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
   const handleInputRef = useRef(handleInput)
   handleInputRef.current = handleInput
+  const driveDraftRef = useRef(driveDraft)
+  driveDraftRef.current = driveDraft
 
   // ─── Recognition lifecycle ─────────────────────────────────────────────────
 
@@ -561,8 +584,18 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     }
     document.addEventListener('visibilitychange', onVisibility)
 
+    // A Log Call dialog just opened. If JARVIS is mid-wizard, re-drive the
+    // whole draft into it (covers reopen-after-manual-close and races).
+    const onDialogOpen = () => {
+      if (!formDrivenRef.current || !wizardRef.current) return
+      const draft = wizardRef.current.draft as unknown as Record<string, string | undefined>
+      setTimeout(() => driveDraftRef.current(draft), 300)
+    }
+    window.addEventListener('jarvis:log-dialog-state', onDialogOpen)
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('jarvis:log-dialog-state', onDialogOpen)
       manager.stop()
       stopSpeaking()
       setLevelListener(null)

@@ -253,6 +253,9 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
   useEffect(() => {
     if (!open) return
+    // Announce to JARVIS that a dialog is live — it re-drives the draft if a
+    // voice wizard is in progress.
+    window.dispatchEvent(new CustomEvent('jarvis:log-dialog-state', { detail: { open: true } }))
 
     function animateType(field: string, value: string) {
       const timers = typeTimersRef.current

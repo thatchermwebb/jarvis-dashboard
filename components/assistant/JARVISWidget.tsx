@@ -58,16 +58,26 @@ export function JARVISWidget({ mobile = false }: { mobile?: boolean }) {
     setPos(clampPos({ x: d.origX + dx, y: d.origY + dy }))
   }, [])
 
+  const suppressClickRef = useRef(false)
+
   const onPointerUp = useCallback(() => {
     const d = dragRef.current
     dragRef.current = null
     if (!d) return
     if (d.moved) {
+      // A drag, not a click — persist the spot and swallow the click event
+      suppressClickRef.current = true
       const p = posRef.current
       if (p) localStorage.setItem('jarvis_widget_pos', JSON.stringify(p))
-    } else {
-      setPanelOpen(!panelOpen)
     }
+  }, [])
+
+  const onClick = useCallback(() => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    setPanelOpen(!panelOpen)
   }, [panelOpen, setPanelOpen])
 
   if (!pos) return null
@@ -78,9 +88,11 @@ export function JARVISWidget({ mobile = false }: { mobile?: boolean }) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onClick={onClick}
         className={cn(
           'fixed z-50 rounded-full jarvis-widget-btn flex items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing',
           status === 'listening' && 'jarvis-widget-btn--hot',
+          status === 'thinking' && 'jarvis-widget-btn--thinking',
           status === 'speaking' && 'jarvis-widget-btn--speaking',
         )}
         style={{ left: pos.x, top: pos.y, width: SIZE, height: SIZE }}

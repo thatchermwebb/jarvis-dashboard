@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic, buildJARVISSystemPrompt } from '@/lib/anthropic'
 import { localToday } from '@/lib/utils'
+import { matchClients } from '@/lib/voice/localParsers'
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Client } from '@/types'
 
@@ -85,12 +86,23 @@ async function executeTool(
   switch (name) {
     case 'search_clients': {
       const term = String(input.term ?? '')
-      const { data } = await supabase
+      // Exact/substring hits first (also covers phone + email)
+      const { data: exact } = await supabase
         .from('clients')
         .select('id, name, business_name, stage, next_followup_date, last_client_sentiment')
         .or(`name.ilike.%${term}%,business_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%`)
         .limit(8)
-      return data ?? []
+      if (exact && exact.length) return exact
+
+      // Fuzzy fallback — voice input misspells names constantly
+      // ("Shepherd" vs "Shepard"), so edit-distance match against the roster.
+      const { data: all } = await supabase
+        .from('clients')
+        .select('id, name, business_name, stage, next_followup_date, last_client_sentiment')
+        .neq('stage', 'churned')
+      const fuzzy = matchClients(term, (all ?? []).map(c => ({ id: c.id, name: c.name, business_name: c.business_name })))
+      const byId = new Map((all ?? []).map(c => [c.id, c]))
+      return fuzzy.map(f => byId.get(f.id)).filter(Boolean)
     }
 
     case 'get_metrics': {
@@ -129,11 +141,19 @@ async function executeTool(
       let clientNote = ''
       if (input.client_name) {
         const term = String(input.client_name)
-        const { data: matches } = await supabase
+        let { data: matches } = await supabase
           .from('clients')
           .select('id, name, business_name')
           .or(`name.ilike.%${term}%,business_name.ilike.%${term}%`)
           .limit(3)
+        if (!matches || matches.length === 0) {
+          // Fuzzy fallback for misheard/misspelled names
+          const { data: all } = await supabase
+            .from('clients')
+            .select('id, name, business_name')
+            .neq('stage', 'churned')
+          matches = matchClients(term, (all ?? [])).slice(0, 3) as typeof matches
+        }
         if (matches && matches.length === 1) clientId = matches[0].id
         else if (matches && matches.length > 1) {
           return { error: 'multiple_client_matches', matches: matches.map(m => m.name), instruction: 'Ask the user which client they mean. Do not create the task yet.' }
@@ -226,6 +246,7 @@ VOICE MODE RULES:
 - Be CONVERSATIONAL. Small talk, banter, "how's it going" — play along with charm and wit, no tools needed. You are not a form; you are a personality. Never respond to casual chat by asking what they need.
 - Never ask for clarification unless you were clearly asked to DO something and genuinely cannot determine what. When merely chatting or when a reasonable interpretation exists, just run with it.
 - Use tools to act and to answer with real numbers — never guess figures.
+- Voice transcription mangles names ("Shepherd" for "Shepard"). search_clients is fuzzy — trust its top match. If a search misses, retry ONCE with just the first 4-5 letters of the name before telling the user it's not found. If a fuzzy match is close (e.g. Shepherd→Shepard), assume it's them and proceed.
 - When asked to create a task, resolve dates yourself (e.g. "tomorrow" = the day after today) and call create_task once with everything filled in. Convert times like "3pm" to 15:00.
 - If a tool reports multiple_client_matches, ask which client they meant.
 - If a tool returns an error, say so honestly (with wit, if it fits) — NEVER claim an action succeeded when the tool result contains an error.${hint === 'task' ? '\n- The user is asking to create a task. Extract title, assignee, date, time, priority and create it now.' : ''}`

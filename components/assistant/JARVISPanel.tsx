@@ -80,17 +80,15 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
 
   return (
     <div
-      className="fixed z-50 jarvis-hud flex flex-col rounded-2xl overflow-hidden"
+      className="fixed z-50 jarvis-hud flex flex-col overflow-hidden"
       style={{ ...style, maxHeight: 'min(560px, 72vh)' }}
     >
+      <div className="jarvis-hud-sweep" />
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#22ccff]/15 flex-shrink-0">
+      <div className="flex items-center gap-2.5 px-4 pt-3 pb-2 flex-shrink-0">
         <ArcReactorOrb status={status} size={26} />
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold tracking-widest text-[#9be5ff]">JARVIS</div>
-          <div className="text-[10px] text-[#22ccff]/60 truncate">
-            {permissionDenied ? 'Mic blocked — check browser settings' : STATUS_LABEL[status]}
-          </div>
+          <div className="text-sm font-semibold tracking-[0.3em] text-[#9be5ff]">JARVIS</div>
         </div>
         {supported && (
           <button
@@ -115,6 +113,15 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
         </button>
       </div>
 
+      {/* Status readout strip */}
+      <div className="flex items-center gap-3 px-4 py-1.5 border-y border-[#22ccff]/12 flex-shrink-0 text-[9px] tracking-[0.22em] text-[#22ccff]/55 uppercase">
+        <span className="flex items-center gap-1.5"><span className="jarvis-dot" /> SYS.ONLINE</span>
+        <span>MIC.{permissionDenied ? 'BLOCKED' : voiceEnabled ? 'HOT' : 'COLD'}</span>
+        <span className="ml-auto text-[#22ccff]/80">
+          {permissionDenied ? 'CHECK BROWSER' : (STATUS_LABEL[status] ?? status).toUpperCase()}
+        </span>
+      </div>
+
       {/* Live wizard draft (mirror of what JARVIS is typing on screen) */}
       {wizard && wizard.step !== 'done' && (
         <div className="px-4 pt-3 flex-shrink-0">
@@ -135,7 +142,7 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
             </p>
             <button
               onClick={() => startLogWizard()}
-              className="w-full flex items-center gap-2 text-left text-xs px-3 py-2 rounded-lg bg-[#22ccff]/10 hover:bg-[#22ccff]/20 text-[#9be5ff] transition-colors border border-[#22ccff]/25 font-medium"
+              className="w-full flex items-center gap-2 text-left text-xs px-3 py-2 rounded-md bg-[#22ccff]/10 hover:bg-[#22ccff]/20 text-[#9be5ff] transition-colors border border-[#22ccff]/25 font-medium"
             >
               <PhoneCall className="w-3.5 h-3.5" /> Log a call
             </button>
@@ -144,7 +151,7 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
                 <button
                   key={p}
                   onClick={() => send(p)}
-                  className="w-full text-left text-[11px] px-3 py-1.5 rounded-lg bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors border border-border/50"
+                  className="w-full text-left text-[11px] px-3 py-1.5 rounded-md bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors border border-border/50"
                 >
                   {p}
                 </button>
@@ -156,7 +163,7 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
         {messages.map((m, i) => (
           <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
             <div className={cn(
-              'max-w-[88%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap',
+              'max-w-[88%] rounded-md px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap',
               m.role === 'user'
                 ? 'bg-[#22ccff]/15 text-[#c9f0ff] border border-[#22ccff]/20'
                 : 'bg-secondary/60 text-foreground',
@@ -169,7 +176,7 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
         {/* Live interim transcript while speaking to JARVIS */}
         {interim && (
           <div className="flex justify-end">
-            <div className="max-w-[88%] rounded-xl px-3 py-2 text-xs bg-[#22ccff]/25 text-[#c9f0ff]/80 italic">
+            <div className="max-w-[88%] rounded-md px-3 py-2 text-xs bg-[#22ccff]/25 text-[#c9f0ff]/80 italic">
               {interim}
             </div>
           </div>
@@ -177,7 +184,7 @@ export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
 
         {busy && status === 'thinking' && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex justify-start">
-            <div className="rounded-xl px-3 py-2 text-xs bg-secondary/60 text-muted-foreground animate-pulse">
+            <div className="rounded-md px-3 py-2 text-xs bg-secondary/60 text-muted-foreground animate-pulse">
               Thinking...
             </div>
           </div>
