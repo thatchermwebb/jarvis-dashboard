@@ -15,7 +15,8 @@ export type RecognitionMode = 'wake' | 'command' | 'speaking'
 
 export interface WakeWordCallbacks {
   onWake: (trailingCommand: string) => void
-  onUtterance: (transcript: string) => void
+  /** alternatives = other recognizer hypotheses for the same audio (may be empty) */
+  onUtterance: (transcript: string, alternatives: string[]) => void
   onInterim: (transcript: string) => void
   onTimeout: () => void
   onBargeIn: (trailingCommand: string) => void
@@ -54,6 +55,7 @@ export class WakeWordManager {
   private prevMode: 'wake' | 'command' = 'wake' // mode to restore after speaking
   private echoText = ''        // normalized text JARVIS is saying / just said
   private echoUntil = 0        // echo filter stays active until this timestamp
+  private pendingAlternatives: string[] = [] // recognizer hypotheses for the buffered utterance
   private cb: WakeWordCallbacks
 
   constructor(callbacks: WakeWordCallbacks) {
@@ -146,6 +148,7 @@ export class WakeWordManager {
   enterCommandMode(opts?: { initialSilenceTimeoutMs?: number; silenceMs?: number }): void {
     this.mode = 'command'
     this.commandBuffer = ''
+    this.pendingAlternatives = []
     this.lastResultAt = 0
     this.silenceMs = opts?.silenceMs ?? 900
     this.clearTimers()
@@ -178,6 +181,7 @@ export class WakeWordManager {
   enterWakeMode(): void {
     this.mode = 'wake'
     this.commandBuffer = ''
+    this.pendingAlternatives = []
     this.clearTimers()
   }
 
@@ -197,6 +201,7 @@ export class WakeWordManager {
     rec.continuous = true
     rec.interimResults = true
     rec.lang = 'en-US'
+    rec.maxAlternatives = 3 // extra hypotheses help fuzzy name matching
 
     rec.onresult = (event: any) => {
       // A healthy session that's producing results — reset the failure backoff
@@ -205,8 +210,14 @@ export class WakeWordManager {
       let finals = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i]
-        if (r.isFinal) finals += r[0].transcript + ' '
-        else interim += r[0].transcript + ' '
+        if (r.isFinal) {
+          finals += r[0].transcript + ' '
+          // Collect the recognizer's other hypotheses for this chunk
+          for (let a = 1; a < Math.min(r.length, 3); a++) {
+            const alt = r[a]?.transcript?.trim()
+            if (alt) this.pendingAlternatives.push(alt)
+          }
+        } else interim += r[0].transcript + ' '
       }
       const combined = (finals + interim).trim()
 
@@ -346,11 +357,13 @@ export class WakeWordManager {
     if (this.silenceTimer) clearTimeout(this.silenceTimer)
     this.silenceTimer = setTimeout(() => {
       const utterance = this.commandBuffer.trim()
+      const alternatives = this.pendingAlternatives.slice(0, 4)
       this.commandBuffer = ''
+      this.pendingAlternatives = []
       if (utterance && !this.isEcho(utterance)) {
         // Real utterance dispatched — the deadline has served its purpose
         if (this.initialSilenceTimer) { clearTimeout(this.initialSilenceTimer); this.initialSilenceTimer = null }
-        this.cb.onUtterance(utterance)
+        this.cb.onUtterance(utterance, alternatives)
       }
     }, this.silenceMs)
   }

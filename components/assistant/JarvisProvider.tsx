@@ -73,8 +73,12 @@ function chime() {
   } catch { /* audio blocked — fine */ }
 }
 
-// Captures type and optional client: "log a call for Kelly Goforth"
-const LOG_INTENT_RE = /\blog (?:a |another |the )?(call|text|meeting|note|voicemail|email)?(?:\s+(?:for|with|on)\s+(.+?))?[.!?]?$/
+// Captures type and optional client: "log a call for Kelly Goforth".
+// Deliberately loose — transcription drops/swaps small words ("log and text
+// with Kelly" = "log a text with Kelly", "lock a call" = "log a call").
+// Anything this misses falls through to the agent, which has a
+// start_call_log tool and routes it back here.
+const LOG_INTENT_RE = /\b(?:log|lock|logging)\s+(?:a |an |and |another |the |my )?(call|text|meeting|note|voicemail|email)?(?:\s+(?:for|with|on|about)\s+(.+?))?[.!?]?$/
 const TASK_INTENT_RE = /\b(?:add|create|put in|make)\b.*\btask\b|\btask\b.*\bfor (?:diego|thatcher|trepp)\b/
 const DISMISS_RE = /^(?:cancel|stop|never ?mind|go to sleep|goodbye|thats all|dismiss(ed)?)[.!]?$/
 const POWER_DOWN_RE = /\bpower (?:down|off)\b/
@@ -96,6 +100,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const wizardRef = useRef<WizardState | null>(null)
   const formDrivenRef = useRef(false) // JARVIS is driving the on-screen dialog
   const wizardGenRef = useRef(0)      // wizard session counter — stale effects can't close a newer session's dialog
+  const startLogWizardRef = useRef<(prefillType?: string, clientText?: string) => Promise<void>>(async () => {})
+  const lastAlternativesRef = useRef<string[]>([]) // recognition alternatives for the last utterance
   const voiceEnabledRef = useRef(false)
   const busyRef = useRef(false)
   const bargedRef = useRef(false)
@@ -218,10 +224,18 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         }
 
         case 'parse_fallback': {
-          // 'client_local_first' is resolved locally with the client list
+          // 'client_local_first' is resolved locally with the client list.
+          // Try the recognizer's alternative hypotheses too — the top
+          // transcript often mangles names an alternative got right.
           if (effect.field === 'client_local_first') {
             const clients = await ensureClients()
-            const r = resolveClientUtterance(state, effect.transcript, clients)
+            let r = resolveClientUtterance(state, effect.transcript, clients)
+            if (!r.state.draft.client_id && r.state.candidates.length === 0) {
+              for (const alt of lastAlternativesRef.current) {
+                const altR = resolveClientUtterance(state, alt, clients)
+                if (altR.state.draft.client_id || altR.state.candidates.length > 0) { r = altR; break }
+              }
+            }
             await processResult(r)
             return
           }
@@ -241,6 +255,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
                   step: state.step,
                   prompt: currentPrompt(state),
                   draft: effect.field === 'wizard' ? state.draft : undefined,
+                  alternatives: effect.field === 'client' ? lastAlternativesRef.current : undefined,
                 },
               }),
             })
@@ -355,12 +370,26 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         }),
       })
       const data = await res.json().catch(() => ({}))
+      let wizardLaunch: { log_type?: string | null; client_name?: string | null } | null = null
       for (const action of data.actions ?? []) {
+        if (action.type === 'start_log_wizard') {
+          wizardLaunch = action.data ?? {}
+          continue // no toast — the wizard opening IS the feedback
+        }
         toast.success(action.summary)
       }
       // Never mask an error response as success
       const reply = data.reply ?? (res.ok ? 'Done, sir.' : 'I hit a snag, sir. Do try again.')
       await say(reply)
+      if (wizardLaunch) {
+        // The agent decided this was a "log a contact" request — hand off to
+        // the wizard with the canonical client name (skips the client question)
+        await startLogWizardRef.current(
+          wizardLaunch.log_type ?? undefined,
+          wizardLaunch.client_name ?? undefined,
+        )
+        return
+      }
       // Keep a follow-up window open — the command deadline returns us to
       // passive wake mode automatically if the user says nothing.
       if (voiceEnabledRef.current) {
@@ -390,6 +419,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           message: text,
           history: messagesRef.current.slice(0, -1).slice(-12),
+          user: getActiveUserFirstName(),
         }),
       })
       if (!res.body) throw new Error('No stream')
@@ -452,6 +482,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const handleInput = useCallback(async (text: string, source: 'voice' | 'text') => {
     const trimmed = text.trim()
     if (!trimmed || busyRef.current) return
+    if (source === 'text') lastAlternativesRef.current = [] // no stale voice hypotheses
     setInterim('')
     appendMessage({ role: 'user', content: trimmed })
 
@@ -502,6 +533,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   handleInputRef.current = handleInput
   const driveDraftRef = useRef(driveDraft)
   driveDraftRef.current = driveDraft
+  startLogWizardRef.current = startLogWizard
 
   // ─── Recognition lifecycle ─────────────────────────────────────────────────
 
@@ -526,7 +558,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
           void speak('Sir?')
         }
       },
-      onUtterance: (transcript) => {
+      onUtterance: (transcript, alternatives) => {
+        lastAlternativesRef.current = alternatives ?? []
         void handleInputRef.current(transcript, 'voice')
       },
       onBargeIn: (trailing) => {

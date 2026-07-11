@@ -386,10 +386,8 @@ function AffiliateSelect({
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
-export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Props) {
-  const [loading, setLoading] = useState(false)
-  const [affiliates, setAffiliates] = useState<Affiliate[]>([])
-  const [form, setForm] = useState({
+function buildFormState(client?: Client, defaultStage?: ClientStage) {
+  return {
     name: client?.name ?? '',
     business_name: client?.business_name ?? '',
     owner_name: client?.owner_name ?? '',
@@ -410,11 +408,37 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
     deal_notes: client?.deal_notes ?? '',
     advertised_package: client?.advertised_package ?? '',
     affiliate_id: client?.affiliate_id ?? '',
-  })
+  }
+}
 
+export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Props) {
+  const [loading, setLoading] = useState(false)
+  const [affiliates, setAffiliates] = useState<Affiliate[]>([])
+  const [form, setForm] = useState(() => buildFormState(client, defaultStage))
+
+  // Re-sync the form with the CURRENT client record every time the dialog
+  // opens. Without this the form keeps whatever the client looked like when
+  // the page mounted — then saving writes those stale (often empty) values
+  // over anything changed since, silently wiping fields like
+  // advertised_package a day later.
+  const wasOpenRef = useRef(false)
   useEffect(() => {
-    if (open && defaultStage && !client) setForm(f => ({ ...f, stage: defaultStage }))
-  }, [open, defaultStage, client])
+    if (open && !wasOpenRef.current) {
+      setForm(buildFormState(client, defaultStage))
+      // The page's copy of the client can itself be stale (tab open since
+      // yesterday, edits from another user/session). Pull the live row and
+      // re-seed the form before the user starts typing.
+      if (client?.id) {
+        fetch(`/api/clients/${client.id}`)
+          .then(r => (r.ok ? r.json() : null))
+          .then((fresh: Client | null) => {
+            if (fresh?.id === client.id) setForm(buildFormState(fresh, defaultStage))
+          })
+          .catch(() => { /* keep the local copy */ })
+      }
+    }
+    wasOpenRef.current = open
+  }, [open, client, defaultStage])
 
   useEffect(() => {
     if (!open) return

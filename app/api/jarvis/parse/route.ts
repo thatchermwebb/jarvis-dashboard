@@ -77,6 +77,7 @@ const FIELD_SCHEMAS: Record<string, object> = {
         properties: {
           stage: { type: 'string', enum: ['churn_risk'] },
           thatcher_needed: { type: 'boolean' },
+          trepp_needed: { type: 'boolean' },
           payment_issue: { type: 'boolean' },
           urgency_level: { type: 'string', enum: ['high'] },
           va_needed: { type: 'boolean' },
@@ -124,10 +125,14 @@ const FIELD_INSTRUCTIONS: Record<string, string> = {
   date: 'Convert the spoken follow-up timing into a concrete date (and time if mentioned). "In a couple weeks" = 14 days. If they clearly want no follow-up, use date "none".',
   yes_no: 'Determine whether the user is confirming (true) or declining (false).',
   client: 'Match the transcript to one client from the provided list (names may be misheard by speech recognition — match phonetically similar names). Return the id.',
-  status_flags: 'The user was asked if any client statuses should be flagged. Extract which flags they want set. Speech recognition mishears "Thatcher" as "that sure", "that chair", or "hatcher" — all of those mean thatcher_needed.',
+  status_flags: 'The user was asked if any client statuses should be flagged. Extract which flags they want set. Speech recognition mishears "Thatcher" as "that sure", "that chair", or "hatcher" — all of those mean thatcher_needed. "Trepp" gets misheard as "trap", "prep", or "tread" — those mean trepp_needed.',
   field_name: 'The user wants to edit a field of a call log. Determine which field.',
-  wizard: 'Decide what the operator means. Be decisive — prefer answer/edit/cancel over clarify. Any variant of stop/scrap/delete/cancel/never mind means cancel.',
+  wizard: 'Decide what the operator means. Be decisive — prefer answer/edit/cancel over clarify. Any variant of stop/scrap/delete/cancel/never mind means cancel. Meta-comments about the UI or venting ("pull up the thing", "wheres the window", "come on", "hurry up") are NOT answers — never record them into a field; use clarify (or repeat the question) instead.',
 }
+
+// Every transcript here came out of browser speech recognition — treat it as
+// noisy audio, not as typed text.
+const SPEECH_NOISE_RULES = `The transcript is from live speech recognition and is often garbled: homophones, dropped small words, wrong word boundaries, run-on sentences, no punctuation. Interpret what the operator MEANT, phonetically and from context — never take a suspicious word literally. Examples: "log a coal" = "log a call"; "text it him" = "texted him"; "close red е" = "close ready"; "follow up next to stay" = "follow up next Tuesday". Names are mangled constantly — match phonetically (Shepherd=Shepard, Kelly=Kelley=Kaylee). If 90% of the utterance clearly means one thing, commit to it with confidence "high".`
 
 export async function POST(req: NextRequest) {
   const { field, transcript, context } = await req.json()
@@ -140,13 +145,16 @@ export async function POST(req: NextRequest) {
   const contextBits: string[] = [`Today's date: ${context?.today ?? localToday()}.`]
   if (field === 'client' && context?.clientNames?.length) {
     contextBits.push(`Clients: ${JSON.stringify(context.clientNames)}`)
+    if (Array.isArray(context?.alternatives) && context.alternatives.length) {
+      contextBits.push(`The recognizer also heard these alternative transcripts of the same audio (any may contain the correct name): ${JSON.stringify(context.alternatives)}`)
+    }
   }
   if (field === 'wizard') {
     contextBits.push(
       `The operator is mid-way through logging a client call. Current question: "${context?.prompt ?? ''}" (field: ${context?.step ?? 'unknown'}).`,
       `Draft so far: ${JSON.stringify(context?.draft ?? {})}.`,
       'Allowed values — log_type: call|text|meeting|email|voicemail|note; outcome: answered|voicemail|texted|no_answer|meeting_booked; sentiment: happy|neutral|confused|concerned|frustrated|angry|ghosting|close_ready; followup_date: YYYY-MM-DD or "none".',
-      'Examples: "switch it to text" → edit log_type=text. "actually make the follow-up next monday" → edit followup_date. "none, delete it" / "scrap the whole thing" → cancel. "yeah save" → save. A description of what happened on the call → answer (verbatim) when the current field is summary/next_step/promises_made.',
+      'Examples: "switch it to text" → edit log_type=text. "actually make the follow-up next monday" → edit followup_date. "none, delete it" / "scrap the whole thing" → cancel. "yeah save" → save. A description of what happened on the call → answer when the current field is summary/next_step/promises_made — keep the operator\'s wording and specifics, but silently fix obvious transcription garble (homophones, word-boundary errors) and add punctuation/capitalization. Never paraphrase or shorten.',
     )
   }
 
@@ -154,7 +162,7 @@ export async function POST(req: NextRequest) {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 300,
-      system: `You parse a single voice-transcribed answer from a busy sales operator into structured data. ${FIELD_INSTRUCTIONS[field]} Be decisive — pick the closest match with confidence "high" unless genuinely ambiguous. Only use confidence "low" with a "clarify" question when you truly cannot decide. A clarify question is SPOKEN OUT LOUD, so it must be ONE short sentence of at most 10 words (e.g. "Sorry sir, which status was that?"). Never write paragraphs or lists. ${contextBits.join(' ')}`,
+      system: `You parse a single voice-transcribed answer from a busy sales operator into structured data. ${FIELD_INSTRUCTIONS[field]} ${SPEECH_NOISE_RULES} Be decisive — pick the closest match with confidence "high" unless genuinely ambiguous. Only use confidence "low" with a "clarify" question when you truly cannot decide. A clarify question is SPOKEN OUT LOUD, so it must be ONE short sentence of at most 10 words (e.g. "Sorry sir, which status was that?"). Never write paragraphs or lists. ${contextBits.join(' ')}`,
       messages: [{ role: 'user', content: `Transcript: "${transcript}"` }],
       tools: [{ name: 'submit_parse', description: 'Submit the parsed value', input_schema: schema as never }],
       tool_choice: { type: 'tool', name: 'submit_parse' },

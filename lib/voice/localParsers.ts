@@ -292,6 +292,7 @@ export function parseDisambiguation(text: string, candidates: ClientCandidate[])
 export interface StatusFlags {
   stage?: 'churn_risk'
   thatcher_needed?: boolean
+  trepp_needed?: boolean
   payment_issue?: boolean
   urgency_level?: 'high'
   va_needed?: boolean
@@ -303,6 +304,8 @@ const FLAG_MAP: [RegExp, keyof StatusFlags, StatusFlags[keyof StatusFlags]][] = 
   [/\bchurn( risk)?\b/, 'stage', 'churn_risk'],
   // "thatcher" gets misheard constantly: "that sure", "that chair", "hatcher"...
   [/\b(thatchers?|that sure|that chair|thatch her|hatcher|fatcher|the thatcher)\b/, 'thatcher_needed', true],
+  // "trepp" too: "trap", "prep", "tread", "trip"
+  [/\b(trepps?|trap|prep|tread|trep)\b/, 'trepp_needed', true],
   [/\bpayment( issue)?\b/, 'payment_issue', true],
   [/\b(urgent|urgency|high priority|needs attention)\b/, 'urgency_level', 'high'],
   [/\b(va|coaching|needs coaching)\b/, 'va_needed', true],
@@ -323,6 +326,7 @@ export function flagsSummary(flags: StatusFlags): string {
   const parts: string[] = []
   if (flags.stage === 'churn_risk') parts.push('churn risk')
   if (flags.thatcher_needed) parts.push('Thatcher needed')
+  if (flags.trepp_needed) parts.push('Trepp needed')
   if (flags.payment_issue) parts.push('payment issue')
   if (flags.urgency_level === 'high') parts.push('high urgency')
   if (flags.va_needed) parts.push('needs coaching')

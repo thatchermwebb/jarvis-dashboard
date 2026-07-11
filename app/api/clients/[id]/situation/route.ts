@@ -24,10 +24,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
+  const now = Date.now()
+  const relAge = (iso: string) => {
+    const days = Math.floor((now - new Date(iso).getTime()) / 86400000)
+    if (days <= 0) return 'TODAY'
+    if (days === 1) return 'YESTERDAY'
+    if (days < 7) return `${days} days ago`
+    if (days < 30) return `${Math.round(days / 7)} weeks ago`
+    return `${Math.round(days / 30)} months ago (OLD)`
+  }
+
   const history = (logs ?? [])
-    .map((l) => {
+    .map((l, i) => {
       const parts = [
-        `[${new Date(l.created_at).toLocaleDateString()}] ${l.log_type ?? 'note'}${l.outcome ? ` (${l.outcome})` : ''} by ${l.created_by ?? 'Diego'}`,
+        `${i === 0 ? '>>> MOST RECENT — ' : ''}[${relAge(l.created_at)}] ${l.log_type ?? 'note'}${l.outcome ? ` (${l.outcome})` : ''} by ${l.created_by ?? 'Diego'}`,
         l.summary ? `notes: "${l.summary}"` : '',
         l.sentiment ? `sentiment: ${l.sentiment}` : '',
         l.promises_made ? `action item: "${l.promises_made}"` : '',
@@ -46,10 +56,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 300,
-      system: `You summarize a client's current situation for a client-success dashboard. Rules:
-- 2-4 short sentences. Most recent state first, then the thread that led here.
-- PRESERVE EXACT PHRASING: when a log says something a specific way (e.g. "need to get his human hook ads live send a text when they are live"), re-use those exact words in quotes rather than generalizing them. Never blur specifics into vague language.
-- Include concrete commitments, dates, and who owes what.
+      system: `You write the "current situation" line for a client-success dashboard. This is a WHERE-THINGS-STAND-NOW readout, not a history recap.
+
+RECENCY RULES (most important):
+- The situation IS the most recent 1-2 contacts. Older entries exist only to explain how we got here — mention one only if it's load-bearing for what happens next.
+- DROP RESOLVED ISSUES ENTIRELY. If a later entry shows something was fixed, done, or moved past (payment fixed, ads went live, call happened), it does not appear — not even as "was resolved".
+- Entries marked OLD are stale context. Ignore them unless they describe something still open and unaddressed.
+- This is NOT a catch-all. Pick the 1-3 most salient live points: what's blocking, what's promised, what happens next. Skip routine no-news entries.
+
+STYLE:
+- 1-3 short sentences. Current state first.
+- PRESERVE EXACT PHRASING for what you do include: when a log says something a specific way, re-use those exact words in quotes rather than generalizing. Never blur specifics into vague language.
+- Include concrete commitments, dates, and who owes what — for LIVE items only.
 - No preamble, no headers — just the summary.`,
       messages: [{
         role: 'user',

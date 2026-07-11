@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { useRef, useState, useEffect, useCallback } from 'react'
+import { ChevronRight, Trash2, Bot } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
+import type { JarvisMemory } from '@/types'
 
 const ACCENT_PRESETS = [
   { name: 'Gold',    hex: '#c9a84c' },
@@ -322,6 +323,86 @@ function ImportExistingClients() {
   )
 }
 
+const MEMORY_CATEGORY_COLORS: Record<string, string> = {
+  preference: 'text-blue-300 bg-blue-500/10 border-blue-500/20',
+  instruction: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+  client: 'text-violet-300 bg-violet-500/10 border-violet-500/20',
+  fact: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+}
+
+function JarvisMemorySection({ userName }: { userName: string }) {
+  const [memories, setMemories] = useState<JarvisMemory[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/jarvis/memories?user=${encodeURIComponent(userName)}`)
+      const data = await res.json()
+      setMemories(Array.isArray(data) ? data : [])
+    } catch { setMemories([]) }
+    finally { setLoading(false) }
+  }, [userName])
+
+  useEffect(() => { load() }, [load])
+
+  async function remove(id: string) {
+    const res = await fetch(`/api/jarvis/memories/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setMemories(prev => prev.filter(m => m.id !== id))
+      toast.success('Memory removed')
+    } else {
+      toast.error('Failed to remove memory')
+    }
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <Bot className="w-3.5 h-3.5" /> JARVIS Memory
+        </h2>
+        <span className="text-[11px] text-muted-foreground/60">{memories.length} saved</span>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">
+        Things JARVIS remembers about you across conversations. It saves these automatically —
+        or tell it &ldquo;remember…&rdquo; / &ldquo;forget…&rdquo;.
+      </p>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(2)].map((_, i) => <div key={i} className="h-10 bg-secondary/40 rounded-xl animate-pulse" />)}
+        </div>
+      ) : memories.length === 0 ? (
+        <div className="text-sm text-muted-foreground/60 bg-secondary/30 rounded-xl px-4 py-6 text-center">
+          Nothing yet. JARVIS will remember preferences and standing instructions as you talk to it.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {memories.map(m => (
+            <div key={m.id} className="group flex items-start gap-3 px-3 py-2.5 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
+              <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 mt-0.5 ${MEMORY_CATEGORY_COLORS[m.category] ?? MEMORY_CATEGORY_COLORS.fact}`}>
+                {m.category}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-foreground leading-snug">{m.content}</div>
+                <div className="text-[10px] text-muted-foreground/50 mt-0.5">{new Date(m.created_at).toLocaleDateString()}</div>
+              </div>
+              <button
+                onClick={() => remove(m.id)}
+                title="Forget this"
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { user, accentColor, bgColor, setAccentColor, setBgColor } = useAuth()
 
@@ -406,6 +487,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* JARVIS Memory */}
+      <JarvisMemorySection userName={user?.name?.split(' ')[0] ?? 'Diego'} />
 
       {/* Import Existing Clients */}
       <ImportExistingClients />

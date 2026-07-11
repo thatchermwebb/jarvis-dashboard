@@ -165,6 +165,16 @@ export interface Client {
   trial_days_left?: number
 }
 
+export interface JarvisMemory {
+  id: string
+  created_at: string
+  user_id: string
+  content: string
+  category: 'preference' | 'fact' | 'client' | 'instruction'
+  client_id?: string | null
+  active: boolean
+}
+
 export interface CommunicationLog {
   id: string
   client_id: string
