@@ -201,7 +201,11 @@ export class WakeWordManager {
     rec.continuous = true
     rec.interimResults = true
     rec.lang = 'en-US'
-    rec.maxAlternatives = 3 // extra hypotheses help fuzzy name matching
+    // NOTE: leave maxAlternatives at its default (1). Asking Chrome for
+    // multiple hypotheses makes it deliver results word-by-word at a crawl —
+    // speed matters more, and fuzzy matching + the Claude parser already
+    // handle misheard names. The alternatives plumbing below stays and simply
+    // receives an empty list.
 
     rec.onresult = (event: any) => {
       // A healthy session that's producing results — reset the failure backoff
