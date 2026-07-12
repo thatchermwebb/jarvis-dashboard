@@ -537,12 +537,23 @@ export default function ClientWarRoom() {
             )}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Step</span>
-                <button
-                  onClick={() => setLogOpen(true)}
-                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
-                >
-                  + Log Call
-                </button>
+                <div className="flex items-center gap-3">
+                  {client.next_followup_date && (
+                    <button
+                      onClick={() => quickUpdate({ next_followup_date: null, followup_reason: null })}
+                      disabled={updating}
+                      className="text-[10px] text-muted-foreground/60 hover:text-red-400 transition-colors font-medium disabled:opacity-50"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setLogOpen(true)}
+                    className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
+                  >
+                    + Log Call
+                  </button>
+                </div>
               </div>
 
               {client.next_followup_date ? (() => {

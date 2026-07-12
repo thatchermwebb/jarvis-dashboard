@@ -105,8 +105,8 @@ export interface Client {
   last_call_outcome?: string
   last_call_summary?: string
   last_client_sentiment?: ClientSentiment
-  next_followup_date?: string
-  followup_reason?: string
+  next_followup_date?: string | null
+  followup_reason?: string | null
   suggested_message?: string
   promises_made?: string
   objections?: string

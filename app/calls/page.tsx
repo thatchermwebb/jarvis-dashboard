@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
@@ -31,6 +31,7 @@ const CAL_DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 type QueueTab = 'today' | 'tomorrow' | 'this_week' | 'all'
 type ViewMode = 'queue' | 'calendar' | 'log'
 type SortMode = 'priority' | 'due_date'
+type TypeFilter = 'all' | 'thatcher' | 'trepp'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,7 @@ function CallsPageInner() {
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
 
   // Data
   const [allClients, setAllClients] = useState<Client[]>([])
@@ -325,6 +327,13 @@ function CallsPageInner() {
       case 'all':
         filtered = allClients.filter(c => c.next_followup_date)
         break
+    }
+
+    // Type filter — who owns the call
+    if (typeFilter === 'thatcher') {
+      filtered = filtered.filter(c => c.thatcher_needed)
+    } else if (typeFilter === 'trepp') {
+      filtered = filtered.filter(c => c.trepp_needed || c.va_needed)
     }
 
     if (sortMode === 'due_date') {
@@ -397,78 +406,94 @@ function CallsPageInner() {
         </div>
       )}
 
-      {/* Top tab bar */}
-      <div className="border-b border-border/40 overflow-x-auto">
-        <div className="flex items-end min-w-max">
-          {/* Queue tabs */}
-          <div className="flex flex-shrink-0">
+      {/* ── Controls ──────────────────────────────────────────────────────── */}
+      {/* Row 1: view switcher (left) + sort (right, queue only) */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5">
+          {([
+            { key: 'queue', label: 'Queue', icon: LayoutList },
+            { key: 'calendar', label: 'Calendar', icon: CalendarDays },
+            { key: 'log', label: 'History', icon: History },
+          ] as { key: ViewMode; label: string; icon: typeof LayoutList }[]).map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setViewMode(key)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                viewMode === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {viewMode === 'queue' && (
+          <button
+            onClick={() => setSortMode(s => s === 'priority' ? 'due_date' : 'priority')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors flex-shrink-0"
+            title="Toggle sort order"
+          >
+            <ArrowUpDown className="w-3 h-3" />
+            <span>{sortMode === 'priority' ? 'Priority' : 'Due Date'}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Row 2 (queue only): time tabs (left) + type filter (right) */}
+      {viewMode === 'queue' && (
+        <div className="flex items-center justify-between gap-3 flex-wrap border-b border-border/40 -mt-2">
+          {/* Time-range tabs */}
+          <div className="flex items-end overflow-x-auto">
             {([
-              { key: 'today', label: 'Due Today' },
-              { key: 'tomorrow', label: 'Due Tomorrow' },
+              { key: 'today', label: 'Today' },
+              { key: 'tomorrow', label: 'Tomorrow' },
               { key: 'this_week', label: 'This Week' },
-              { key: 'all', label: 'All Follow-Ups' },
+              { key: 'all', label: 'All' },
             ] as { key: QueueTab; label: string }[]).map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => { setQueueTab(key); if (viewMode === 'log') setViewMode('queue') }}
-                className={tabStyle((viewMode !== 'log') && queueTab === key)}
+                onClick={() => setQueueTab(key)}
+                className={tabStyle(queueTab === key)}
               >
                 {label}
                 {tabCount(key) > 0 && (
                   <span className={cn(
                     'ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded',
-                    (viewMode !== 'log') && queueTab === key ? 'bg-primary/15 text-primary' : 'bg-secondary/60 text-muted-foreground'
+                    queueTab === key ? 'bg-primary/15 text-primary' : 'bg-secondary/60 text-muted-foreground'
                   )}>
                     {tabCount(key)}
                   </span>
                 )}
-                {(viewMode !== 'log') && queueTab === key && (
+                {queueTab === key && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t" />
                 )}
               </button>
             ))}
           </div>
 
-          {/* View toggles + sort */}
-          <div className="flex items-center gap-1 mb-2.5">
-            {viewMode !== 'log' && (
+          {/* Type filter: All / Thatcher / Trepp */}
+          <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 mb-2 flex-shrink-0">
+            {([
+              { key: 'all', label: 'All' },
+              { key: 'thatcher', label: 'Thatcher' },
+              { key: 'trepp', label: 'Trepp' },
+            ] as { key: TypeFilter; label: string }[]).map(({ key, label }) => (
               <button
-                onClick={() => setSortMode(s => s === 'priority' ? 'due_date' : 'priority')}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                title={`Sort: ${sortMode === 'priority' ? 'Priority' : 'Due Date'}`}
+                key={key}
+                onClick={() => setTypeFilter(key)}
+                className={cn(
+                  'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                  typeFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
               >
-                <ArrowUpDown className="w-3 h-3" />
-                <span className="hidden sm:inline">{sortMode === 'priority' ? 'Priority' : 'Due Date'}</span>
+                {label}
               </button>
-            )}
-            <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode('queue')}
-                className={cn('p-1.5 rounded transition-colors', viewMode === 'queue' ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                title="Queue view"
-              >
-                <LayoutList className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={cn('p-1.5 rounded transition-colors', viewMode === 'calendar' ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                title="Calendar view"
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <button
-              onClick={() => setViewMode(v => v === 'log' ? 'queue' : 'log')}
-              className={cn(
-                'px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border',
-                viewMode === 'log' ? 'bg-background text-foreground border-border' : 'text-muted-foreground border-transparent hover:text-foreground hover:border-border/40'
-              )}
-            >
-              History
-            </button>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── QUEUE VIEW ────────────────────────────────────────────────────── */}
       {viewMode === 'queue' && (

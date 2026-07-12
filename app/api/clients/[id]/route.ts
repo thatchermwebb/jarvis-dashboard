@@ -15,10 +15,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(data)
 }
 
+// Terminal "lost" stages — once a client lands here they have no open
+// follow-up obligation, so any scheduled next step is cleared automatically.
+const LOST_STAGES = new Set(['churned', 'free_trial_lost'])
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const body = await req.json()
+
+  // Marking a client lost/churned wipes any future follow-up. (You can still
+  // add one back later by logging a new note with a follow-up date.)
+  if (typeof body.stage === 'string' && LOST_STAGES.has(body.stage)) {
+    body.next_followup_date = null
+    body.followup_reason = null
+  }
 
   const { data, error } = await supabase
     .from('clients')

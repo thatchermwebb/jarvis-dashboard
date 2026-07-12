@@ -48,7 +48,7 @@ export function StatCard({ label, value, sub, color = 'default', href }: StatCar
 
 interface AlertRowProps {
   clients: Client[]
-  type: 'trials_ending' | 'payment_issues' | 'at_risk' | 'overdue' | 'thatcher'
+  type: 'trials_ending' | 'payment_issues' | 'at_risk' | 'overdue' | 'thatcher' | 'trepp'
 }
 
 export function AlertRow({ clients, type }: AlertRowProps) {
@@ -60,6 +60,7 @@ export function AlertRow({ clients, type }: AlertRowProps) {
     at_risk: { label: '⚠️ Churn Risk', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
     overdue: { label: '📅 Overdue Follow-Ups', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
     thatcher: { label: '⭐ Needs Thatcher', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+    trepp: { label: '🔧 Needs Trepp / Coaching', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
   }
 
   const cfg = configs[type]
@@ -82,6 +83,7 @@ export function AlertRow({ clients, type }: AlertRowProps) {
               {type === 'at_risk' ? stageLabel(c.stage) : ''}
               {type === 'overdue' && c.next_followup_date ? formatDate(c.next_followup_date) : ''}
               {type === 'thatcher' ? (c.stage === 'free_trial' ? 'close call' : 'save call') : ''}
+              {type === 'trepp' ? (c.trepp_needed && c.va_needed ? 'trepp · coaching' : c.trepp_needed ? 'trepp' : 'coaching') : ''}
             </span>
           </button>
         ))}

@@ -76,6 +76,7 @@ export default async function CommandCenter() {
   const atRiskClients        = allClients.filter(c => c.stage === 'overdue' || c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 60)
   const overdueClients       = allClients.filter(c => c.next_followup_date && c.next_followup_date < todayStr)
   const thatcherClients      = allClients.filter(c => c.thatcher_needed)
+  const treppClients         = allClients.filter(c => c.trepp_needed || c.va_needed)
   const closeReadyClients    = trialClients.filter(c => (c.trial_health_score ?? 0) >= 80 || c.last_client_sentiment === 'close_ready')
 
   const briefingLists: BriefingClientLists = {
@@ -143,13 +144,13 @@ export default async function CommandCenter() {
         <div className="order-1 lg:order-2">
           <div className="flex items-center gap-2 mb-4">
             <h2 className="text-xl font-bold">Alerts</h2>
-            {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].some(a => a.length > 0) && (
+            {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, treppClients, overdueClients].some(a => a.length > 0) && (
               <span className="text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5">
-                {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].reduce((n, a) => n + a.length, 0)}
+                {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, treppClients, overdueClients].reduce((n, a) => n + a.length, 0)}
               </span>
             )}
           </div>
-          {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, overdueClients].every(a => !a.length) ? (
+          {[trialsEndingSoon, paymentIssueClients, atRiskClients, thatcherClients, treppClients, overdueClients].every(a => !a.length) ? (
             <div className="bg-card border border-border rounded-xl p-6 text-center text-muted-foreground text-sm">
               No urgent alerts right now.
             </div>
@@ -158,6 +159,7 @@ export default async function CommandCenter() {
               <AlertRow clients={trialsEndingSoon}    type="trials_ending" />
               <AlertRow clients={paymentIssueClients} type="payment_issues" />
               <AlertRow clients={thatcherClients}     type="thatcher" />
+              <AlertRow clients={treppClients}        type="trepp" />
               <AlertRow clients={atRiskClients}       type="at_risk" />
               <AlertRow clients={overdueClients}      type="overdue" />
             </div>
