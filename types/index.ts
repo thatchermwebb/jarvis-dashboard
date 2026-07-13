@@ -318,6 +318,28 @@ export interface PaymentSchedule {
   client?: Pick<Client, 'id' | 'name' | 'business_name'>
 }
 
+export type TeamVaId = 'wilson' | 'samuel'
+export type TeamEntryStatus = 'idle' | 'running' | 'paused' | 'completed'
+
+export interface TeamTimeEntry {
+  id: string
+  created_at: string
+  updated_at: string
+  va_id: TeamVaId
+  description?: string | null
+  is_standard: boolean
+  client_id?: string | null
+  assigned_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  running_since?: string | null
+  accumulated_seconds: number
+  status: TeamEntryStatus
+  paid: boolean
+  paid_at?: string | null
+  client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
+}
+
 export interface DashboardStats {
   active_clients: number
   free_trials: number

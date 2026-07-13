@@ -462,6 +462,26 @@ function TableView({
   )
 }
 
+// Affiliate initials chip — shown wherever a payment renders so affiliate-
+// linked deals (e.g. Jair → Malakai) are visible on the payment record itself.
+function AffiliateChip({ payment, size = 'sm' }: { payment: Payment; size?: 'sm' | 'xs' }) {
+  const affiliate = (payment.client as any)?.affiliate
+  if (!affiliate) return null
+  return (
+    <span
+      title={affiliate.name}
+      className={cn(
+        'rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0',
+        size === 'sm' ? 'w-5 h-5' : 'w-4 h-4',
+      )}
+    >
+      <span className={cn('font-bold text-violet-400', size === 'sm' ? 'text-[8px]' : 'text-[7px]')}>
+        {affiliate.initials}
+      </span>
+    </span>
+  )
+}
+
 function MobilePaymentRow({ payment: p, onMarkPaid, onEdit }: {
   payment: Payment
   onMarkPaid: () => void
@@ -476,8 +496,9 @@ function MobilePaymentRow({ payment: p, onMarkPaid, onEdit }: {
   return (
     <div className={cn('bg-card border border-border border-l-2 rounded-xl px-3 py-2.5 flex items-center gap-3', st.border)}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-foreground truncate">{clientName}</span>
+          <AffiliateChip payment={p} size="xs" />
           <span className="text-sm font-bold tabular-nums text-foreground flex-shrink-0">{formatCurrency(p.amount)}</span>
         </div>
         <div className="text-xs text-muted-foreground/70 truncate mt-0.5">
@@ -608,6 +629,7 @@ function PaymentRow({
 
 const SPREADSHEET_COLS = [
   { key: 'client',       label: 'Client',     width: 'w-40'  },
+  { key: 'affiliate',    label: 'Affiliate',  width: 'w-28'  },
   { key: 'type',         label: 'Type',       width: 'w-36'  },
   { key: 'amount',       label: 'Amount',     width: 'w-24'  },
   { key: 'due_date',     label: 'Due Date',   width: 'w-28'  },
@@ -640,6 +662,9 @@ function SpreadsheetView({
       if (sortCol === 'client') {
         va = (a.client as any)?.name ?? ''
         vb = (b.client as any)?.name ?? ''
+      } else if (sortCol === 'affiliate') {
+        va = (a.client as any)?.affiliate?.name ?? ''
+        vb = (b.client as any)?.affiliate?.name ?? ''
       } else if (sortCol === 'type') { va = paymentLabel(a); vb = paymentLabel(b) }
       else if (sortCol === 'amount') return sortDir === 'asc' ? a.amount - b.amount : b.amount - a.amount
       else if (sortCol === 'due_date') { va = a.due_date; vb = b.due_date }
@@ -712,6 +737,17 @@ function SpreadsheetView({
                     >
                       {clientName}
                     </button>
+                  </td>
+                  {/* Affiliate */}
+                  <td className="px-3 py-2.5">
+                    {(p.client as any)?.affiliate ? (
+                      <span className="flex items-center gap-1.5">
+                        <AffiliateChip payment={p} size="xs" />
+                        <span className="text-xs text-muted-foreground/80 truncate max-w-[80px]">{(p.client as any).affiliate.name}</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground/30 text-xs">—</span>
+                    )}
                   </td>
                   {/* Type */}
                   <td className="px-3 py-2.5 text-muted-foreground/80 truncate max-w-[140px]">{paymentLabel(p)}</td>
@@ -844,16 +880,19 @@ function CalendarView({
                       return (
                         <div key={p.id} className={cn('rounded-lg px-3 py-2.5 border', st.calBg)} onClick={() => onEdit(p)}>
                           <div className="flex items-center justify-between gap-2">
-                            <button
-                              className="text-sm font-semibold text-foreground hover:text-primary transition-colors truncate text-left"
-                              onClick={e => {
-                                e.stopPropagation()
-                                const clientId = (p.client as any)?.id
-                                if (clientId && onClientClick) onClientClick(clientId)
-                              }}
-                            >
-                              {clientName}
-                            </button>
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <button
+                                className="text-sm font-semibold text-foreground hover:text-primary transition-colors truncate text-left"
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  const clientId = (p.client as any)?.id
+                                  if (clientId && onClientClick) onClientClick(clientId)
+                                }}
+                              >
+                                {clientName}
+                              </button>
+                              <AffiliateChip payment={p} size="xs" />
+                            </span>
                             <span className="text-sm font-bold tabular-nums flex-shrink-0">{formatCurrency(p.amount)}</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 mt-1">
@@ -948,16 +987,19 @@ function CalendarView({
                     >
                       {/* Client + amount row */}
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <button
-                          className="text-xs font-semibold text-foreground hover:text-primary transition-colors truncate text-left"
-                          onClick={e => {
-                            e.stopPropagation()
-                            const clientId = (p.client as any)?.id
-                            if (clientId && onClientClick) onClientClick(clientId)
-                          }}
-                        >
-                          {clientName}
-                        </button>
+                        <span className="flex items-center gap-1 min-w-0">
+                          <button
+                            className="text-xs font-semibold text-foreground hover:text-primary transition-colors truncate text-left"
+                            onClick={e => {
+                              e.stopPropagation()
+                              const clientId = (p.client as any)?.id
+                              if (clientId && onClientClick) onClientClick(clientId)
+                            }}
+                          >
+                            {clientName}
+                          </button>
+                          <AffiliateChip payment={p} size="xs" />
+                        </span>
                         <span className="text-xs font-bold tabular-nums flex-shrink-0">{formatCurrency(p.amount)}</span>
                       </div>
                       {/* Type */}

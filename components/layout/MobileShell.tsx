@@ -17,6 +17,7 @@ import {
   Package,
   CalendarDays,
   CheckSquare,
+  Users2,
   Menu,
   X,
   Search,
@@ -28,16 +29,17 @@ const ALL_NAV_ITEMS = [
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Fulfillment', icon: Package },
+  { href: '/team', label: 'Team', icon: Users2 },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/tasks', '/settings']
+const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/tasks', '/team', '/settings']
 
 // Primary tabs shown in the bottom bar; everything else lives in "More"
-const TAB_HREFS = ['/', '/calls', '/clients', '/payments']
+const TAB_HREFS = ['/', '/clients', '/team', '/payments']
 
 export function MobileShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

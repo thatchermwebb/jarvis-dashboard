@@ -8,6 +8,7 @@ import {
 import { X, ExternalLink } from 'lucide-react'
 import { formatCurrency, parseLocalDate } from '@/lib/utils'
 import Link from 'next/link'
+import { ReportsAnalyst } from '@/components/reports/ReportsAnalyst'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -448,6 +449,9 @@ export default function ReportsPage() {
           ))}
         </div>
       </div>
+
+      {/* AI Analyst */}
+      <ReportsAnalyst />
 
       {/* Top metric cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

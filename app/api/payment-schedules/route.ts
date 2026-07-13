@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('payment_schedules')
-    .select('*, client:clients(id, name, business_name)')
+    .select('*, client:clients(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))')
     .order('created_at', { ascending: false })
 
   if (clientId) query = query.eq('client_id', clientId)

@@ -177,6 +177,19 @@ export default function ClientWarRoom() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
       })
+      // Seed a standard Ads task on Wilson's Team board, stamped with the
+      // assigned time — anchors the team assigned→completed KPI. Non-blocking.
+      fetch('/api/team/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          va_id: 'wilson',
+          description: `${name} — Ads`,
+          is_standard: true,
+          client_id: client.id,
+          assigned_at: new Date().toISOString(),
+        }),
+      }).catch(() => {})
       setAdStarted(true)
       toast.success('Fulfillment started — Slack notified')
     } catch {
@@ -381,8 +394,8 @@ export default function ClientWarRoom() {
             🎯 Ready to Close
           </button>
           <button
-            onClick={() => quickUpdate({ stage: 'churn_risk' })}
-            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.stage === 'churn_risk' ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'border-border text-muted-foreground hover:border-rose-500/30 hover:text-rose-300')}
+            onClick={() => quickUpdate({ churn_risk_score: (client.churn_risk_score ?? 0) >= 60 ? 0 : 75 })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', (client.churn_risk_score ?? 0) >= 60 ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'border-border text-muted-foreground hover:border-rose-500/30 hover:text-rose-300')}
             disabled={updating}
           >
             🚨 Churn Risk

@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { anthropic, buildJARVISSystemPrompt } from '@/lib/anthropic'
 import { localToday } from '@/lib/utils'
 import { matchClients } from '@/lib/voice/localParsers'
+import { paymentAudit, clientAnalyticsRows } from '@/lib/analytics'
+import type { Payment, PaymentSchedule } from '@/types'
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Client } from '@/types'
 
@@ -105,7 +107,46 @@ const TOOLS: Anthropic.Tool[] = [
       required: ['query'],
     },
   },
+  {
+    name: 'get_payments',
+    description: 'READ-ONLY payments ledger query. Use for ANY question about payments: "what\'s X\'s next payment", what\'s due today/tomorrow/this week, what\'s overdue, what has been paid. Returns rows sorted by due date plus totals.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        client_name: { type: 'string', description: 'Filter to one client (fuzzy-matched)' },
+        status: { type: 'string', enum: ['pending', 'overdue', 'paid', 'paid_late', 'waived', 'upcoming'], description: '"upcoming" = pending + overdue' },
+        due_within_days: { type: 'number', description: 'Only payments due within N days from today (0 = today only, 1 = today+tomorrow)' },
+      },
+    },
+  },
+  {
+    name: 'payment_audit',
+    description: 'Bookkeeping integrity check over the whole book. Finds: (1) ACTIVE clients with NO upcoming payment and no active schedule — usually means someone forgot to enter their next payment; (2) overdue payments; (3) active clients with a retainer but zero payments ever recorded. Run it whenever payments come up.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'payment_insights',
+    description: 'Revenue analytics (read-only, pre-computed — trust the numbers). With client_name: that client\'s LTV, tenure, cash collected in their first 30 days, next payment. Without: book-wide averages (avg LTV, avg cash collected within 30 days of signing), collected this month, top clients by LTV.',
+    input_schema: {
+      type: 'object',
+      properties: { client_name: { type: 'string' } },
+    },
+  },
 ]
+
+// Full ledger snapshot for the read-only payment tools
+async function fetchLedger(supabase: SupabaseClient) {
+  const [c, p, s] = await Promise.all([
+    supabase.from('clients').select('*'),
+    supabase.from('payments').select('*'),
+    supabase.from('payment_schedules').select('*'),
+  ])
+  return {
+    clients: (c.data ?? []) as Client[],
+    payments: (p.data ?? []) as Payment[],
+    schedules: (s.data ?? []) as PaymentSchedule[],
+  }
+}
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 type AgentAction = { type: string; summary: string; data: unknown }
@@ -316,6 +357,106 @@ async function executeTool(
       return { success: true, forgot: scored[0].m.content }
     }
 
+    case 'get_payments': {
+      const { clients, payments } = await fetchLedger(supabase)
+      let rows = payments
+
+      if (input.client_name) {
+        const matches = matchClients(String(input.client_name), clients)
+        if (!matches.length) return { error: `No client matching "${input.client_name}"` }
+        const ids = new Set(matches.slice(0, 1).map(m => m.id))
+        rows = rows.filter(p => ids.has(p.client_id))
+      }
+      const status = String(input.status ?? '')
+      if (status === 'upcoming') rows = rows.filter(p => ['pending', 'overdue'].includes(p.status))
+      else if (status) rows = rows.filter(p => p.status === status)
+
+      if (input.due_within_days != null) {
+        const t = localToday()
+        const [y, m, d] = t.split('-').map(Number)
+        const end = new Date(Date.UTC(y, m - 1, d) + Number(input.due_within_days) * 86_400_000)
+        const endStr = `${end.getUTCFullYear()}-${String(end.getUTCMonth() + 1).padStart(2, '0')}-${String(end.getUTCDate()).padStart(2, '0')}`
+        rows = rows.filter(p => p.due_date >= t && p.due_date <= endStr)
+      }
+
+      rows = [...rows].sort((a, b) => a.due_date.localeCompare(b.due_date))
+      const nameOf = new Map(clients.map(c => [c.id, c.name]))
+      return {
+        count: rows.length,
+        total_amount: rows.reduce((s, p) => s + p.amount, 0),
+        payments: rows.slice(0, 40).map(p => ({
+          client: nameOf.get(p.client_id) ?? 'Unknown',
+          amount: p.amount,
+          type: p.payment_type,
+          status: p.status,
+          due_date: p.due_date,
+          paid_date: p.paid_date ?? null,
+          notes: p.notes ?? null,
+        })),
+      }
+    }
+
+    case 'payment_audit': {
+      const { clients, payments, schedules } = await fetchLedger(supabase)
+      const report = paymentAudit(clients, payments, schedules)
+      return {
+        ...report,
+        summary: {
+          active_clients_missing_upcoming_payment: report.missing_upcoming.length,
+          overdue_payments: report.overdue.length,
+          overdue_total: report.overdue.reduce((s, o) => s + o.amount, 0),
+          active_clients_never_paid: report.never_paid.length,
+        },
+      }
+    }
+
+    case 'payment_insights': {
+      const { clients, payments } = await fetchLedger(supabase)
+      const rows = clientAnalyticsRows(clients, payments)
+
+      if (input.client_name) {
+        const matches = matchClients(String(input.client_name), clients)
+        if (!matches.length) return { error: `No client matching "${input.client_name}"` }
+        const target = matches[0]
+        const row = rows.find(r => r.name === target.name)
+        if (!row) return { error: 'No analytics for that client' }
+        return {
+          client: row.name,
+          stage: row.stage,
+          ltv: row.ltv,
+          tenure_days: row.tenure_days,
+          signed: row.signed,
+          collected_first_30_days: row.collected_first_30d ?? 'window incomplete (signed <30 days ago)',
+          avg_monthly_collected: row.tenure_days >= 30 ? Math.round(row.ltv / (row.tenure_days / 30)) : null,
+          retainer: row.retainer,
+          next_payment: row.next_due ? { due_date: row.next_due, amount: row.next_due_amount } : null,
+          affiliate: row.affiliate,
+        }
+      }
+
+      const active = rows.filter(r => ['active_client', 'won_back'].includes(r.stage))
+      const with30d = rows.filter(r => r.collected_first_30d != null)
+      const notMeasurable = rows.filter(r => r.collected_first_30d == null && ['active_client', 'won_back'].includes(r.stage))
+      const monthStart = localToday().slice(0, 7)
+      const collectedThisMonth = payments
+        .filter(p => ['paid', 'paid_late'].includes(p.status) && p.paid_date?.startsWith(monthStart))
+        .reduce((s, p) => s + p.amount, 0)
+      return {
+        active_clients: active.length,
+        avg_ltv_active: active.length ? Math.round(active.reduce((s, r) => s + r.ltv, 0) / active.length) : 0,
+        avg_collected_first_30_days: with30d.length
+          ? Math.round(with30d.reduce((s, r) => s + (r.collected_first_30d ?? 0), 0) / with30d.length)
+          : null,
+        clients_in_30d_average: with30d.length,
+        note_30d: with30d.length
+          ? undefined
+          : 'No clients have a measurable first-30-day window yet: recent signings are still inside their 30 days, and older clients signed before payment tracking began. Say so instead of quoting $0.',
+        not_measurable_30d: notMeasurable.map(r => r.name),
+        collected_this_month: collectedThisMonth,
+        top_ltv: [...rows].sort((a, b) => b.ltv - a.ltv).slice(0, 5).map(r => ({ client: r.name, ltv: r.ltv })),
+      }
+    }
+
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -364,6 +505,8 @@ VOICE MODE RULES:
 - Voice transcription mangles names ("Shepherd" for "Shepard"). search_clients is fuzzy — trust its top match. If a search misses, retry ONCE with just the first 4-5 letters of the name before telling the user it's not found. If a fuzzy match is close (e.g. Shepherd→Shepard), assume it's them and proceed.
 - CANONICAL NAMES: always write and speak client names using the exact spelling from the roster/tool results — never the transcript's spelling.
 - LOGGING A CONTACT: if the user wants to record/log/note a contact they had — any phrasing — call start_call_log immediately. Do not draft messages, ask questions, or chat instead.
+- PAYMENTS: you have READ-ONLY access to the payments ledger via get_payments, payment_audit, and payment_insights. NEVER guess an amount, date, LTV, or average — always pull it. The tools pre-compute all math; just narrate the numbers.
+- PROACTIVE AUDITING: whenever a payments question comes up, ALSO run payment_audit. If any ACTIVE client has no upcoming payment scheduled, flag it briefly even though the user didn't ask — that usually means someone forgot to enter their next payment. One short sentence, e.g. "Also, sir — Kelly and Marcus have no upcoming payment on the books."
 - AUTO-REMEMBER: when the user states durable info — a preference ("I like follow-ups in the afternoon"), a standing instruction ("always assign ad tasks to Trepp"), a stable fact — call remember proactively without being asked. Don't save one-off task details, things already in the CRM, or trivia. Acknowledge saves in four words or fewer inside your reply. Use forget when they retract something.
 - When asked to create a task, resolve dates yourself (e.g. "tomorrow" = the day after today) and call create_task once with everything filled in. Convert times like "3pm" to 15:00.
 - If a tool reports multiple_client_matches, ask which client they meant.

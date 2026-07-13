@@ -15,6 +15,7 @@ import {
   Package,
   CalendarDays,
   CheckSquare,
+  Users2,
 } from 'lucide-react'
 
 const ALL_NAV_ITEMS = [
@@ -23,13 +24,14 @@ const ALL_NAV_ITEMS = [
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Fulfillment', icon: Package },
+  { href: '/team', label: 'Team', icon: Users2 },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/tasks', '/settings']
+const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/tasks', '/team', '/settings']
 
 export function Sidebar() {
   const pathname = usePathname()

@@ -131,6 +131,18 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message }),
         }).catch(() => {})
+        // Seed Wilson's Team board with a standard Ads task, stamped assigned.
+        fetch('/api/team/entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            va_id: 'wilson',
+            description: `${name} — Ads`,
+            is_standard: true,
+            client_id: client.id,
+            assigned_at: new Date().toISOString(),
+          }),
+        }).catch(() => {})
         toast.success('Started — Slack notified')
       } else {
         toast.success('Moved to In Progress')
