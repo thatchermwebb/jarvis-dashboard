@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { localToday, daysBetween } from '@/lib/utils'
+import { currentMrr } from '@/lib/analytics'
 import type { Client, DashboardStats } from '@/types'
 
 export async function GET() {
@@ -48,12 +49,8 @@ export async function GET() {
         c.next_followup_date.slice(0, 10) < todayStr &&
         !['churned'].includes(c.stage)
     ).length,
-    monthly_recurring_revenue: allClients
-      .filter((c) => c.stage === 'active_client' && c.monthly_retainer)
-      .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0),
-    weekly_recurring_revenue: allClients
-      .filter((c) => c.stage === 'active_client' && c.payment_frequency === 'weekly' && c.monthly_retainer)
-      .reduce((sum, c) => sum + ((c.monthly_retainer ?? 0) / 4), 0),
+    monthly_recurring_revenue: currentMrr(allClients),
+    weekly_recurring_revenue: 0,
   }
 
   // Trials ending in 48h (alert)

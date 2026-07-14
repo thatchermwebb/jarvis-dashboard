@@ -69,23 +69,23 @@ export function budgetZone(fraction: number | null): 'green' | 'yellow' | 'red' 
   return 'red'
 }
 
-/** Is a timestamp inside 8:00–17:00 America/Chicago (CST/CDT)? */
+/** Is a timestamp inside 9:00 AM–5:00 PM America/Chicago (CST/CDT)? */
 export function withinWorkHoursCST(iso: string): boolean {
   const hourStr = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago', hour: 'numeric', hour12: false,
   }).format(new Date(iso))
   // Intl can return "24" for midnight in hour12:false — normalize.
   const hour = parseInt(hourStr, 10) % 24
-  return hour >= 8 && hour < 17
+  return hour >= 9 && hour < 17
 }
 
 /**
- * Whether an entry counts toward KPI at all. Fulfillment-seeded tasks
- * (assigned_at set) assigned outside work hours are excluded entirely.
- * Purely manual tasks (no assigned_at) are always eligible.
+ * Whether an entry counts toward KPI at all. Any task assigned outside work
+ * hours (9–5 CST) is invalidated. Tasks with no assignment anchor can't have
+ * a turnaround, so they never count.
  */
 export function kpiEligible(e: Pick<TeamTimeEntry, 'assigned_at'>): boolean {
-  if (!e.assigned_at) return true
+  if (!e.assigned_at) return false
   return withinWorkHoursCST(e.assigned_at)
 }
 

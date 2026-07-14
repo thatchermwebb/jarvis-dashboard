@@ -9,9 +9,57 @@ const PAID = new Set(['paid', 'paid_late'])
 const UPCOMING = new Set(['pending', 'overdue'])
 const ACTIVE_STAGES = new Set(['active_client', 'won_back'])
 
+// ─── MRR: the single source of truth ─────────────────────────────────────────
+// Everything (dashboard, /api/stats, Reports header + chart, the analyst) must
+// go through these so the numbers always agree. Retainer is treated as an
+// already-monthly figure (no frequency normalization).
+
+/** Stages that count as "currently on a retainer": active, won-back, and
+ *  still-contracted-but-flagged. Trials/onboarding/paused/churned excluded. */
+export const MRR_STAGES = new Set(['active_client', 'won_back', 'overdue', 'payment_issue', 'churn_risk'])
+/** Stages where a client has stopped paying (used for historical reconstruction). */
+const STOPPED_STAGES = new Set(['churned', 'free_trial_lost', 'paused'])
+
+// Minimal shape MRR math needs — satisfied by both the full Client type and
+// the Reports page's local client interface (whose `stage` is a plain string).
+type MrrClient = {
+  stage: string
+  monthly_retainer?: number | null
+  signed_at?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export function isMrrActive(c: Pick<MrrClient, 'stage' | 'monthly_retainer'>): boolean {
+  return MRR_STAGES.has(c.stage) && !!c.monthly_retainer
+}
+
+/** Current MRR — sum of monthly_retainer over the MRR population. */
+export function currentMrr(clients: MrrClient[]): number {
+  return clients.filter(isMrrActive).reduce((s, c) => s + (c.monthly_retainer ?? 0), 0)
+}
+
+/**
+ * Reconstructed MRR as of a past date. A client contributes if they had a
+ * retainer, ever converted (currently in an MRR or stopped stage — never a
+ * pure trial), had signed by then, and hadn't stopped before then. At
+ * date = now this equals currentMrr(), so the chart's last point matches the
+ * headline number.
+ */
+export function mrrAtDate(clients: MrrClient[], dateMs: number): number {
+  return clients.filter(c => {
+    if (!c.monthly_retainer) return false
+    const everPaying = MRR_STAGES.has(c.stage) || STOPPED_STAGES.has(c.stage)
+    if (!everPaying) return false
+    if (Date.parse(signedAnchor(c) + 'T00:00:00') > dateMs) return false
+    if (STOPPED_STAGES.has(c.stage) && c.updated_at && Date.parse(c.updated_at) < dateMs) return false
+    return true
+  }).reduce((s, c) => s + (c.monthly_retainer ?? 0), 0)
+}
+
 /** The date a client became a paying client: signed_at (immutable, set on the
  *  first transition to active) with created_at as fallback for older rows. */
-export function signedAnchor(c: Client): string {
+export function signedAnchor(c: Pick<MrrClient, 'signed_at' | 'created_at'>): string {
   return (c.signed_at ?? c.created_at).slice(0, 10)
 }
 
@@ -145,7 +193,6 @@ export function monthlyBusinessSeries(clients: Client[], payments: Payment[], mo
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-    const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`
 
     const new_clients = clients.filter(c => signedAnchor(c).startsWith(month) && (ACTIVE_STAGES.has(c.stage) || LOST_STAGES.has(c.stage) || c.stage === 'paused')).length
     const churned = clients.filter(c => LOST_STAGES.has(c.stage) && (c.updated_at ?? '').startsWith(month)).length
@@ -153,16 +200,9 @@ export function monthlyBusinessSeries(clients: Client[], payments: Payment[], mo
       .filter(p => PAID.has(p.status) && p.paid_date?.startsWith(month))
       .reduce((s, p) => s + p.amount, 0)
 
-    // Reconstructed MRR at month end: retainer clients signed by then, minus
-    // ones already lost by then (same approach as the Reports page chart).
-    const mrr_end_of_month = clients
-      .filter(c => {
-        if (!c.monthly_retainer) return false
-        if (signedAnchor(c) > monthEndStr) return false
-        if (LOST_STAGES.has(c.stage) && (c.updated_at ?? '').slice(0, 10) <= monthEndStr) return false
-        return true
-      })
-      .reduce((s, c) => s + (c.monthly_retainer ?? 0), 0)
+    // Canonical reconstructed MRR at month end (capped at now for the current
+    // month so it equals the live currentMrr).
+    const mrr_end_of_month = mrrAtDate(clients, Math.min(monthEnd.getTime(), now.getTime()))
 
     rows.push({ month, new_clients, churned, cash_collected, mrr_end_of_month })
   }

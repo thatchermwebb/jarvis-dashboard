@@ -6,6 +6,7 @@ import { TrialPipelineWidget } from '@/components/dashboard/TrialPipelineWidget'
 import { RevenueSnapshotWidget } from '@/components/dashboard/RevenueSnapshotWidget'
 import type { Client, Task, Payment, DashboardStats } from '@/types'
 import { localToday } from '@/lib/utils'
+import { currentMrr, mrrAtDate } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,16 +57,11 @@ export default async function CommandCenter() {
     tasks_due_today: allTasks.filter(t => t.due_date === todayStr).length,
     tasks_overdue: allTasks.filter(t => t.due_date && t.due_date < todayStr).length,
     overdue_followups: allClients.filter(c => c.next_followup_date && c.next_followup_date < todayStr).length,
-    monthly_recurring_revenue: allClients
-      .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer)
-      .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0),
+    monthly_recurring_revenue: currentMrr(allClients),
     weekly_recurring_revenue: 0,
   }
 
-  const thirtyDaysAgoStr = addDayStr(-30)
-  const mrrThirtyDaysAgo = allClients
-    .filter(c => (c.stage === 'active_client' || c.stage === 'won_back') && c.monthly_retainer && c.created_at.slice(0, 10) < thirtyDaysAgoStr)
-    .reduce((sum, c) => sum + (c.monthly_retainer ?? 0), 0)
+  const mrrThirtyDaysAgo = mrrAtDate(allClients, Date.now() - 30 * 86_400_000)
   const mrrChange = mrrThirtyDaysAgo > 0
     ? Math.round(((stats.monthly_recurring_revenue - mrrThirtyDaysAgo) / mrrThirtyDaysAgo) * 100)
     : null

@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
     description: body.description ?? null,
     is_standard: body.is_standard ?? false,
     client_id: body.client_id ?? null,
-    assigned_at: body.assigned_at ?? null,
+    // Anchor every task with an assigned time. Fulfillment passes it explicitly
+    // (the handoff moment); manual tasks self-assign at creation so a standard
+    // one still counts toward the turnaround KPI.
+    assigned_at: body.assigned_at ?? new Date().toISOString(),
     status: 'idle',
     accumulated_seconds: 0,
   }

@@ -9,6 +9,7 @@ import { X, ExternalLink } from 'lucide-react'
 import { formatCurrency, parseLocalDate } from '@/lib/utils'
 import Link from 'next/link'
 import { ReportsAnalyst } from '@/components/reports/ReportsAnalyst'
+import { currentMrr, mrrAtDate } from '@/lib/analytics'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -220,7 +221,8 @@ export default function ReportsPage() {
   // ── Revenue metrics ──────────────────────────────────────────────────────────
 
   const activeClients = useMemo(() => clients.filter(c => c.stage === 'active_client'), [clients])
-  const mrr = useMemo(() => activeClients.reduce((s, c) => s + (c.monthly_retainer ?? 0), 0), [activeClients])
+  // Canonical current MRR — same population/definition as every other surface.
+  const mrr = useMemo(() => currentMrr(clients), [clients])
 
   const paidInRange = useMemo(() =>
     payments.filter(p =>
@@ -364,18 +366,10 @@ export default function ReportsPage() {
     if (!start) return []
     const weeks = getWeeksInRange(start, now)
     return weeks.map(weekStart => {
-      const weekDate = new Date(weekStart + 'T00:00:00')
-      const mrr = clients
-        .filter(c => {
-          if (!c.monthly_retainer) return false
-          const created = new Date(c.created_at)
-          if (created > weekDate) return false
-          if (c.stage === 'churned' || c.stage === 'free_trial_lost') {
-            return new Date(c.updated_at) >= weekDate
-          }
-          return true
-        })
-        .reduce((s, c) => s + (c.monthly_retainer ?? 0), 0)
+      // Canonical reconstruction — the last week equals the live currentMrr,
+      // so the chart line agrees with the header.
+      const weekMs = new Date(weekStart + 'T23:59:59').getTime()
+      const mrr = mrrAtDate(clients, Math.min(weekMs, now.getTime()))
       return { date: weekStart, mrr, label: fmtWeek(weekStart) }
     })
   }, [clients, rangeStart])
