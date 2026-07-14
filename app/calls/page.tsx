@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
+import { AuthorBadge } from '@/components/ui/author-badge'
 import { cn, timeAgo, localToday, daysUntil } from '@/lib/utils'
 import type { Client } from '@/types'
 
@@ -570,11 +571,7 @@ function CallsPageInner() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {log.created_by && (
-                        <span className="text-[9px] font-mono text-muted-foreground/30">
-                          {log.created_by === 'Diego' ? '(DC)' : log.created_by === 'Thatcher' ? '(TW)' : log.created_by === 'Trepp' ? '(TG)' : `(${log.created_by.slice(0,2).toUpperCase()})`}
-                        </span>
-                      )}
+                      <AuthorBadge createdBy={log.created_by} />
                       <span className="text-xs text-muted-foreground">{timeAgo(log.created_at)}</span>
                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
                     </div>

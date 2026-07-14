@@ -13,8 +13,12 @@ interface ClientWithAds extends Client {
 }
 
 function getColumn(client: ClientWithAds): 'new' | 'in_progress' | 'completed' {
-  if (client.stage === 'free_trial') return 'completed'
   const ads = client.adProductions
+  // Completion is driven by the ad work being done — the client STAYS in
+  // Onboarding (we no longer flip them to Free Trial). `free_trial` is only
+  // kept here for clients flipped by the old behavior.
+  if (client.stage === 'free_trial') return 'completed'
+  if (ads.length > 0 && ads.every(a => a.status === 'done')) return 'completed'
   if (ads.length === 0 || ads.every(a => a.status === 'not_started')) return 'new'
   return 'in_progress'
 }
@@ -79,6 +83,13 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
           ...c,
           adProductions: (Array.isArray(allAds) ? allAds : []).filter(a => a.client_id === c.id),
         }))
+        // Drop long-since-completed cards so the board stays current (mirrors
+        // the old 14-day free_trial cutoff, now that completed clients stay
+        // in Onboarding rather than flipping to Free Trial).
+        .filter(c => {
+          const done = c.adProductions.length > 0 && c.adProductions.every(a => a.status === 'done')
+          return !(done && c.stage === 'onboarding' && c.updated_at < cutoff)
+        })
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
       setClients(pipeline)
@@ -168,16 +179,12 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
   }
 
   async function handleComplete(client: ClientWithAds) {
+    // Mark the ad work done but LEAVE the client in Onboarding — no stage flip
+    // to Free Trial. The card moves to Completed based on the ads being done.
     setClients(prev => prev.map(c => c.id !== client.id ? c : {
       ...c,
-      stage: 'free_trial' as const,
+      adProductions: c.adProductions.map(a => ({ ...a, status: 'done' as const })),
     }))
-
-    await fetch(`/api/clients/${client.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage: 'free_trial' }),
-    })
 
     await Promise.all(
       client.adProductions.map(ad =>
@@ -188,6 +195,14 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         })
       )
     )
+
+    // Bump the client's updated_at (trigger sets now(); no stage change) so the
+    // Completed column's 14-day pruning has a completion timestamp to work from.
+    await fetch(`/api/clients/${client.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updated_at: new Date().toISOString() }),
+    })
 
     toast.success('Onboarding marked complete')
     load()

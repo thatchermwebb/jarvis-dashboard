@@ -21,6 +21,7 @@ import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
 import { StartFulfillmentModal } from '@/components/delivery/StartFulfillmentModal'
+import { AuthorBadge } from '@/components/ui/author-badge'
 import {
   cn, stageLabel, stageColor, sentimentEmoji, sentimentColor,
   cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
@@ -734,11 +735,7 @@ export default function ClientWarRoom() {
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {log.created_by && (
-                              <span className="text-[9px] font-mono text-muted-foreground/30">
-                                {log.created_by === 'Diego' ? '(DC)' : log.created_by === 'Thatcher' ? '(TW)' : `(${log.created_by.slice(0,2).toUpperCase()})`}
-                              </span>
-                            )}
+                            <AuthorBadge createdBy={log.created_by} size="sm" />
                             <span className="text-[10px] text-muted-foreground">{timeAgo(log.created_at)}</span>
                             <button
                               onClick={() => setEditingLog(log)}

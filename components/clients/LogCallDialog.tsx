@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { InlineCalendar } from '@/components/ui/inline-calendar'
 import { TimePicker } from '@/components/ui/time-picker'
+import { AuthorBadge } from '@/components/ui/author-badge'
 import { cn } from '@/lib/utils'
 import type { Client, LogType, LogOutcome, ClientSentiment } from '@/types'
 
@@ -429,7 +430,6 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
   }
 
   const displayName = editLog?.client?.name ?? preselectedClient?.name ?? selectedClient?.name
-  const creatorTag = form.created_by === 'Diego' ? '(DC)' : form.created_by === 'Thatcher' ? '(TW)' : form.created_by === 'Trepp' ? '(TG)' : ''
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -695,7 +695,9 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
           {/* Footer */}
           <div className="flex items-center justify-between mt-6 pt-5 border-t border-border/40">
-            <span className="text-xs text-muted-foreground/40 font-mono">{creatorTag} {form.created_by}</span>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <AuthorBadge createdBy={form.created_by} size="sm" /> {form.created_by}
+            </span>
             <div className="flex gap-3">
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
               <Button type="submit" disabled={loading} className="px-8">
