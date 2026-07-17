@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
+import { CallQueueCard, type PaymentDue } from '@/components/call-queue/CallQueueCard'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { AuthorBadge } from '@/components/ui/author-badge'
@@ -279,14 +279,36 @@ function CallsPageInner() {
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
+  const [paymentFlags, setPaymentFlags] = useState<Record<string, PaymentDue>>({})
 
   const loadQueue = useCallback(async () => {
     setLoadingQueue(true)
-    const res = await fetch('/api/clients?prioritized=true')
-    const data = await res.json()
+    const [clientsRes, paymentsRes] = await Promise.all([
+      fetch('/api/clients?prioritized=true'),
+      fetch('/api/payments'),
+    ])
+    const data = await clientsRes.json()
     const all: Client[] = Array.isArray(data) ? data : []
     const excluded = ['churned', 'free_trial_lost', 'trial_concluded', 'onboarding']
     setAllClients(all.filter(c => !excluded.includes(c.stage)))
+
+    // Build a per-client "most urgent unpaid payment" flag for the call cards.
+    const payments = await paymentsRes.json().catch(() => [])
+    const t = localToday()
+    const tom = offsetStr(1)
+    const flags: Record<string, PaymentDue> = {}
+    const rank: Record<PaymentDue, number> = { overdue: 3, today: 2, tomorrow: 1 }
+    for (const p of (Array.isArray(payments) ? payments : [])) {
+      if (!p.client_id || !p.due_date) continue
+      if (!['pending', 'overdue'].includes(p.status)) continue // unpaid only
+      let flag: PaymentDue | null = null
+      if (p.status === 'overdue' || p.due_date < t) flag = 'overdue'
+      else if (p.due_date === t) flag = 'today'
+      else if (p.due_date === tom) flag = 'tomorrow'
+      if (!flag) continue
+      if (!flags[p.client_id] || rank[flag] > rank[flags[p.client_id]]) flags[p.client_id] = flag
+    }
+    setPaymentFlags(flags)
     setLoadingQueue(false)
   }, [])
 
@@ -517,7 +539,7 @@ function CallsPageInner() {
               </div>
             )
           ) : (
-            tabClients.map(c => <CallQueueCard key={c.id} client={c} onUpdated={loadQueue} />)
+            tabClients.map(c => <CallQueueCard key={c.id} client={c} onUpdated={loadQueue} paymentDue={paymentFlags[c.id] ?? null} />)
           )}
         </div>
       )}

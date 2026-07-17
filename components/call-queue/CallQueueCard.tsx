@@ -19,12 +19,22 @@ import {
 } from '@/lib/utils'
 import type { Client } from '@/types'
 
+export type PaymentDue = 'overdue' | 'today' | 'tomorrow'
+
+const PAYMENT_DUE_CONFIG: Record<PaymentDue, { label: string; cls: string }> = {
+  overdue:  { label: 'Overdue Payment',     cls: 'bg-red-500/20 text-red-300 border-red-500/40' },
+  today:    { label: 'Payment Due Today',   cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+  tomorrow: { label: 'Payment Due Tomorrow', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+}
+
 interface Props {
   client: Client
   onUpdated?: () => void
+  /** Payment flag for the call card — most urgent unpaid payment status. */
+  paymentDue?: PaymentDue | null
 }
 
-export function CallQueueCard({ client, onUpdated }: Props) {
+export function CallQueueCard({ client, onUpdated, paymentDue }: Props) {
   const router = useRouter()
   const [logOpen, setLogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -85,6 +95,17 @@ export function CallQueueCard({ client, onUpdated }: Props) {
               <div className="text-sm text-muted-foreground mt-0.5">
                 {[client.business_name, client.market_location].filter(Boolean).join(' · ')}
               </div>
+            )}
+            {paymentDue && (
+              <span
+                title={PAYMENT_DUE_CONFIG[paymentDue].label}
+                className={cn(
+                  'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border mt-2',
+                  PAYMENT_DUE_CONFIG[paymentDue].cls,
+                )}
+              >
+                💳 {PAYMENT_DUE_CONFIG[paymentDue].label}
+              </span>
             )}
           </div>
 
