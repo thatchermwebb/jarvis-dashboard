@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { WakeWordManager, speechRecognitionSupported } from '@/lib/voice/recognition'
 import { speak, stopSpeaking, initVoices, ttsSupported, prewarm, setLevelListener } from '@/lib/voice/tts'
@@ -32,7 +32,6 @@ interface JarvisContextValue {
   setPanelOpen: (open: boolean) => void
   messages: JarvisMessage[]
   clearMessages: () => void
-  interim: string
   busy: boolean
   wizard: WizardState | null
   enableVoice: () => void
@@ -43,10 +42,18 @@ interface JarvisContextValue {
 
 const JarvisContext = createContext<JarvisContextValue | null>(null)
 
+// High-frequency live-transcript state kept in its own context so speech frames
+// re-render only the transcript line, not every JARVIS consumer.
+const JarvisInterimContext = createContext<string>('')
+
 export function useJarvis(): JarvisContextValue {
   const ctx = useContext(JarvisContext)
   if (!ctx) throw new Error('useJarvis must be used inside JarvisProvider')
   return ctx
+}
+
+export function useJarvisInterim(): string {
+  return useContext(JarvisInterimContext)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -659,15 +666,23 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const clearMessages = useCallback(() => setMessages([]), [])
+  const startLogWizardCb = useCallback(() => void startLogWizard(), [startLogWizard])
+
+  // Memoized so interim speech frames (which live in their own context) don't
+  // churn this value and re-render every JARVIS consumer.
+  const value = useMemo<JarvisContextValue>(() => ({
+    supported, status, voiceEnabled, permissionDenied, panelOpen, setPanelOpen,
+    messages, clearMessages, busy, wizard,
+    enableVoice, disableVoice, sendText,
+    startLogWizard: startLogWizardCb,
+  }), [supported, status, voiceEnabled, permissionDenied, panelOpen, messages, busy, wizard,
+      clearMessages, enableVoice, disableVoice, sendText, startLogWizardCb])
 
   return (
-    <JarvisContext.Provider value={{
-      supported, status, voiceEnabled, permissionDenied, panelOpen, setPanelOpen,
-      messages, clearMessages, interim, busy, wizard,
-      enableVoice, disableVoice, sendText,
-      startLogWizard: () => void startLogWizard(),
-    }}>
-      {children}
+    <JarvisContext.Provider value={value}>
+      <JarvisInterimContext.Provider value={interim}>
+        {children}
+      </JarvisInterimContext.Provider>
     </JarvisContext.Provider>
   )
 }

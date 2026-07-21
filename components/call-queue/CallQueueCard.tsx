@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import {
   cn,
@@ -19,22 +19,43 @@ import {
 } from '@/lib/utils'
 import type { Client } from '@/types'
 
-export type PaymentDue = 'overdue' | 'today' | 'tomorrow'
+export type PaymentDueFlag = 'overdue' | 'today' | 'tomorrow'
 
-const PAYMENT_DUE_CONFIG: Record<PaymentDue, { label: string; cls: string }> = {
-  overdue:  { label: 'Overdue Payment',     cls: 'bg-red-500/20 text-red-300 border-red-500/40' },
-  today:    { label: 'Payment Due Today',   cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
-  tomorrow: { label: 'Payment Due Tomorrow', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+/** Rich payment info surfaced on the call card (amount + plan + timing). */
+export interface PaymentDueInfo {
+  flag: PaymentDueFlag
+  amount: number
+  dueDate: string
+  /** Human plan label, e.g. "Retainer (Bi-weekly)" or "Deposit". */
+  typeLabel: string
+}
+
+/** @deprecated use PaymentDueInfo. Kept for any external importers. */
+export type PaymentDue = PaymentDueFlag
+
+const PAYMENT_DUE_CONFIG: Record<PaymentDueFlag, { label: string; cls: string }> = {
+  overdue:  { label: 'Overdue',     cls: 'bg-red-500/20 text-red-300 border-red-500/40' },
+  today:    { label: 'Due Today',   cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+  tomorrow: { label: 'Due Tomorrow', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+}
+
+/** Ready-to-close signal (mirrors the definition used across the app). */
+function isCloseReady(client: Client): boolean {
+  return client.last_client_sentiment === 'close_ready' || (client.trial_health_score ?? 0) >= 80
 }
 
 interface Props {
   client: Client
   onUpdated?: () => void
-  /** Payment flag for the call card — most urgent unpaid payment status. */
-  paymentDue?: PaymentDue | null
+  /** Most-urgent unpaid payment surfaced on the card (amount + plan + timing). */
+  paymentDue?: PaymentDueInfo | null
+  /** Multi-select mode: show a checkbox instead of navigating on the whole card. */
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }
 
-export function CallQueueCard({ client, onUpdated, paymentDue }: Props) {
+export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selected, onToggleSelect }: Props) {
   const router = useRouter()
   const [logOpen, setLogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -83,6 +104,19 @@ export function CallQueueCard({ client, onUpdated, paymentDue }: Props) {
       <div className="bg-card rounded-2xl overflow-hidden border border-border/40">
         {/* Main row */}
         <div className="flex items-start gap-6 px-6 py-5">
+          {/* Optional multi-select checkbox */}
+          {selectable && (
+            <button
+              onClick={() => onToggleSelect?.(client.id)}
+              aria-label={selected ? 'Deselect' : 'Select'}
+              className={cn(
+                'flex-shrink-0 mt-1 w-5 h-5 rounded-md border flex items-center justify-center transition-colors',
+                selected ? 'bg-primary border-primary text-primary-foreground' : 'border-border/70 hover:border-primary/60'
+              )}
+            >
+              {selected && <Check className="w-3.5 h-3.5" />}
+            </button>
+          )}
           {/* Left: name + business */}
           <div className="flex-1 min-w-0">
             <button
@@ -96,17 +130,30 @@ export function CallQueueCard({ client, onUpdated, paymentDue }: Props) {
                 {[client.business_name, client.market_location].filter(Boolean).join(' · ')}
               </div>
             )}
-            {paymentDue && (
-              <span
-                title={PAYMENT_DUE_CONFIG[paymentDue].label}
-                className={cn(
-                  'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border mt-2',
-                  PAYMENT_DUE_CONFIG[paymentDue].cls,
-                )}
-              >
-                💳 {PAYMENT_DUE_CONFIG[paymentDue].label}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              {paymentDue && (
+                <span
+                  title={`${paymentDue.typeLabel} · ${formatCurrency(paymentDue.amount)} · ${PAYMENT_DUE_CONFIG[paymentDue.flag].label} (${paymentDue.dueDate})`}
+                  className={cn(
+                    'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border',
+                    PAYMENT_DUE_CONFIG[paymentDue.flag].cls,
+                  )}
+                >
+                  💳 {formatCurrency(paymentDue.amount)} {PAYMENT_DUE_CONFIG[paymentDue.flag].label}
+                  <span className="font-normal opacity-70">· {paymentDue.typeLabel}</span>
+                </span>
+              )}
+              {isCloseReady(client) && !client.close_call_booked && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                  🎯 Close Ready
+                </span>
+              )}
+              {client.close_call_booked && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border bg-teal-500/15 text-teal-300 border-teal-500/30">
+                  📅 Closing Call Booked
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Center: stage badge */}
@@ -228,6 +275,18 @@ export function CallQueueCard({ client, onUpdated, paymentDue }: Props) {
             Thatcher
           </button>
           <button
+            onClick={() => quickAction({ trepp_needed: !client.trepp_needed })}
+            disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.trepp_needed
+                ? 'border-orange-500/40 bg-orange-500/10 text-orange-300'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            )}
+          >
+            Trepp
+          </button>
+          <button
             onClick={() => quickAction({ va_needed: !client.va_needed })}
             disabled={updating}
             className={cn(
@@ -237,8 +296,22 @@ export function CallQueueCard({ client, onUpdated, paymentDue }: Props) {
                 : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
             )}
           >
-            VA Needed
+            Coaching
           </button>
+          {(isCloseReady(client) || client.close_call_booked) && (
+            <button
+              onClick={() => quickAction({ close_call_booked: !client.close_call_booked })}
+              disabled={updating}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+                client.close_call_booked
+                  ? 'border-teal-500/40 bg-teal-500/10 text-teal-300'
+                  : 'border-emerald-500/40 text-emerald-300/80 hover:text-emerald-300 hover:border-emerald-500/60'
+              )}
+            >
+              {client.close_call_booked ? 'Booked ✓' : 'Book Closing'}
+            </button>
+          )}
           <button
             onClick={() => quickAction({ payment_issue: !client.payment_issue })}
             disabled={updating}

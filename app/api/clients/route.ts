@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sortClientsByPriority } from '@/lib/scoring'
 
+// Throttle the "expire old trials" write so it runs at most once per interval
+// instead of firing a table-wide UPDATE scan on every single list load.
+let lastTrialSweep = 0
+const TRIAL_SWEEP_INTERVAL_MS = 5 * 60_000 // 5 minutes
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(req.url)
@@ -9,14 +14,18 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const prioritized = searchParams.get('prioritized') === 'true'
 
-  // Auto-promote expired trials → trial_concluded (fire-and-forget, best effort)
-  const today = new Date().toISOString().slice(0, 10)
-  supabase
-    .from('clients')
-    .update({ stage: 'trial_concluded' })
-    .in('stage', ['free_trial', 'free_trial_pending', 'trial_ending_soon'])
-    .lt('trial_end', today)
-    .then(() => {})
+  // Auto-promote expired trials → trial_concluded (fire-and-forget, best effort, throttled)
+  const now = Date.now()
+  if (now - lastTrialSweep > TRIAL_SWEEP_INTERVAL_MS) {
+    lastTrialSweep = now
+    const today = new Date().toISOString().slice(0, 10)
+    supabase
+      .from('clients')
+      .update({ stage: 'trial_concluded' })
+      .in('stage', ['free_trial', 'free_trial_pending', 'trial_ending_soon'])
+      .lt('trial_end', today)
+      .then(() => {})
+  }
 
   let query = supabase.from('clients').select('*').order('updated_at', { ascending: false })
 

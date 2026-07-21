@@ -7,10 +7,12 @@ import { MobileShell } from './MobileShell'
 import { JARVISWidget } from '@/components/assistant/JARVISWidget'
 import { JarvisProvider } from '@/components/assistant/JarvisProvider'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isMobile = useIsMobile()
+  const mainRef = useScrollRestoration<HTMLElement>()
 
   if (pathname === '/login') {
     return <>{children}</>
@@ -30,7 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar />
-          <main className="flex-1 overflow-y-auto p-6">
+          <main ref={mainRef} className="flex-1 overflow-y-auto p-6">
             {children}
           </main>
         </div>

@@ -28,12 +28,17 @@ function stopLevel(): void {
   levelListener?.(0)
 }
 
-function startAnalyser(audio: HTMLAudioElement): void {
+// Build the WebAudio analyser graph and resume the context. MUST run BEFORE
+// audio.play(): createMediaElementSource reroutes the element's output into the
+// graph, and if that happens mid-playback (or with a suspended context) the
+// first ~tens of ms are swallowed — the classic "half the first word" clip.
+async function startAnalyser(audio: HTMLAudioElement): Promise<void> {
   if (!levelListener) return
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     audioCtx ??= new Ctx()
-    if (audioCtx.state === 'suspended') void audioCtx.resume()
+    // Await the resume so the context is actually running before the first buffer.
+    if (audioCtx.state === 'suspended') await audioCtx.resume()
     const src = audioCtx.createMediaElementSource(audio)
     const analyser = audioCtx.createAnalyser()
     analyser.fftSize = 256
@@ -170,8 +175,11 @@ async function speakEleven(text: string): Promise<boolean> {
       const ms = isFinite(audio.duration) ? audio.duration * 1000 + 1500 : 30000
       setTimeout(finish, ms)
     }
-    audio.onplay = () => startAnalyser(audio)
-    audio.play().catch(finish)
+    // Wire the analyser graph + resume the AudioContext BEFORE play so the
+    // element's output is already routed through the graph on the first sample.
+    void startAnalyser(audio).finally(() => {
+      audio.play().catch(finish)
+    })
   })
   return true
 }
@@ -202,7 +210,9 @@ function speakBrowser(text: string): Promise<void> {
     setTimeout(finish, est + 3000)
 
     u.onstart = () => startFakeLevel()
-    window.speechSynthesis.speak(u)
+    // Chrome drops the first ~100-200ms when speak() runs in the same tick as
+    // cancel(); a short defer lets the engine reset so word one isn't clipped.
+    setTimeout(() => window.speechSynthesis.speak(u), 60)
   })
 }
 

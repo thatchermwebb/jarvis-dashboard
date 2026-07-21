@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { JARVISWidget } from '@/components/assistant/JARVISWidget'
+import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -48,6 +49,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const mainRef = useScrollRestoration<HTMLElement>()
 
   const navItems = user?.userType === 'va'
     ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
@@ -85,7 +87,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-4">
+      <main ref={mainRef} className="flex-1 overflow-y-auto px-4 pt-4 pb-4">
         {children}
       </main>
 

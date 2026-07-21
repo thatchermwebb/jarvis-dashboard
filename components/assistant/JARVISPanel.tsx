@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send, X, Mic, MicOff, PhoneCall } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useJarvis } from './JarvisProvider'
+import { useJarvis, useJarvisInterim } from './JarvisProvider'
 import { ArcReactorOrb } from './ArcReactorOrb'
 import { LiveDraftForm } from './LiveDraftForm'
 
@@ -37,9 +37,10 @@ interface Props {
 export function JARVISPanel({ open, onClose, clientName, anchor }: Props) {
   const {
     supported, status, voiceEnabled, permissionDenied,
-    messages, clearMessages, interim, busy, wizard,
+    messages, clearMessages, busy, wizard,
     enableVoice, disableVoice, sendText, startLogWizard,
   } = useJarvis()
+  const interim = useJarvisInterim()
 
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)

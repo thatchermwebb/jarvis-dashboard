@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, Table2, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
@@ -645,7 +645,7 @@ function ClientsContent() {
     return all
   }
 
-  const visible = applyFilter(clients)
+  const visible = useMemo(() => applyFilter(clients), [clients, urlFilter, urlStage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filterLabel =
     urlFilter === 'free_trials'    ? 'Free Trials' :
@@ -655,10 +655,12 @@ function ClientsContent() {
     urlStage                       ? urlStage.replace(/_/g, ' ') :
     null
 
-  const visibleGroups = LIST_GROUPS.map(g => ({
-    ...g,
-    clients: visible.filter(c => g.stages.includes(c.stage ?? '')),
-  })).filter(g => g.clients.length > 0)
+  const visibleGroups = useMemo(() =>
+    LIST_GROUPS.map(g => ({
+      ...g,
+      clients: sortClients(visible.filter(c => g.stages.includes(c.stage ?? ''))),
+    })).filter(g => g.clients.length > 0),
+    [visible, sortField, sortDir]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -731,7 +733,7 @@ function ClientsContent() {
         <div className="space-y-4">
           {visibleGroups.map(group => {
             const collapsed = collapsedGroups.has(group.label)
-            const sorted = sortClients(group.clients)
+            const sorted = group.clients // already sorted in visibleGroups memo
             return (
               <div key={group.label}>
                 {/* Group header — clickable to collapse */}

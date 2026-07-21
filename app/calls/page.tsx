@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { CallQueueCard, type PaymentDue } from '@/components/call-queue/CallQueueCard'
+import { CallQueueCard, type PaymentDueFlag, type PaymentDueInfo } from '@/components/call-queue/CallQueueCard'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { AuthorBadge } from '@/components/ui/author-badge'
@@ -32,7 +33,18 @@ const CAL_DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 type QueueTab = 'today' | 'tomorrow' | 'this_week' | 'all'
 type ViewMode = 'queue' | 'calendar' | 'log'
 type SortMode = 'priority' | 'due_date'
-type TypeFilter = 'all' | 'thatcher' | 'trepp'
+type OwnerFilter = 'mine' | 'thatcher' | 'trepp' | 'all'
+
+// Human labels for the payment-due badge on call cards
+const PAYMENT_TYPE_LABEL: Record<string, string> = {
+  retainer_monthly: 'Retainer (Monthly)',
+  retainer_biweekly: 'Retainer (Bi-weekly)',
+  retainer_weekly: 'Retainer (Weekly)',
+  deposit: 'Deposit',
+  remaining_balance: 'Remaining Balance',
+  one_time: 'One-Time',
+  partial_payment: 'Partial Payment',
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -266,7 +278,14 @@ function CallsPageInner() {
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('mine')
+
+  // Multi-select (bulk owner/flag assignment)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+  // Booked closing-calls (collapsed out of the main queue)
+  const [showBooked, setShowBooked] = useState(false)
 
   // Data
   const [allClients, setAllClients] = useState<Client[]>([])
@@ -279,7 +298,7 @@ function CallsPageInner() {
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
-  const [paymentFlags, setPaymentFlags] = useState<Record<string, PaymentDue>>({})
+  const [paymentFlags, setPaymentFlags] = useState<Record<string, PaymentDueInfo>>({})
 
   const loadQueue = useCallback(async () => {
     setLoadingQueue(true)
@@ -289,24 +308,38 @@ function CallsPageInner() {
     ])
     const data = await clientsRes.json()
     const all: Client[] = Array.isArray(data) ? data : []
-    const excluded = ['churned', 'free_trial_lost', 'trial_concluded', 'onboarding']
-    setAllClients(all.filter(c => !excluded.includes(c.stage)))
+    // Show anyone with a scheduled follow-up regardless of stage, plus all onboardings;
+    // only truly-dead stages with no next step are hidden. Booked closing-calls drop off.
+    const excluded = ['churned', 'free_trial_lost', 'trial_concluded']
+    setAllClients(
+      all.filter(c =>
+        (c.next_followup_date || c.stage === 'onboarding' || !excluded.includes(c.stage))
+      )
+    )
 
-    // Build a per-client "most urgent unpaid payment" flag for the call cards.
+    // Build a per-client "most urgent unpaid payment" (amount + plan + timing) for the call cards.
     const payments = await paymentsRes.json().catch(() => [])
     const t = localToday()
     const tom = offsetStr(1)
-    const flags: Record<string, PaymentDue> = {}
-    const rank: Record<PaymentDue, number> = { overdue: 3, today: 2, tomorrow: 1 }
+    const flags: Record<string, PaymentDueInfo> = {}
+    const rank: Record<PaymentDueFlag, number> = { overdue: 3, today: 2, tomorrow: 1 }
     for (const p of (Array.isArray(payments) ? payments : [])) {
       if (!p.client_id || !p.due_date) continue
       if (!['pending', 'overdue'].includes(p.status)) continue // unpaid only
-      let flag: PaymentDue | null = null
+      let flag: PaymentDueFlag | null = null
       if (p.status === 'overdue' || p.due_date < t) flag = 'overdue'
       else if (p.due_date === t) flag = 'today'
       else if (p.due_date === tom) flag = 'tomorrow'
       if (!flag) continue
-      if (!flags[p.client_id] || rank[flag] > rank[flags[p.client_id]]) flags[p.client_id] = flag
+      const existing = flags[p.client_id]
+      if (!existing || rank[flag] > rank[existing.flag]) {
+        flags[p.client_id] = {
+          flag,
+          amount: Number(p.amount) || 0,
+          dueDate: p.due_date,
+          typeLabel: PAYMENT_TYPE_LABEL[p.payment_type] ?? 'Payment',
+        }
+      }
     }
     setPaymentFlags(flags)
     setLoadingQueue(false)
@@ -324,38 +357,41 @@ function CallsPageInner() {
   useEffect(() => { loadQueue() }, [loadQueue])
   useEffect(() => { if (viewMode === 'log') loadLog() }, [viewMode, loadLog])
 
-  // Filter clients by tab
-  function getTabClients(tab: QueueTab): Client[] {
+  // Filter clients by tab (booked closing-calls are handled separately, not in the queue)
+  const getTabClients = useCallback((tab: QueueTab): Client[] => {
     const t = localToday()
     const tom = offsetStr(1)
     const in7 = offsetStr(7)
+    const pool = allClients.filter(c => !c.close_call_booked)
 
     let filtered: Client[]
     switch (tab) {
       case 'today':
-        filtered = allClients.filter(c => {
+        filtered = pool.filter(c => {
           if (!c.next_followup_date) return true // never contacted / no date = due now
           return c.next_followup_date <= t
         })
         break
       case 'tomorrow':
-        filtered = allClients.filter(c => c.next_followup_date === tom)
+        filtered = pool.filter(c => c.next_followup_date === tom)
         break
       case 'this_week':
-        filtered = allClients.filter(c => {
+        filtered = pool.filter(c => {
           if (!c.next_followup_date) return false
           return c.next_followup_date > t && c.next_followup_date <= in7
         })
         break
       case 'all':
-        filtered = allClients.filter(c => c.next_followup_date)
+        filtered = pool.filter(c => c.next_followup_date)
         break
     }
 
-    // Type filter — who owns the call
-    if (typeFilter === 'thatcher') {
+    // Owner filter — whose call is it
+    if (ownerFilter === 'mine') {
+      filtered = filtered.filter(c => !c.thatcher_needed && !c.trepp_needed && !c.va_needed)
+    } else if (ownerFilter === 'thatcher') {
       filtered = filtered.filter(c => c.thatcher_needed)
-    } else if (typeFilter === 'trepp') {
+    } else if (ownerFilter === 'trepp') {
       filtered = filtered.filter(c => c.trepp_needed || c.va_needed)
     }
 
@@ -371,14 +407,67 @@ function CallsPageInner() {
     }
     // priority: already sorted by API
     return filtered
-  }
+  }, [allClients, ownerFilter, sortMode])
 
   // Calendar shows all clients with followup dates
-  const calendarClients = allClients.filter(c => c.next_followup_date)
+  const calendarClients = useMemo(() => allClients.filter(c => c.next_followup_date), [allClients])
 
-  const tabClients = getTabClients(queueTab)
+  // Booked closing-calls, collapsed out of the main queue
+  const bookedClients = useMemo(() => allClients.filter(c => c.close_call_booked), [allClients])
 
-  const tabCount = (tab: QueueTab) => getTabClients(tab).length
+  const tabClients = useMemo(() => getTabClients(queueTab), [getTabClients, queueTab])
+
+  const tabCounts = useMemo(() => ({
+    today: getTabClients('today').length,
+    tomorrow: getTabClients('tomorrow').length,
+    this_week: getTabClients('this_week').length,
+    all: getTabClients('all').length,
+  }), [getTabClients])
+  const tabCount = (tab: QueueTab) => tabCounts[tab]
+
+  // ── Multi-select / bulk assign ──────────────────────────────────────────
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  function selectAllVisible() {
+    setSelectedIds(new Set(tabClients.map(c => c.id)))
+  }
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+  function exitSelectMode() {
+    setSelectMode(false)
+    clearSelection()
+  }
+  async function bulkAssign(field: 'thatcher_needed' | 'trepp_needed' | 'va_needed') {
+    if (selectedIds.size === 0) return
+    setBulkUpdating(true)
+    const ids = [...selectedIds]
+    try {
+      const results = await Promise.all(
+        ids.map(id =>
+          fetch(`/api/clients/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: true }),
+          }).then(r => r.ok)
+        )
+      )
+      const ok = results.filter(Boolean).length
+      const labelMap = { thatcher_needed: 'Thatcher', trepp_needed: 'Trepp', va_needed: 'Coaching' }
+      toast.success(`Assigned ${ok} to ${labelMap[field]}`)
+      exitSelectMode()
+      await loadQueue()
+    } catch {
+      toast.error('Bulk assign failed')
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
 
   async function deleteLog(id: string) {
     await fetch(`/api/communication-logs/${id}`, { method: 'DELETE' })
@@ -453,14 +542,27 @@ function CallsPageInner() {
         </div>
 
         {viewMode === 'queue' && (
-          <button
-            onClick={() => setSortMode(s => s === 'priority' ? 'due_date' : 'priority')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors flex-shrink-0"
-            title="Toggle sort order"
-          >
-            <ArrowUpDown className="w-3 h-3" />
-            <span>{sortMode === 'priority' ? 'Priority' : 'Due Date'}</span>
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => { if (selectMode) exitSelectMode(); else setSelectMode(true) }}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors',
+                selectMode ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+              )}
+              title="Select multiple to assign"
+            >
+              <CheckSquare className="w-3 h-3" />
+              <span>{selectMode ? 'Done' : 'Select'}</span>
+            </button>
+            <button
+              onClick={() => setSortMode(s => s === 'priority' ? 'due_date' : 'priority')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+              title="Toggle sort order"
+            >
+              <ArrowUpDown className="w-3 h-3" />
+              <span>{sortMode === 'priority' ? 'Priority' : 'Due Date'}</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -496,19 +598,20 @@ function CallsPageInner() {
             ))}
           </div>
 
-          {/* Type filter: All / Thatcher / Trepp */}
+          {/* Owner filter: Mine / Thatcher / Trepp / All */}
           <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 mb-2 flex-shrink-0">
             {([
-              { key: 'all', label: 'All' },
+              { key: 'mine', label: 'Mine' },
               { key: 'thatcher', label: 'Thatcher' },
               { key: 'trepp', label: 'Trepp' },
-            ] as { key: TypeFilter; label: string }[]).map(({ key, label }) => (
+              { key: 'all', label: 'All' },
+            ] as { key: OwnerFilter; label: string }[]).map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => setTypeFilter(key)}
+                onClick={() => setOwnerFilter(key)}
                 className={cn(
                   'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                  typeFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  ownerFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {label}
@@ -521,6 +624,26 @@ function CallsPageInner() {
       {/* ── QUEUE VIEW ────────────────────────────────────────────────────── */}
       {viewMode === 'queue' && (
         <div className="space-y-3">
+          {/* Bulk-assign bar (select mode) */}
+          {selectMode && (
+            <div className="sticky top-2 z-10 flex items-center gap-2 flex-wrap bg-card/95 backdrop-blur border border-border/60 rounded-xl px-4 py-2.5 shadow-sm">
+              <span className="text-sm font-medium">{selectedIds.size} selected</span>
+              <button onClick={selectAllVisible} className="text-xs text-primary hover:underline">Select all</button>
+              {selectedIds.size > 0 && (
+                <button onClick={clearSelection} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-muted-foreground hidden sm:inline">Assign:</span>
+                <button disabled={selectedIds.size === 0 || bulkUpdating} onClick={() => bulkAssign('thatcher_needed')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-500/40 bg-amber-500/10 text-amber-300 disabled:opacity-40 hover:bg-amber-500/20">Thatcher</button>
+                <button disabled={selectedIds.size === 0 || bulkUpdating} onClick={() => bulkAssign('trepp_needed')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 bg-orange-500/10 text-orange-300 disabled:opacity-40 hover:bg-orange-500/20">Trepp</button>
+                <button disabled={selectedIds.size === 0 || bulkUpdating} onClick={() => bulkAssign('va_needed')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 bg-blue-500/10 text-blue-300 disabled:opacity-40 hover:bg-blue-500/20">Coaching</button>
+              </div>
+            </div>
+          )}
+
           {loadingQueue ? (
             [...Array(3)].map((_, i) => (
               <div key={i} className="h-36 bg-card border border-border rounded-xl animate-pulse" />
@@ -539,7 +662,37 @@ function CallsPageInner() {
               </div>
             )
           ) : (
-            tabClients.map(c => <CallQueueCard key={c.id} client={c} onUpdated={loadQueue} paymentDue={paymentFlags[c.id] ?? null} />)
+            tabClients.map(c => (
+              <CallQueueCard
+                key={c.id}
+                client={c}
+                onUpdated={loadQueue}
+                paymentDue={paymentFlags[c.id] ?? null}
+                selectable={selectMode}
+                selected={selectedIds.has(c.id)}
+                onToggleSelect={toggleSelect}
+              />
+            ))
+          )}
+
+          {/* Booked closing-calls (collapsed out of the queue) */}
+          {bookedClients.length > 0 && (
+            <div className="pt-2">
+              <button
+                onClick={() => setShowBooked(s => !s)}
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showBooked ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                Closing calls booked ({bookedClients.length})
+              </button>
+              {showBooked && (
+                <div className="space-y-3 mt-3">
+                  {bookedClients.map(c => (
+                    <CallQueueCard key={c.id} client={c} onUpdated={loadQueue} paymentDue={paymentFlags[c.id] ?? null} />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

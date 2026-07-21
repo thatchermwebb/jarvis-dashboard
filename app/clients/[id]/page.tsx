@@ -29,7 +29,18 @@ import {
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import type { Client, CommunicationLog } from '@/types'
+import type { Client, CommunicationLog, Payment } from '@/types'
+
+// Human labels for the Next Payment card
+const PAYMENT_TYPE_LABEL: Record<string, string> = {
+  retainer_monthly: 'Retainer (Monthly)',
+  retainer_biweekly: 'Retainer (Bi-weekly)',
+  retainer_weekly: 'Retainer (Weekly)',
+  deposit: 'Deposit',
+  remaining_balance: 'Remaining Balance',
+  one_time: 'One-Time',
+  partial_payment: 'Partial Payment',
+}
 
 function Field({ label, value, mono = false }: { label: string; value?: string | number | null; mono?: boolean }) {
   if (!value && value !== 0) return null
@@ -83,6 +94,8 @@ export default function ClientWarRoom() {
   const [startModalOpen, setStartModalOpen] = useState(false)
   const [aiSummary, setAiSummary] = useState<string | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [nextPayment, setNextPayment] = useState<Payment | null>(null)
+  const [activeTab, setActiveTab] = useState('history')
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   const refreshSummary = useCallback(async (clientId: string) => {
@@ -106,15 +119,21 @@ export default function ClientWarRoom() {
   }, [])
 
   const load = useCallback(async () => {
-    const [clientRes, logsRes, adsRes] = await Promise.all([
+    const [clientRes, logsRes, adsRes, paymentsRes] = await Promise.all([
       fetch(`/api/clients/${id}`),
       fetch(`/api/communication-logs?client_id=${id}`),
       fetch(`/api/ad-productions?client_id=${id}`),
+      fetch(`/api/payments?client_id=${id}`),
     ])
     if (!clientRes.ok) { router.push('/clients'); return }
-    const [clientData, logsData, adsData] = await Promise.all([clientRes.json(), logsRes.json(), adsRes.json()])
+    const [clientData, logsData, adsData, paymentsData] = await Promise.all([clientRes.json(), logsRes.json(), adsRes.json(), paymentsRes.json()])
     setClient(clientData)
     setLogs(Array.isArray(logsData) ? logsData : [])
+    // Soonest unpaid payment → "Next Payment" card
+    const unpaid = (Array.isArray(paymentsData) ? paymentsData : [])
+      .filter((p: Payment) => p.status === 'pending' || p.status === 'overdue')
+      .sort((a: Payment, b: Payment) => a.due_date.localeCompare(b.due_date))
+    setNextPayment(unpaid[0] ?? null)
     const ads = Array.isArray(adsData) ? adsData : []
     setAdStarted(ads.some((a: any) => a.status === 'in_progress' || a.status === 'done'))
 
@@ -609,6 +628,56 @@ export default function ClientWarRoom() {
               )}
             </div>
 
+            {/* Next Payment card */}
+            <div className={cn(
+              'border rounded-xl p-4 space-y-3',
+              nextPayment ? 'bg-card border-border' : 'bg-secondary/20 border-border/40'
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Payment</span>
+                <button
+                  onClick={() => { setActiveTab('payments'); document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth' }) }}
+                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
+                >
+                  {nextPayment ? 'Manage' : '+ Add'}
+                </button>
+              </div>
+
+              {nextPayment ? (() => {
+                const d = daysUntil(nextPayment.due_date)
+                const overdue = nextPayment.status === 'overdue' || (d !== null && d < 0)
+                const isToday = d === 0
+                const isTomorrow = d === 1
+                const dateLabel = overdue
+                  ? (d !== null ? `${Math.abs(d)} day${Math.abs(d) !== 1 ? 's' : ''} overdue` : 'Overdue')
+                  : isToday ? 'Due today'
+                  : isTomorrow ? 'Due tomorrow'
+                  : d !== null ? `Due in ${d} days`
+                  : `Due ${formatDate(nextPayment.due_date)}`
+                return (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className={cn(
+                        'text-xl font-bold leading-tight',
+                        overdue ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-foreground'
+                      )}>
+                        {formatCurrency(nextPayment.amount)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{PAYMENT_TYPE_LABEL[nextPayment.payment_type] ?? 'Payment'}</div>
+                    </div>
+                    <div className={cn(
+                      'text-xs font-medium',
+                      overdue ? 'text-red-400' : isToday ? 'text-blue-400' : isTomorrow ? 'text-amber-400' : 'text-muted-foreground'
+                    )}>
+                      {overdue && '⚠ '}{dateLabel} · {formatDate(nextPayment.due_date)}
+                    </div>
+                  </>
+                )
+              })() : (
+                <div className="text-sm text-muted-foreground/50 py-1">No upcoming payment scheduled</div>
+              )}
+            </div>
+
           </div>
 
           {/* Right column — communication + tabs */}
@@ -693,7 +762,7 @@ export default function ClientWarRoom() {
             </div>
 
             {/* Tabs */}
-            <Tabs defaultValue="history">
+            <Tabs id="client-tabs" value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-secondary/50 border border-border h-11 gap-1 px-1">
                 <TabsTrigger value="history" className="text-sm px-5 h-9">History</TabsTrigger>
                 <TabsTrigger value="payments" className="text-sm px-5 h-9">Payments</TabsTrigger>
