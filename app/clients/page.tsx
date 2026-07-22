@@ -507,7 +507,8 @@ function ClientsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const isVA = user?.userType === 'va'
+  // VAs and (read-only) associates can't create/import clients.
+  const isVA = user?.userType === 'va' || user?.userType === 'associate'
   const isMobile = useIsMobile()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)

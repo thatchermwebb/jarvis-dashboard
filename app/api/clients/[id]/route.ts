@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('clients')
     .select('*, affiliate:affiliates(id, name, initials)')
     .eq('id', id)
-    .single()
+
+  // Associates may only open clients in their own affiliated book — a direct
+  // URL to someone else's client 404s rather than leaking the record.
+  const scope = await getAffiliateScope()
+  if (scope) query = query.eq('affiliate_id', scope)
+
+  const { data, error } = await query.single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 404 })
   return NextResponse.json(data)
@@ -20,6 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 const LOST_STAGES = new Set(['churned', 'free_trial_lost'])
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const supabase = await createClient()
   const body = await req.json()
@@ -43,6 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const supabase = await createClient()
 

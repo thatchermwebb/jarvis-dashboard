@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic } from '@/lib/anthropic'
+import { callerIsReadOnly } from '@/lib/auth-server'
 
 // AI "Current Situation" summary for one client. Summarizes the recent
 // communication history WITHOUT paraphrasing away specifics — exact wording
@@ -9,6 +10,8 @@ import { anthropic } from '@/lib/anthropic'
 export const maxDuration = 30
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Regenerating the summary writes to the client row and burns model spend.
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const { id } = await params
 

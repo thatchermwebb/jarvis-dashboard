@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { ASSOCIATE_ALLOWED_HREFS } from '@/lib/auth'
 import {
   LayoutDashboard,
   Phone,
@@ -39,6 +40,8 @@ export function Sidebar() {
 
   const navItems = user?.userType === 'va'
     ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
+    : user?.userType === 'associate'
+    ? ALL_NAV_ITEMS.filter(item => ASSOCIATE_ALLOWED_HREFS.includes(item.href))
     : ALL_NAV_ITEMS
 
   return (

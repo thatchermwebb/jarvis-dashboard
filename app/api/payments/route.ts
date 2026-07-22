@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -7,10 +8,19 @@ export async function GET(req: NextRequest) {
   const clientId = searchParams.get('client_id')
   const status = searchParams.get('status')
 
+  // Associates only see payments belonging to their own affiliated clients.
+  // `!inner` makes the embedded client a join filter rather than a nullable side-load.
+  const scope = await getAffiliateScope()
+  const clientJoin = scope
+    ? 'client:clients!inner(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))'
+    : 'client:clients(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))'
+
   let query = supabase
     .from('payments')
-    .select('*, client:clients(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))')
+    .select(`*, ${clientJoin}`)
     .order('due_date', { ascending: true })
+
+  if (scope) query = query.eq('client.affiliate_id', scope)
 
   if (clientId) query = query.eq('client_id', clientId)
   if (status) query = query.eq('status', status)
@@ -21,6 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const body = await req.json()
 

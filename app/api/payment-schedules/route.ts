@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
 import { addWeeks, addMonths, format, parseISO } from 'date-fns'
 
 function generateDueDates(frequency: string, startDate: Date, endDate?: Date): Date[] {
@@ -23,11 +24,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('client_id')
 
+  // Associates only see schedules for their own affiliated clients.
+  const scope = await getAffiliateScope()
+  const clientJoin = scope
+    ? 'client:clients!inner(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))'
+    : 'client:clients(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))'
+
   let query = supabase
     .from('payment_schedules')
-    .select('*, client:clients(id, name, business_name, affiliate_id, affiliate:affiliates(id, name, initials))')
+    .select(`*, ${clientJoin}`)
     .order('created_at', { ascending: false })
 
+  if (scope) query = query.eq('client.affiliate_id', scope)
   if (clientId) query = query.eq('client_id', clientId)
 
   const { data, error } = await query
@@ -36,6 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const body = await req.json()
 

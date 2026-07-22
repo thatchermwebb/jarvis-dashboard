@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency, formatDate, localToday } from '@/lib/utils'
 import type { Payment, PaymentSchedule, PaymentType, PaymentFrequency } from '@/types'
 
@@ -41,6 +42,9 @@ interface Props {
 }
 
 export function PaymentPanel({ clientId, clientName }: Props) {
+  const { user } = useAuth()
+  // Associates view their own clients' payments read-only.
+  const readOnly = user?.userType === 'associate'
   const [payments, setPayments] = useState<Payment[]>([])
   const [schedules, setSchedules] = useState<PaymentSchedule[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,7 +138,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
           {totalOwed > 0 && <span className="text-yellow-400 font-medium">{formatCurrency(totalOwed)} upcoming</span>}
           {totalPaid > 0 && <span className="text-emerald-400">{formatCurrency(totalPaid)} collected</span>}
         </div>
-        <div className="flex gap-2">
+        <div className={cn('flex gap-2', readOnly && 'hidden')}>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setScheduleOpen(true)}>
             <Repeat className="w-3 h-3" /> Set Schedule
           </Button>
@@ -195,7 +199,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
                       <span className="text-muted-foreground">{formatCurrency(s.amount)} · {s.frequency}</span>
                       {!s.active && <span className="text-[10px] text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5">Paused</span>}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className={cn('flex items-center gap-1 flex-shrink-0', readOnly && 'hidden')}>
                       {s.active ? (
                         <>
                           <button onClick={() => pauseSchedule(s.id)} title="Pause plan"
@@ -235,6 +239,8 @@ export function PaymentPanel({ clientId, clientName }: Props) {
 function PaymentRow({ payment: p, onMark, onDelete, onEdit }: {
   payment: Payment; onMark: (s: string) => void; onDelete: () => void; onEdit: () => void
 }) {
+  const { user } = useAuth()
+  const readOnly = user?.userType === 'associate'
   const cfg = STATUS_CONFIG[p.status] ?? STATUS_CONFIG.pending
   const isPaid = p.status === 'paid' || p.status === 'paid_late' || p.status === 'waived'
 

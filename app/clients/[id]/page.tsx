@@ -29,6 +29,7 @@ import {
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useAuth } from '@/contexts/AuthContext'
 import type { Client, CommunicationLog, Payment } from '@/types'
 
 // Human labels for the Next Payment card
@@ -96,9 +97,13 @@ export default function ClientWarRoom() {
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [nextPayment, setNextPayment] = useState<Payment | null>(null)
   const [activeTab, setActiveTab] = useState('history')
+  const { user } = useAuth()
+  // Associates get a read-only profile for their own affiliated clients.
+  const readOnly = user?.userType === 'associate'
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   const refreshSummary = useCallback(async (clientId: string) => {
+    if (readOnly) return // associates can't regenerate (API would 403)
     setSummaryLoading(true)
     try {
       const res = await fetch(`/api/clients/${clientId}/situation`, { method: 'POST' })
@@ -106,7 +111,7 @@ export default function ClientWarRoom() {
       if (res.ok && data.summary) setAiSummary(data.summary)
     } catch { /* keep whatever we have */ }
     finally { setSummaryLoading(false) }
-  }, [])
+  }, [readOnly])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -261,14 +266,16 @@ export default function ClientWarRoom() {
               {/* Inline stage picker */}
               <div className="relative" ref={stagePickerRef}>
                 <button
-                  onClick={() => setStagePickerOpen(o => !o)}
+                  onClick={() => { if (!readOnly) setStagePickerOpen(o => !o) }}
+                  disabled={readOnly}
                   className={cn(
                     'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all',
-                    stageColor(client.stage)
+                    stageColor(client.stage),
+                    readOnly && 'cursor-default'
                   )}
                 >
                   {stageLabel(client.stage)}
-                  <ChevronDown className={cn('w-3 h-3 transition-transform', stagePickerOpen && 'rotate-180')} />
+                  {!readOnly && <ChevronDown className={cn('w-3 h-3 transition-transform', stagePickerOpen && 'rotate-180')} />}
                 </button>
                 {stagePickerOpen && (
                   <div className="absolute top-full left-0 mt-1.5 z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden min-w-[200px]">
@@ -313,7 +320,7 @@ export default function ClientWarRoom() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className={cn('flex items-center gap-1.5 flex-wrap', readOnly && 'hidden')}>
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setLogOpen(true)}>
               <Phone className="w-3 h-3" /> Log Call
             </Button>
@@ -339,10 +346,12 @@ export default function ClientWarRoom() {
                 {startingAds ? 'Starting...' : adStarted ? 'Started' : 'Start + Notify Slack'}
               </Button>
             )}
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setEditOpen(true)}>
-              <Edit className="w-3 h-3" /> Edit
-            </Button>
-            {deleteConfirm ? (
+            {!readOnly && (
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setEditOpen(true)}>
+                <Edit className="w-3 h-3" /> Edit
+              </Button>
+            )}
+            {readOnly ? null : deleteConfirm ? (
               <div className="flex items-center gap-1">
                 <span className="text-xs text-red-400">Delete client?</span>
                 <Button size="sm" variant="outline" className="h-8 text-xs border-red-500/40 text-red-400 hover:bg-red-950/30"
@@ -363,7 +372,7 @@ export default function ClientWarRoom() {
         </div>
 
         {/* Quick action chips */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className={cn('flex items-center gap-2 flex-wrap', readOnly && 'hidden')}>
           <button
             onClick={() => quickUpdate({ payment_issue: !client.payment_issue })}
             className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.payment_issue ? 'bg-red-500/20 border-red-500/30 text-red-300' : 'border-border text-muted-foreground hover:border-red-500/30 hover:text-red-300')}
@@ -570,7 +579,7 @@ export default function ClientWarRoom() {
             )}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Step</span>
-                <div className="flex items-center gap-3">
+                <div className={cn('flex items-center gap-3', readOnly && 'hidden')}>
                   {client.next_followup_date && (
                     <button
                       onClick={() => quickUpdate({ next_followup_date: null, followup_reason: null })}
@@ -637,9 +646,12 @@ export default function ClientWarRoom() {
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Payment</span>
                 <button
                   onClick={() => { setActiveTab('payments'); document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth' }) }}
-                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
+                  className={cn(
+                    'text-[10px] text-primary hover:text-primary/80 transition-colors font-medium',
+                    readOnly && !nextPayment && 'hidden',
+                  )}
                 >
-                  {nextPayment ? 'Manage' : '+ Add'}
+                  {readOnly ? 'View' : nextPayment ? 'Manage' : '+ Add'}
                 </button>
               </div>
 
@@ -703,13 +715,15 @@ export default function ClientWarRoom() {
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                         <Bot className="w-3 h-3" /> Situation Summary
                       </div>
-                      <button
-                        onClick={() => refreshSummary(client.id)}
-                        disabled={summaryLoading}
-                        className="text-[10px] text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
-                      >
-                        {summaryLoading ? 'Updating…' : 'Refresh'}
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => refreshSummary(client.id)}
+                          disabled={summaryLoading}
+                          className="text-[10px] text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
+                        >
+                          {summaryLoading ? 'Updating…' : 'Refresh'}
+                        </button>
+                      )}
                     </div>
                     {aiSummary ? (
                       <div className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2 whitespace-pre-wrap">
@@ -780,9 +794,11 @@ export default function ClientWarRoom() {
                       View all <ArrowRight className="w-3 h-3" />
                     </a>
                   </div>
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setLogOpen(true)}>
-                    <Plus className="w-3 h-3" /> Log
-                  </Button>
+                  {!readOnly && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setLogOpen(true)}>
+                      <Plus className="w-3 h-3" /> Log
+                    </Button>
+                  )}
                 </div>
                 {logs.length === 0 ? (
                   <div className="bg-card border border-border rounded-xl p-6 text-center text-xs text-muted-foreground">
@@ -921,7 +937,9 @@ export default function ClientWarRoom() {
       <LogCallDialog open={!!editingLog} onClose={() => setEditingLog(null)} editLog={editingLog ? { ...editingLog, log_type: editingLog.log_type ?? 'call', outcome: editingLog.outcome ?? 'answered' } : undefined} onLogged={() => { setEditingLog(null); load() }} />
       <AdSetupDialog open={adSetupOpen} onClose={() => setAdSetupOpen(false)} clientId={client.id} clientName={client.name} businessName={client.business_name} marketLocation={client.market_location} onSaved={load} />
       <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} client={client} onSaved={load} />
-      <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />
+      {/* JARVIS has no provider for associates (it can read across the whole
+          book), and useJarvis() throws without one — so don't mount it. */}
+      {!readOnly && <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />}
       <BriefGenerator open={briefOpen} onClose={() => setBriefOpen(false)} client={client} />
       {startModalOpen && (
         <StartFulfillmentModal

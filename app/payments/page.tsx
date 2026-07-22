@@ -12,9 +12,20 @@ import { cn, formatCurrency, localToday } from '@/lib/utils'
 import type { Payment, PaymentEntryStatus, PaymentType } from '@/types'
 import { PaymentDialog } from '@/components/payments/PaymentDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+/**
+ * Associates get a read-only view of their own affiliated payments — the API
+ * rejects their writes, so don't offer the affordances. Read straight from
+ * auth in each row rather than drilling a prop through five components.
+ */
+function useReadOnly(): boolean {
+  const { user } = useAuth()
+  return user?.userType === 'associate'
+}
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +74,7 @@ function getNextWeekRange() {
 
 export default function PaymentsPage() {
   const router = useRouter()
+  const readOnly = useReadOnly()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'table' | 'calendar'>('list')
@@ -224,7 +236,7 @@ export default function PaymentsPage() {
               <Calendar className="w-3.5 h-3.5" /> Calendar
             </button>
           </div>
-          {!isMobile && (
+          {!isMobile && !readOnly && (
             <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => openAdd()}>
               <Plus className="w-3.5 h-3.5" /> Add Payment
             </Button>
@@ -375,6 +387,7 @@ function TableView({
   onDeleteCancel: () => void
   onClientClick: (id: string) => void
 }) {
+  const readOnly = useReadOnly()
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set(['History']))
 
   function toggleSection(title: string) {
@@ -408,7 +421,7 @@ function TableView({
 
   return (
     <div className="space-y-4">
-      {isMobile && (
+      {isMobile && !readOnly && (
         <button
           onClick={onAdd}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground hover:text-foreground hover:border-border active:bg-muted/20 transition-colors"
@@ -487,6 +500,7 @@ function MobilePaymentRow({ payment: p, onMarkPaid, onEdit }: {
   onMarkPaid: () => void
   onEdit: () => void
 }) {
+  const readOnly = useReadOnly()
   const [confirming, setConfirming] = useState(false)
   const st = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending
   const isPaid = ['paid','paid_late','waived','voided'].includes(p.status)
@@ -506,7 +520,9 @@ function MobilePaymentRow({ payment: p, onMarkPaid, onEdit }: {
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        {isPaid ? (
+        {readOnly ? (
+          <span className={cn('text-[10px] font-semibold px-2 py-1 rounded-full border whitespace-nowrap', st.badge)}>{st.label}</span>
+        ) : isPaid ? (
           <>
             <span className={cn('text-[10px] font-semibold px-2 py-1 rounded-full border whitespace-nowrap', st.badge)}>{st.label}</span>
             <button onClick={onEdit} className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground active:bg-muted/30 transition-colors">
@@ -560,6 +576,7 @@ function PaymentRow({
   onDeleteConfirm: () => void
   onDeleteCancel: () => void
 }) {
+  const readOnly = useReadOnly()
   const st = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending
   const isPaid = ['paid','paid_late','waived','voided'].includes(p.status)
   const clientName = (p.client as any)?.name ?? 'Unknown'
@@ -592,7 +609,10 @@ function PaymentRow({
       </div>
 
       {/* Actions — visible on hover */}
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={cn(
+        'flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity',
+        readOnly && 'hidden',
+      )}>
         {!isPaid && (
           <button
             onClick={onMarkPaid}

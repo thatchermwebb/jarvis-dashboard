@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { ASSOCIATE_ALLOWED_HREFS } from '@/lib/auth'
 import { JARVISWidget } from '@/components/assistant/JARVISWidget'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { cn } from '@/lib/utils'
@@ -53,6 +54,8 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
 
   const navItems = user?.userType === 'va'
     ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
+    : user?.userType === 'associate'
+    ? ALL_NAV_ITEMS.filter(item => ASSOCIATE_ALLOWED_HREFS.includes(item.href))
     : ALL_NAV_ITEMS
 
   const tabs = navItems.filter(item => TAB_HREFS.includes(item.href))
@@ -91,7 +94,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <JARVISWidget mobile />
+      {user?.userType !== 'associate' && <JARVISWidget mobile />}
 
       {/* Bottom tab bar */}
       <nav className="flex-shrink-0 flex items-stretch border-t border-sidebar-border bg-sidebar/95 backdrop-blur-sm" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

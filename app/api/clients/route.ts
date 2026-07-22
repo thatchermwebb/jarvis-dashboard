@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sortClientsByPriority } from '@/lib/scoring'
+import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
 
 // Throttle the "expire old trials" write so it runs at most once per interval
 // instead of firing a table-wide UPDATE scan on every single list load.
@@ -28,6 +29,10 @@ export async function GET(req: NextRequest) {
   }
 
   let query = supabase.from('clients').select('*').order('updated_at', { ascending: false })
+
+  // Associates only ever see their own affiliated book.
+  const scope = await getAffiliateScope()
+  if (scope) query = query.eq('affiliate_id', scope)
 
   if (stage) query = query.eq('stage', stage)
   if (search) {
@@ -64,6 +69,7 @@ const CLIENT_FIELDS = new Set([
 ])
 
 export async function POST(req: NextRequest) {
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const raw = await req.json()
 

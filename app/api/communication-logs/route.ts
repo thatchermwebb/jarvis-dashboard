@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('client_id')
 
+  // Associates only see logs belonging to their own affiliated clients.
+  const scope = await getAffiliateScope()
+  const clientJoin = scope
+    ? 'client:clients!inner(id, name, business_name, affiliate_id)'
+    : 'client:clients(id, name, business_name)'
+
   let query = supabase
     .from('communication_logs')
-    .select('*, client:clients(id, name, business_name)')
+    .select(`*, ${clientJoin}`)
     .order('created_at', { ascending: false })
     .limit(100)
 
+  if (scope) query = query.eq('client.affiliate_id', scope)
   if (clientId) query = query.eq('client_id', clientId)
 
   const { data, error } = await query
@@ -20,6 +28,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const body = await req.json()
 
