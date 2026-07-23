@@ -64,6 +64,9 @@ export interface Affiliate {
   created_at: string
 }
 
+// Where the client's owner is in their business journey.
+export type GrowthStage = 'launching' | 'hiring' | 'scaling'
+
 export interface Client {
   id: string
   created_at: string
@@ -87,6 +90,7 @@ export interface Client {
   payment_status?: PaymentStatus
   deal_notes?: string
   advertised_package?: string
+  growth_stage?: GrowthStage
   affiliate_id?: string
   affiliate?: Affiliate
 

@@ -65,7 +65,7 @@ const CLIENT_FIELDS = new Set([
   'area_collected','conversations_needing_human','missed_conversations','booking_rate',
   'crm_issue','churn_risk_score','risk_reason','save_action','thatcher_needed',
   'va_needed','trepp_needed','payment_issue','urgency_level','slack_thread','google_drive_folder',
-  'advertised_package','affiliate_id',
+  'advertised_package','affiliate_id','growth_stage',
 ])
 
 export async function POST(req: NextRequest) {

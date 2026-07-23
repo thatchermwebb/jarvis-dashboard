@@ -30,7 +30,32 @@ import {
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Client, CommunicationLog, Payment } from '@/types'
+import type { Client, CommunicationLog, Payment, GrowthStage } from '@/types'
+
+// Growth stage — where the client's owner is in their business journey.
+const GROWTH_STAGES: { value: GrowthStage; label: string; desc: string; on: string; dot: string }[] = [
+  {
+    value: 'launching',
+    label: 'Launching',
+    desc: 'Solo operators who haven’t hired before — usually 0–10k.',
+    on: 'bg-blue-500/20 border-blue-500/40 text-blue-300',
+    dot: 'bg-blue-400',
+  },
+  {
+    value: 'hiring',
+    label: 'Hiring',
+    desc: 'In the hiring process for the first time — usually 8–15k.',
+    on: 'bg-violet-500/20 border-violet-500/40 text-violet-300',
+    dot: 'bg-violet-400',
+  },
+  {
+    value: 'scaling',
+    label: 'Scaling',
+    desc: 'Been there, done that, and doing it — usually 15k+.',
+    on: 'bg-amber-500/20 border-amber-500/40 text-amber-300',
+    dot: 'bg-amber-400',
+  },
+]
 
 // Human labels for the Next Payment card
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -506,6 +531,35 @@ export default function ClientWarRoom() {
                     </div>
                   </>
                 )}
+              </Section>
+
+              <Separator className="bg-border" />
+
+              <Section title="Growth Stage">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {GROWTH_STAGES.map(s => {
+                    const active = client.growth_stage === s.value
+                    return (
+                      <button
+                        key={s.value}
+                        title={s.desc}
+                        disabled={updating || readOnly}
+                        onClick={() => quickUpdate({ growth_stage: active ? null : s.value } as Partial<Client>)}
+                        className={cn(
+                          'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
+                          active
+                            ? s.on
+                            : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
+                          readOnly && 'cursor-default hover:text-muted-foreground',
+                        )}
+                      >
+                        <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
+                        {s.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground/70 mt-2">Hover a tag for what it means.</p>
               </Section>
 
               {client.trial_start && ['free_trial','trial_ending_soon','onboarding'].includes(client.stage) && (
