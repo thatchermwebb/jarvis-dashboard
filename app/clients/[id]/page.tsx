@@ -123,8 +123,10 @@ export default function ClientWarRoom() {
   const [nextPayment, setNextPayment] = useState<Payment | null>(null)
   const [activeTab, setActiveTab] = useState('history')
   const { user } = useAuth()
-  // Associates get a read-only profile for their own affiliated clients.
+  // Associates get a read-only profile for their own affiliated clients...
   const readOnly = user?.userType === 'associate'
+  // ...except they may log calls on those clients.
+  const canLogCalls = !readOnly || user?.userType === 'associate'
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   const refreshSummary = useCallback(async (clientId: string) => {
@@ -695,8 +697,8 @@ export default function ClientWarRoom() {
             )}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Step</span>
-                <div className={cn('flex items-center gap-3', readOnly && 'hidden')}>
-                  {client.next_followup_date && (
+                <div className={cn('flex items-center gap-3', !canLogCalls && readOnly && 'hidden')}>
+                  {!readOnly && client.next_followup_date && (
                     <button
                       onClick={() => quickUpdate({ next_followup_date: null, followup_reason: null })}
                       disabled={updating}
@@ -705,12 +707,14 @@ export default function ClientWarRoom() {
                       Clear
                     </button>
                   )}
-                  <button
-                    onClick={() => setLogOpen(true)}
-                    className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
-                  >
-                    + Log Call
-                  </button>
+                  {canLogCalls && (
+                    <button
+                      onClick={() => setLogOpen(true)}
+                      className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium"
+                    >
+                      + Log Call
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -857,7 +861,7 @@ export default function ClientWarRoom() {
                       View all <ArrowRight className="w-3 h-3" />
                     </a>
                   </div>
-                  {!readOnly && (
+                  {canLogCalls && (
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setLogOpen(true)}>
                       <Plus className="w-3 h-3" /> Log
                     </Button>

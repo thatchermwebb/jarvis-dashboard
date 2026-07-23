@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { InlineCalendar } from '@/components/ui/inline-calendar'
+import { getUserById } from '@/lib/auth'
 import { TimePicker } from '@/components/ui/time-picker'
 import { AuthorBadge } from '@/components/ui/author-badge'
 import { cn } from '@/lib/utils'
@@ -49,8 +50,8 @@ function getActiveUser(): string {
   try {
     const cookie = document.cookie.split(';').find(c => c.trim().startsWith('cza_user='))
     const userId = cookie?.split('=')[1]?.trim()
-    if (userId === 'thatcher') return 'Thatcher'
-    if (userId === 'trepp') return 'Trepp'
+    const first = userId ? getUserById(userId)?.name.split(' ')[0] : undefined
+    if (first) return first
   } catch {}
   return 'Diego'
 }

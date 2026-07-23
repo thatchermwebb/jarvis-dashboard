@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
+import { getAffiliateScope } from '@/lib/auth-server'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -28,9 +28,21 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const body = await req.json()
+
+  // Associates are read-only EXCEPT they may log calls for their own clients.
+  // Verify the target client is inside their affiliate scope before writing.
+  const scope = await getAffiliateScope()
+  if (scope) {
+    const { data: owned } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('id', body.client_id)
+      .eq('affiliate_id', scope)
+      .maybeSingle()
+    if (!owned) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: log, error } = await supabase
     .from('communication_logs')
