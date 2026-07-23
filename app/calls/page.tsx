@@ -601,7 +601,7 @@ function CallsPageInner() {
           {/* Owner filter: Mine / Thatcher / Trepp / All */}
           <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 mb-2 flex-shrink-0">
             {([
-              { key: 'mine', label: 'Mine' },
+              { key: 'mine', label: 'Diego' },
               { key: 'thatcher', label: 'Thatcher' },
               { key: 'trepp', label: 'Trepp' },
               { key: 'all', label: 'All' },
