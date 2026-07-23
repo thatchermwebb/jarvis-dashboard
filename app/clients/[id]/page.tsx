@@ -540,26 +540,35 @@ export default function ClientWarRoom() {
                   {GROWTH_STAGES.map(s => {
                     const active = client.growth_stage === s.value
                     return (
-                      <button
-                        key={s.value}
-                        title={s.desc}
-                        disabled={updating || readOnly}
-                        onClick={() => quickUpdate({ growth_stage: active ? null : s.value } as Partial<Client>)}
-                        className={cn(
-                          'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
-                          active
-                            ? s.on
-                            : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
-                          readOnly && 'cursor-default hover:text-muted-foreground',
-                        )}
-                      >
-                        <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
-                        {s.label}
-                      </button>
+                      <div key={s.value} className="relative group">
+                        <button
+                          disabled={updating || readOnly}
+                          onClick={() => quickUpdate({ growth_stage: active ? null : s.value } as Partial<Client>)}
+                          className={cn(
+                            'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
+                            active
+                              ? s.on
+                              : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
+                            readOnly && 'cursor-default',
+                          )}
+                        >
+                          <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
+                          {s.label}
+                        </button>
+                        {/* Styled hover tooltip (instant, replaces native title) */}
+                        <div
+                          role="tooltip"
+                          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 z-50 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150"
+                        >
+                          <div className="rounded-lg bg-popover border border-border shadow-xl px-3 py-2 text-[11px] leading-snug text-foreground/90">
+                            {s.desc}
+                          </div>
+                          <div className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 w-2 h-2 rotate-45 bg-popover border-r border-b border-border" />
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
-                <p className="text-[11px] text-muted-foreground/70 mt-2">Hover a tag for what it means.</p>
               </Section>
 
               {client.trial_start && ['free_trial','trial_ending_soon','onboarding'].includes(client.stage) && (
@@ -626,6 +635,59 @@ export default function ClientWarRoom() {
               </div>
             </div>
 
+            {/* Next Payment card */}
+            <div className={cn(
+              'border rounded-xl p-4 space-y-3',
+              nextPayment ? 'bg-card border-border' : 'bg-secondary/20 border-border/40'
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Payment</span>
+                <button
+                  onClick={() => { setActiveTab('payments'); document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth' }) }}
+                  className={cn(
+                    'text-[10px] text-primary hover:text-primary/80 transition-colors font-medium',
+                    readOnly && !nextPayment && 'hidden',
+                  )}
+                >
+                  {readOnly ? 'View' : nextPayment ? 'Manage' : '+ Add'}
+                </button>
+              </div>
+
+              {nextPayment ? (() => {
+                const d = daysUntil(nextPayment.due_date)
+                const overdue = nextPayment.status === 'overdue' || (d !== null && d < 0)
+                const isToday = d === 0
+                const isTomorrow = d === 1
+                const dateLabel = overdue
+                  ? (d !== null ? `${Math.abs(d)} day${Math.abs(d) !== 1 ? 's' : ''} overdue` : 'Overdue')
+                  : isToday ? 'Due today'
+                  : isTomorrow ? 'Due tomorrow'
+                  : d !== null ? `Due in ${d} days`
+                  : `Due ${formatDate(nextPayment.due_date)}`
+                return (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className={cn(
+                        'text-xl font-bold leading-tight',
+                        overdue ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-foreground'
+                      )}>
+                        {formatCurrency(nextPayment.amount)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{PAYMENT_TYPE_LABEL[nextPayment.payment_type] ?? 'Payment'}</div>
+                    </div>
+                    <div className={cn(
+                      'text-xs font-medium',
+                      overdue ? 'text-red-400' : isToday ? 'text-blue-400' : isTomorrow ? 'text-amber-400' : 'text-muted-foreground'
+                    )}>
+                      {overdue && '⚠ '}{dateLabel} · {formatDate(nextPayment.due_date)}
+                    </div>
+                  </>
+                )
+              })() : (
+                <div className="text-sm text-muted-foreground/50 py-1">No upcoming payment scheduled</div>
+              )}
+            </div>
+
             {/* Next Step card */}
             <div className={cn(
               'border rounded-xl p-4 space-y-3',
@@ -688,59 +750,6 @@ export default function ClientWarRoom() {
                 )
               })() : (
                 <div className="text-sm text-muted-foreground/50 py-1">No next step scheduled</div>
-              )}
-            </div>
-
-            {/* Next Payment card */}
-            <div className={cn(
-              'border rounded-xl p-4 space-y-3',
-              nextPayment ? 'bg-card border-border' : 'bg-secondary/20 border-border/40'
-            )}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Payment</span>
-                <button
-                  onClick={() => { setActiveTab('payments'); document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth' }) }}
-                  className={cn(
-                    'text-[10px] text-primary hover:text-primary/80 transition-colors font-medium',
-                    readOnly && !nextPayment && 'hidden',
-                  )}
-                >
-                  {readOnly ? 'View' : nextPayment ? 'Manage' : '+ Add'}
-                </button>
-              </div>
-
-              {nextPayment ? (() => {
-                const d = daysUntil(nextPayment.due_date)
-                const overdue = nextPayment.status === 'overdue' || (d !== null && d < 0)
-                const isToday = d === 0
-                const isTomorrow = d === 1
-                const dateLabel = overdue
-                  ? (d !== null ? `${Math.abs(d)} day${Math.abs(d) !== 1 ? 's' : ''} overdue` : 'Overdue')
-                  : isToday ? 'Due today'
-                  : isTomorrow ? 'Due tomorrow'
-                  : d !== null ? `Due in ${d} days`
-                  : `Due ${formatDate(nextPayment.due_date)}`
-                return (
-                  <>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <div className={cn(
-                        'text-xl font-bold leading-tight',
-                        overdue ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-foreground'
-                      )}>
-                        {formatCurrency(nextPayment.amount)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{PAYMENT_TYPE_LABEL[nextPayment.payment_type] ?? 'Payment'}</div>
-                    </div>
-                    <div className={cn(
-                      'text-xs font-medium',
-                      overdue ? 'text-red-400' : isToday ? 'text-blue-400' : isTomorrow ? 'text-amber-400' : 'text-muted-foreground'
-                    )}>
-                      {overdue && '⚠ '}{dateLabel} · {formatDate(nextPayment.due_date)}
-                    </div>
-                  </>
-                )
-              })() : (
-                <div className="text-sm text-muted-foreground/50 py-1">No upcoming payment scheduled</div>
               )}
             </div>
 
