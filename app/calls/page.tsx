@@ -757,7 +757,7 @@ function CallsPageInner() {
                       {log.summary && (
                         <div>
                           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Summary</div>
-                          <div className="text-sm">{log.summary}</div>
+                          <div className="text-sm whitespace-pre-wrap break-words">{log.summary}</div>
                         </div>
                       )}
                       {log.promises_made && (

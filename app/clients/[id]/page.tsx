@@ -904,7 +904,7 @@ export default function ClientWarRoom() {
                           </div>
                         </div>
                         {log.summary && (
-                          <div className="text-sm text-foreground/90 mt-1.5">{log.summary}</div>
+                          <div className="text-sm text-foreground/90 mt-1.5 whitespace-pre-wrap break-words">{log.summary}</div>
                         )}
                         {log.next_step && (
                           <div className="text-xs text-violet-400 mt-1">Next: {log.next_step}</div>
