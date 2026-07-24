@@ -30,7 +30,7 @@ import {
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Client, CommunicationLog, Payment, GrowthStage } from '@/types'
+import type { Client, CommunicationLog, Payment, GrowthStage, ContractStatus } from '@/types'
 
 // Growth stage — where the client's owner is in their business journey.
 const GROWTH_STAGES: { value: GrowthStage; label: string; desc: string; on: string; dot: string }[] = [
@@ -56,6 +56,28 @@ const GROWTH_STAGES: { value: GrowthStage; label: string; desc: string; on: stri
     dot: 'bg-amber-400',
   },
 ]
+
+// Contract lifecycle — proposed → sent → signed → over.
+const CONTRACT_STATUSES: { value: ContractStatus; label: string; on: string; dot: string }[] = [
+  { value: 'proposed', label: 'Proposed', on: 'bg-slate-500/20 border-slate-400/40 text-slate-200', dot: 'bg-slate-300' },
+  { value: 'sent',     label: 'Sent',     on: 'bg-blue-500/20 border-blue-500/40 text-blue-300',    dot: 'bg-blue-400' },
+  { value: 'signed',   label: 'Signed',   on: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300', dot: 'bg-emerald-400' },
+  { value: 'over',     label: 'Over',     on: 'bg-amber-500/20 border-amber-500/40 text-amber-300', dot: 'bg-amber-400' },
+]
+
+/** Human contract length, e.g. "6 months" / "6 weeks". */
+function contractTermLabel(start?: string, end?: string): string | null {
+  if (!start || !end) return null
+  const s = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  const days = Math.round((e.getTime() - s.getTime()) / 86_400_000)
+  if (days <= 0) return null
+  const months = Math.round(days / 30.44)
+  if (months >= 1) return `${months} month${months !== 1 ? 's' : ''}`
+  const weeks = Math.round(days / 7)
+  if (weeks >= 1) return `${weeks} week${weeks !== 1 ? 's' : ''}`
+  return `${days} day${days !== 1 ? 's' : ''}`
+}
 
 // Human labels for the Next Payment card
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -571,6 +593,61 @@ export default function ClientWarRoom() {
                     )
                   })}
                 </div>
+              </Section>
+
+              <Separator className="bg-border" />
+
+              <Section title="Contract">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {CONTRACT_STATUSES.map(s => {
+                    const active = client.contract_status === s.value
+                    return (
+                      <button
+                        key={s.value}
+                        disabled={updating || readOnly}
+                        onClick={() => quickUpdate({ contract_status: active ? null : s.value } as Partial<Client>)}
+                        className={cn(
+                          'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
+                          active
+                            ? s.on
+                            : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
+                          readOnly && 'cursor-default',
+                        )}
+                      >
+                        <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
+                        {s.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {(client.contract_start || client.contract_end) && (
+                  <div className="mt-3">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Term</div>
+                    <div className="text-sm text-foreground">
+                      {client.contract_start ? formatDate(client.contract_start) : '—'}
+                      {' → '}
+                      {client.contract_end ? formatDate(client.contract_end) : '—'}
+                      {(() => {
+                        const term = contractTermLabel(client.contract_start, client.contract_end)
+                        return term ? <span className="text-muted-foreground"> · {term}</span> : null
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {(client.contract_payment_count != null || client.contract_total_value != null) && (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <Field label="Payments" value={client.contract_payment_count != null ? `${client.contract_payment_count}` : null} />
+                    <Field label="Total Value" value={client.contract_total_value != null ? formatCurrency(client.contract_total_value) : null} />
+                  </div>
+                )}
+
+                {!client.contract_status && !client.contract_start && client.contract_total_value == null && (
+                  <p className="text-[11px] text-muted-foreground/60 mt-2">
+                    Set the term, payment count and value in {readOnly ? 'the client record' : 'Edit'}.
+                  </p>
+                )}
               </Section>
 
               {client.trial_start && ['free_trial','trial_ending_soon','onboarding'].includes(client.stage) && (

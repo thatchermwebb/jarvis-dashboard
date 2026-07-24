@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const prioritized = searchParams.get('prioritized') === 'true'
 
-  // Auto-promote expired trials → trial_concluded (fire-and-forget, best effort, throttled)
+  // Auto-promote expired trials → trial_concluded, and expired signed
+  // contracts → over (fire-and-forget, best effort, throttled)
   const now = Date.now()
   if (now - lastTrialSweep > TRIAL_SWEEP_INTERVAL_MS) {
     lastTrialSweep = now
@@ -25,6 +26,13 @@ export async function GET(req: NextRequest) {
       .update({ stage: 'trial_concluded' })
       .in('stage', ['free_trial', 'free_trial_pending', 'trial_ending_soon'])
       .lt('trial_end', today)
+      .then(() => {})
+
+    supabase
+      .from('clients')
+      .update({ contract_status: 'over' })
+      .eq('contract_status', 'signed')
+      .lt('contract_end', today)
       .then(() => {})
   }
 
@@ -66,6 +74,8 @@ const CLIENT_FIELDS = new Set([
   'crm_issue','churn_risk_score','risk_reason','save_action','thatcher_needed',
   'va_needed','trepp_needed','payment_issue','urgency_level','slack_thread','google_drive_folder',
   'advertised_package','affiliate_id','growth_stage',
+  'contract_status','contract_start','contract_end',
+  'contract_payment_count','contract_total_value',
 ])
 
 export async function POST(req: NextRequest) {

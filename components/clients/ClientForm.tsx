@@ -408,6 +408,10 @@ function buildFormState(client?: Client, defaultStage?: ClientStage) {
     deal_notes: client?.deal_notes ?? '',
     advertised_package: client?.advertised_package ?? '',
     affiliate_id: client?.affiliate_id ?? '',
+    contract_start: client?.contract_start ?? '',
+    contract_end: client?.contract_end ?? '',
+    contract_payment_count: client?.contract_payment_count?.toString() ?? '',
+    contract_total_value: client?.contract_total_value?.toString() ?? '',
   }
 }
 
@@ -476,6 +480,10 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
     payload.monthly_retainer = form.monthly_retainer ? Number(form.monthly_retainer) : null
     payload.trial_start = form.trial_start || null
     payload.trial_end = form.trial_end || null
+    payload.contract_start = form.contract_start || null
+    payload.contract_end = form.contract_end || null
+    payload.contract_payment_count = form.contract_payment_count ? Number(form.contract_payment_count) : null
+    payload.contract_total_value = form.contract_total_value ? Number(form.contract_total_value) : null
 
     try {
       const url = client ? `/api/clients/${client.id}` : '/api/clients'
@@ -578,6 +586,30 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trial End</Label>
               <DatePicker value={form.trial_end} onChange={(v) => set('trial_end', v)} placeholder="Select end date..." />
+            </div>
+          </div>
+
+          {/* Contract term */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contract Start</Label>
+              <DatePicker value={form.contract_start} onChange={(v) => set('contract_start', v)} placeholder="Select start date..." />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contract End</Label>
+              <DatePicker value={form.contract_end} onChange={(v) => set('contract_end', v)} placeholder="Select end date..." />
+            </div>
+          </div>
+
+          {/* Contract payments */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide"># of Payments</Label>
+              <Input value={form.contract_payment_count} onChange={(e) => set('contract_payment_count', e.target.value)} placeholder="6" type="number" className="bg-secondary/50 h-11 text-base border-border/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total Contract Value ($)</Label>
+              <Input value={form.contract_total_value} onChange={(e) => set('contract_total_value', e.target.value)} placeholder="4500" type="number" className="bg-secondary/50 h-11 text-base border-border/50" />
             </div>
           </div>
 

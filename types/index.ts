@@ -67,6 +67,9 @@ export interface Affiliate {
 // Where the client's owner is in their business journey.
 export type GrowthStage = 'launching' | 'hiring' | 'scaling'
 
+// Contract lifecycle.
+export type ContractStatus = 'proposed' | 'sent' | 'signed' | 'over'
+
 export interface Client {
   id: string
   created_at: string
@@ -93,6 +96,13 @@ export interface Client {
   growth_stage?: GrowthStage
   affiliate_id?: string
   affiliate?: Affiliate
+
+  // Contract
+  contract_status?: ContractStatus
+  contract_start?: string
+  contract_end?: string
+  contract_payment_count?: number
+  contract_total_value?: number
 
   // Trial
   trial_start?: string
