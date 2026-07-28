@@ -8,17 +8,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const body = await req.json()
 
-  // paid_date must come from the client (browser local time) — never auto-generate server-side (UTC mismatch)
+  // Marking a payment paid: "late" is authoritatively decided by paid_date vs
+  // due_date, NOT by which bucket the row was displayed in. paid_date must come
+  // from the client (browser local); never auto-generate server-side (UTC mismatch).
   if (body.status === 'paid' || body.status === 'paid_late') {
     if (!body.paid_date) {
       // Fallback only: shouldn't reach here; client should always send paid_date
       body.paid_date = new Date().toISOString().slice(0, 10)
     }
-    // If caller sent status='paid' but we need to check due_date
-    if (body.status === 'paid' && body.due_date) {
-      const due = new Date(body.due_date + 'T00:00:00')
-      const paid = new Date(body.paid_date + 'T00:00:00')
-      if (paid > due) body.status = 'paid_late'
+    // Only auto-decide for the neutral "paid" action; an explicit 'paid_late'
+    // (e.g. chosen in the edit dialog) is respected as a manual override.
+    if (body.status === 'paid') {
+      // due_date may not be in the body — fetch the row's value to compare.
+      let dueDate: string | undefined = body.due_date
+      if (!dueDate) {
+        const { data: existing } = await supabase.from('payments').select('due_date').eq('id', id).single()
+        dueDate = existing?.due_date ?? undefined
+      }
+      // ISO YYYY-MM-DD strings compare chronologically. Paid on/before due = on time.
+      if (dueDate) body.status = body.paid_date > dueDate ? 'paid_late' : 'paid'
     }
   }
 

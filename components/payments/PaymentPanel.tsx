@@ -70,16 +70,22 @@ export function PaymentPanel({ clientId, clientName }: Props) {
 
   useEffect(() => { load() }, [load])
 
-  async function markStatus(id: string, status: string, wasOverdue: boolean) {
-    const finalStatus = wasOverdue && status === 'paid' ? 'paid_late' : status
+  async function markStatus(id: string, status: string) {
+    // Send today's browser-local date; the server decides paid vs paid_late
+    // from paid_date vs due_date (not from the row's overdue bucket).
+    const paidDate = localToday()
+    const isPay = status === 'paid'
     try {
-      await fetch(`/api/payments/${id}`, {
+      const res = await fetch(`/api/payments/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: finalStatus }),
+        body: JSON.stringify(isPay ? { status: 'paid', paid_date: paidDate } : { status }),
       })
-      setPayments((prev) => prev.map((p) => p.id === id ? { ...p, status: finalStatus as any, paid_date: new Date().toISOString().split('T')[0] } : p))
-      toast.success(finalStatus === 'paid' || finalStatus === 'paid_late' ? 'Marked as paid' : 'Updated')
+      const updated = await res.json().catch(() => null)
+      setPayments((prev) => prev.map((p) => p.id === id
+        ? { ...p, status: (updated?.status ?? status) as any, paid_date: isPay ? paidDate : p.paid_date }
+        : p))
+      toast.success(isPay ? 'Marked as paid' : 'Updated')
     } catch {
       toast.error('Failed to update')
     }
@@ -161,7 +167,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
             <div className="space-y-1.5">
               <div className="text-xs font-semibold text-red-400 uppercase tracking-wider">Overdue ({overdue.length})</div>
               {overdue.map((p) => (
-                <PaymentRow key={p.id} payment={p} onMark={(s) => markStatus(p.id, s, true)} onDelete={() => deletePayment(p.id)} onEdit={() => setEditPayment(p)} />
+                <PaymentRow key={p.id} payment={p} onMark={(s) => markStatus(p.id, s)} onDelete={() => deletePayment(p.id)} onEdit={() => setEditPayment(p)} />
               ))}
             </div>
           )}
@@ -171,7 +177,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
             <div className="space-y-1.5">
               <div className="text-xs font-semibold text-yellow-400 uppercase tracking-wider">Upcoming ({upcoming.length})</div>
               {upcoming.map((p) => (
-                <PaymentRow key={p.id} payment={p} onMark={(s) => markStatus(p.id, s, false)} onDelete={() => deletePayment(p.id)} onEdit={() => setEditPayment(p)} />
+                <PaymentRow key={p.id} payment={p} onMark={(s) => markStatus(p.id, s)} onDelete={() => deletePayment(p.id)} onEdit={() => setEditPayment(p)} />
               ))}
             </div>
           )}
@@ -181,7 +187,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
             <div className="space-y-1.5">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History ({history.length})</div>
               {history.map((p) => (
-                <PaymentRow key={p.id} payment={p} onMark={(s) => markStatus(p.id, s, false)} onDelete={() => deletePayment(p.id)} onEdit={() => setEditPayment(p)} />
+                <PaymentRow key={p.id} payment={p} onMark={(s) => markStatus(p.id, s)} onDelete={() => deletePayment(p.id)} onEdit={() => setEditPayment(p)} />
               ))}
             </div>
           )}
