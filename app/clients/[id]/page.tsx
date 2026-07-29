@@ -17,6 +17,7 @@ import { ClientForm } from '@/components/clients/ClientForm'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { AdSetupDialog } from '@/components/ad-production/AdSetupDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
+import { ContractDialog } from '@/components/clients/ContractDialog'
 import { PaymentPanel } from '@/components/payments/PaymentPanel'
 import { BriefGenerator } from '@/components/briefs/BriefGenerator'
 import { JARVISPanel } from '@/components/assistant/JARVISPanel'
@@ -100,10 +101,13 @@ function Field({ label, value, mono = false }: { label: string; value?: string |
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</h3>
+        {action}
+      </div>
       {children}
     </div>
   )
@@ -144,6 +148,7 @@ export default function ClientWarRoom() {
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [nextPayment, setNextPayment] = useState<Payment | null>(null)
   const [activeTab, setActiveTab] = useState('history')
+  const [contractEditOpen, setContractEditOpen] = useState(false)
   const { user } = useAuth()
   // Associates get a read-only profile for their own affiliated clients...
   const readOnly = user?.userType === 'associate'
@@ -597,7 +602,14 @@ export default function ClientWarRoom() {
 
               <Separator className="bg-border" />
 
-              <Section title="Contract">
+              <Section title="Contract" action={!readOnly ? (
+                <button
+                  onClick={() => setContractEditOpen(true)}
+                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium flex items-center gap-1"
+                >
+                  <Edit className="w-3 h-3" /> Edit
+                </button>
+              ) : undefined}>
                 <div className="flex items-center gap-2 flex-wrap">
                   {CONTRACT_STATUSES.map(s => {
                     const active = client.contract_status === s.value
@@ -1081,6 +1093,8 @@ export default function ClientWarRoom() {
       <LogCallDialog open={!!editingLog} onClose={() => setEditingLog(null)} editLog={editingLog ? { ...editingLog, log_type: editingLog.log_type ?? 'call', outcome: editingLog.outcome ?? 'answered' } : undefined} onLogged={() => { setEditingLog(null); load() }} />
       <AdSetupDialog open={adSetupOpen} onClose={() => setAdSetupOpen(false)} clientId={client.id} clientName={client.name} businessName={client.business_name} marketLocation={client.market_location} onSaved={load} />
       <ScheduleCallDialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} client={client} onSaved={load} />
+      {!readOnly && <ContractDialog open={contractEditOpen} onClose={() => setContractEditOpen(false)} client={client} onSaved={(updated) => setClient(updated)} />}
+
       {/* JARVIS has no provider for associates (it can read across the whole
           book), and useJarvis() throws without one — so don't mount it. */}
       {!readOnly && <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />}
