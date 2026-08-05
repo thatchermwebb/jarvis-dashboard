@@ -36,7 +36,12 @@ export function workedHours(e: Pick<TeamTimeEntry, 'accumulated_seconds' | 'runn
   return workedSeconds(e, now) / 3600
 }
 
-// ─── Turnaround (the KPI metric): assigned → started → completed ─────────────
+// ─── KPI metric: ACTIVE WORKED TIME per task ─────────────────────────────────
+// The KPI budget is the VA's own worked time on a task (accumulated_seconds +
+// the live running segment), NOT wall-clock since assignment. This means each
+// onboarding gets its own 40-min budget that only counts down while that task
+// is actually running — stacked tasks don't burn the clock concurrently, and
+// pausing freezes the countdown until resumed.
 
 /** Response time: how long after assignment the VA first hit Start (seconds). */
 export function responseSeconds(e: Pick<TeamTimeEntry, 'assigned_at' | 'started_at'>): number | null {
@@ -44,23 +49,23 @@ export function responseSeconds(e: Pick<TeamTimeEntry, 'assigned_at' | 'started_
   return Math.max(0, Math.floor((Date.parse(e.started_at) - Date.parse(e.assigned_at)) / 1000))
 }
 
-/** Turnaround: assigned → completed (seconds). The real KPI. */
+/** Wall-clock assigned → completed (seconds). Kept for reference/analytics only. */
 export function turnaroundSeconds(e: Pick<TeamTimeEntry, 'assigned_at' | 'completed_at'>): number | null {
   if (!e.assigned_at || !e.completed_at) return null
   return Math.max(0, Math.floor((Date.parse(e.completed_at) - Date.parse(e.assigned_at)) / 1000))
 }
 
-/** Live seconds since assignment (for the inbox / active budget clock). */
-export function budgetElapsed(e: Pick<TeamTimeEntry, 'assigned_at'>, now = Date.now()): number | null {
-  if (!e.assigned_at) return null
-  return Math.max(0, Math.floor((now - Date.parse(e.assigned_at)) / 1000))
+/**
+ * KPI budget spent = active worked seconds. Advances only while the task is
+ * running; frozen when paused/idle; independent per task (never concurrent).
+ */
+export function budgetElapsed(e: Pick<TeamTimeEntry, 'accumulated_seconds' | 'running_since' | 'status'>, now = Date.now()): number {
+  return workedSeconds(e, now)
 }
 
-/** Fraction of the turnaround budget already spent (0..>1). */
-export function budgetFraction(e: Pick<TeamTimeEntry, 'assigned_at'>, cfg: VaConfig, now = Date.now()): number | null {
-  const el = budgetElapsed(e, now)
-  if (el == null) return null
-  return el / cfg.kpiSeconds
+/** Fraction of the 40-min worked budget already spent (0..>1). */
+export function budgetFraction(e: Pick<TeamTimeEntry, 'accumulated_seconds' | 'running_since' | 'status'>, cfg: VaConfig, now = Date.now()): number {
+  return workedSeconds(e, now) / cfg.kpiSeconds
 }
 
 export function budgetZone(fraction: number | null): 'green' | 'yellow' | 'red' {
@@ -98,11 +103,10 @@ export function kpiCountable(e: TeamTimeEntry): boolean {
   return e.status === 'completed' && e.is_standard && !!e.assigned_at && kpiEligible(e)
 }
 
-/** A countable entry whose assigned→completed turnaround met the threshold. */
+/** A countable entry whose active worked time stayed within the KPI budget. */
 export function kpiHit(e: TeamTimeEntry, cfg: VaConfig): boolean {
   if (!kpiCountable(e)) return false
-  const t = turnaroundSeconds(e)
-  return t != null && t <= cfg.kpiSeconds
+  return workedSeconds(e) <= cfg.kpiSeconds
 }
 
 export interface KpiSummary {

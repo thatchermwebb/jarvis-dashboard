@@ -217,7 +217,7 @@ export default function TeamPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main column */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Assigned inbox — urgent, budget clock already ticking */}
+          {/* Assigned inbox — start now; the 40-min budget only counts down once started */}
           {inbox.length > 0 && (
             <div className="space-y-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-red-400/90 flex items-center gap-1.5">
@@ -321,7 +321,7 @@ export default function TeamPage() {
                   <Button size="sm" className="h-8 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white" onClick={() => timerAction(e.id, 'complete')}>
                     <Square className="w-3.5 h-3.5" /> End task
                   </Button>
-                  {/* live turnaround budget (from assignment) — the real KPI */}
+                  {/* live worked-time budget — the KPI; freezes when paused */}
                   {e.is_standard && (e.assigned_at ? (() => {
                     const left = cfg.kpiSeconds - (budgetElapsed(e, now) ?? 0)
                     return (

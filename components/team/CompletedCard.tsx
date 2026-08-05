@@ -2,7 +2,7 @@
 
 import { CheckCircle2, XCircle, Trash2, Zap, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { workedHours, kpiHit, kpiCountable, kpiEligible, responseSeconds, turnaroundSeconds, type VaConfig } from '@/lib/team'
+import { workedHours, workedSeconds, kpiHit, kpiCountable, kpiEligible, responseSeconds, type VaConfig } from '@/lib/team'
 import type { TeamTimeEntry } from '@/types'
 
 function fmtTime(iso?: string | null): string {
@@ -32,7 +32,7 @@ export function CompletedCard({ entry, cfg, onDelete }: {
   const hit = kpiHit(entry, cfg)
   const countable = kpiCountable(entry)
   const response = responseSeconds(entry)
-  const turnaround = turnaroundSeconds(entry)
+  const worked = workedSeconds(entry)
   const hasAssignment = !!entry.assigned_at
 
   return (
@@ -61,12 +61,12 @@ export function CompletedCard({ entry, cfg, onDelete }: {
             <span className="mx-1.5 text-muted-foreground/40">·</span>
             <span className="font-semibold text-foreground/80 tabular-nums">{hrs.toFixed(2)} hrs</span>
           </div>
-          {/* Turnaround + response — the metrics that matter */}
+          {/* Worked time (the KPI) + response — the metrics that matter */}
           {hasAssignment && (
             <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded',
                 hit ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400')}>
-                <Timer className="w-3 h-3" /> {fmtDur(turnaround)} turnaround
+                <Timer className="w-3 h-3" /> {fmtDur(worked)} worked
               </span>
               {response != null && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
