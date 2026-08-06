@@ -40,6 +40,11 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
+  // Calendar page is retired — hidden from everyone.
+  if (pathname === '/calendar' || pathname.startsWith('/calendar/')) {
+    return NextResponse.redirect(new URL('/', req.url))
+  }
+
   return NextResponse.next()
 }
 
