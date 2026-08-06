@@ -7,11 +7,14 @@ import { RevenueSnapshotWidget } from '@/components/dashboard/RevenueSnapshotWid
 import type { Client, Task, Payment, DashboardStats } from '@/types'
 import { localToday } from '@/lib/utils'
 import { currentMrr, mrrAtDate } from '@/lib/analytics'
+import { getServerUser } from '@/lib/auth-server'
+import { paymentsHidden } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CommandCenter() {
   const supabase = await createClient()
+  const hidePayments = paymentsHidden(await getServerUser())
 
   const [{ data: clients }, { data: tasksRaw }, { data: paymentsRaw }] = await Promise.all([
     supabase.from('clients').select('*').not('stage', 'eq', 'churned'),
@@ -131,7 +134,7 @@ export default async function CommandCenter() {
         <div className="lg:col-span-2 order-2 lg:order-1 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <TrialPipelineWidget trials={trialClients} />
-            <RevenueSnapshotWidget payments={dashboardPayments} />
+            {!hidePayments && <RevenueSnapshotWidget payments={dashboardPayments} />}
           </div>
           <TasksWidget tasks={allTasks} />
         </div>

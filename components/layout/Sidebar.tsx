@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
-import { ASSOCIATE_ALLOWED_HREFS } from '@/lib/auth'
+import { ASSOCIATE_ALLOWED_HREFS, NO_PAYMENTS_HREFS } from '@/lib/auth'
 import {
   LayoutDashboard,
   Phone,
@@ -38,11 +38,12 @@ export function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
-  const navItems = user?.userType === 'va'
+  const navItems = (user?.userType === 'va'
     ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
     : user?.userType === 'associate'
     ? ALL_NAV_ITEMS.filter(item => ASSOCIATE_ALLOWED_HREFS.includes(item.href))
     : ALL_NAV_ITEMS
+  ).filter(item => !(user?.noPayments && NO_PAYMENTS_HREFS.includes(item.href)))
 
   return (
     <aside className="w-52 flex-shrink-0 flex flex-col h-screen bg-sidebar border-r border-sidebar-border">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getUserById, ASSOCIATE_ALLOWED_HREFS, ASSOCIATE_ALLOWED_API } from '@/lib/auth'
+import { getUserById, ASSOCIATE_ALLOWED_HREFS, ASSOCIATE_ALLOWED_API, NO_PAYMENTS_API_PREFIXES, NO_PAYMENTS_HREFS } from '@/lib/auth'
 
 export function middleware(req: NextRequest) {
   const cookie = req.cookies.get('cza_user')
@@ -13,6 +13,10 @@ export function middleware(req: NextRequest) {
     if (user?.userType === 'associate') {
       const allowed = ASSOCIATE_ALLOWED_API.some(p => pathname === p || pathname.startsWith(p + '/'))
       if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    // noPayments users can't touch the payments/revenue APIs at all.
+    if (user?.noPayments && NO_PAYMENTS_API_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     return NextResponse.next()
   }
@@ -29,6 +33,11 @@ export function middleware(req: NextRequest) {
   if (user?.userType === 'associate' && pathname !== '/login') {
     const allowed = ASSOCIATE_ALLOWED_HREFS.some(p => pathname === p || pathname.startsWith(p + '/'))
     if (!allowed) return NextResponse.redirect(new URL('/clients', req.url))
+  }
+
+  // noPayments users can't open the Payments or Reports pages.
+  if (user?.noPayments && NO_PAYMENTS_HREFS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    return NextResponse.redirect(new URL('/', req.url))
   }
 
   return NextResponse.next()

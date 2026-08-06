@@ -11,12 +11,15 @@ export interface AppUser {
    * clients (and those clients' payments) carrying this `affiliate_id`.
    */
   affiliateId?: string
+  /** Hides the entire Payments module (nav, pages, tabs, widgets, API). */
+  noPayments?: boolean
 }
 
 export const USERS: AppUser[] = [
   { id: 'thatcher', name: 'Thatcher Webb',  role: 'Co-Founder', initials: 'TW', userType: 'admin' },
   { id: 'trepp',    name: 'Trepp Grandich', role: 'Co-Founder', initials: 'TG', userType: 'admin' },
   { id: 'diego',    name: 'Diego Carranza', role: 'VP',         initials: 'DC', userType: 'admin' },
+  { id: 'jacques',  name: 'Jacques Brock',  role: 'Head of Operations', initials: 'JB', userType: 'admin', noPayments: true },
   { id: 'wilson',   name: 'Wilson',         role: 'Ads VA',     initials: 'WL', userType: 'va'    },
   { id: 'samuel',   name: 'Samuel',         role: 'Backend VA', initials: 'SM', userType: 'va'    },
   {
@@ -51,6 +54,17 @@ export const ASSOCIATE_ALLOWED_API = [
 /** Associates are read-only — they may never mutate anything. */
 export function isReadOnly(user: AppUser | undefined | null): boolean {
   return user?.userType === 'associate'
+}
+
+/** Pages hidden from noPayments users (payments ledger + revenue reporting). */
+export const NO_PAYMENTS_HREFS = ['/payments', '/reports']
+
+/** API prefixes blocked for noPayments users (payments + revenue analytics). */
+export const NO_PAYMENTS_API_PREFIXES = ['/api/payments', '/api/payment-schedules', '/api/reports']
+
+/** Whether the Payments/revenue module is hidden for this user. */
+export function paymentsHidden(user: AppUser | undefined | null): boolean {
+  return !!user?.noPayments
 }
 
 /**

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { ASSOCIATE_ALLOWED_HREFS } from '@/lib/auth'
+import { ASSOCIATE_ALLOWED_HREFS, NO_PAYMENTS_HREFS } from '@/lib/auth'
 import { JARVISWidget } from '@/components/assistant/JARVISWidget'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { cn } from '@/lib/utils'
@@ -52,11 +52,12 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   const [search, setSearch] = useState('')
   const mainRef = useScrollRestoration<HTMLElement>()
 
-  const navItems = user?.userType === 'va'
+  const navItems = (user?.userType === 'va'
     ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
     : user?.userType === 'associate'
     ? ALL_NAV_ITEMS.filter(item => ASSOCIATE_ALLOWED_HREFS.includes(item.href))
     : ALL_NAV_ITEMS
+  ).filter(item => !(user?.noPayments && NO_PAYMENTS_HREFS.includes(item.href)))
 
   const tabs = navItems.filter(item => TAB_HREFS.includes(item.href))
   const moreItems = navItems.filter(item => !TAB_HREFS.includes(item.href))

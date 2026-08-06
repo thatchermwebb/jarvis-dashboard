@@ -154,6 +154,8 @@ export default function ClientWarRoom() {
   const readOnly = user?.userType === 'associate'
   // ...except they may log calls on those clients.
   const canLogCalls = !readOnly || user?.userType === 'associate'
+  // noPayments users (e.g. Head of Ops) never see the Payments module.
+  const hidePayments = !!user?.noPayments
   const stagePickerRef = useRef<HTMLDivElement>(null)
 
   const refreshSummary = useCallback(async (clientId: string) => {
@@ -182,10 +184,11 @@ export default function ClientWarRoom() {
       fetch(`/api/clients/${id}`),
       fetch(`/api/communication-logs?client_id=${id}`),
       fetch(`/api/ad-productions?client_id=${id}`),
-      fetch(`/api/payments?client_id=${id}`),
+      hidePayments ? Promise.resolve(null) : fetch(`/api/payments?client_id=${id}`),
     ])
     if (!clientRes.ok) { router.push('/clients'); return }
-    const [clientData, logsData, adsData, paymentsData] = await Promise.all([clientRes.json(), logsRes.json(), adsRes.json(), paymentsRes.json()])
+    const paymentsData = paymentsRes ? await paymentsRes.json() : []
+    const [clientData, logsData, adsData] = await Promise.all([clientRes.json(), logsRes.json(), adsRes.json()])
     setClient(clientData)
     setLogs(Array.isArray(logsData) ? logsData : [])
     // Soonest unpaid payment → "Next Payment" card
@@ -207,7 +210,7 @@ export default function ClientWarRoom() {
       setAiSummary(cached ?? null)
       void refreshSummary(clientData.id)
     }
-  }, [id, router, refreshSummary])
+  }, [id, router, refreshSummary, hidePayments])
 
   useEffect(() => { load() }, [load])
 
@@ -727,6 +730,7 @@ export default function ClientWarRoom() {
             </div>
 
             {/* Next Payment card */}
+            {!hidePayments && (
             <div className={cn(
               'border rounded-xl p-4 space-y-3',
               nextPayment ? 'bg-card border-border' : 'bg-secondary/20 border-border/40'
@@ -778,6 +782,7 @@ export default function ClientWarRoom() {
                 <div className="text-sm text-muted-foreground/50 py-1">No upcoming payment scheduled</div>
               )}
             </div>
+            )}
 
             {/* Next Step card */}
             <div className={cn(
@@ -935,7 +940,7 @@ export default function ClientWarRoom() {
             <Tabs id="client-tabs" value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-secondary/50 border border-border h-11 gap-1 px-1">
                 <TabsTrigger value="history" className="text-sm px-5 h-9">History</TabsTrigger>
-                <TabsTrigger value="payments" className="text-sm px-5 h-9">Payments</TabsTrigger>
+                {!hidePayments && <TabsTrigger value="payments" className="text-sm px-5 h-9">Payments</TabsTrigger>}
                 <TabsTrigger value="risk" className="text-sm px-5 h-9">Risk & Scores</TabsTrigger>
               </TabsList>
 
@@ -1007,9 +1012,11 @@ export default function ClientWarRoom() {
                 )}
               </TabsContent>
 
-              <TabsContent value="payments" className="mt-3">
-                <PaymentPanel clientId={client.id} clientName={client.name} />
-              </TabsContent>
+              {!hidePayments && (
+                <TabsContent value="payments" className="mt-3">
+                  <PaymentPanel clientId={client.id} clientName={client.name} />
+                </TabsContent>
+              )}
 
               <TabsContent value="risk" className="mt-3 space-y-3">
                 {/* Priority Score breakdown */}

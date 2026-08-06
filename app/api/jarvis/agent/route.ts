@@ -4,7 +4,12 @@ import { anthropic, buildJARVISSystemPrompt } from '@/lib/anthropic'
 import { localToday } from '@/lib/utils'
 import { matchClients } from '@/lib/voice/localParsers'
 import { paymentAudit, clientAnalyticsRows } from '@/lib/analytics'
+import { getServerUser } from '@/lib/auth-server'
+import { paymentsHidden } from '@/lib/auth'
 import type { Payment, PaymentSchedule } from '@/types'
+
+// JARVIS tools that expose payment data — withheld from noPayments users.
+const PAYMENT_TOOL_NAMES = new Set(['get_payments', 'payment_audit', 'payment_insights'])
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Client } from '@/types'
 
@@ -468,6 +473,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'messages required' }, { status: 400 })
   }
 
+  // Head-of-Ops (noPayments) gets JARVIS without any payment tools.
+  const noPay = paymentsHidden(await getServerUser())
+  const availableTools = noPay ? TOOLS.filter(t => !PAYMENT_TOOL_NAMES.has(t.name)) : TOOLS
+
   const supabase = await createClient()
   // Trimmed columns + fewer rows keeps the prompt small so the model responds
   // faster; search_clients / get_client_details fetch full detail on demand.
@@ -528,7 +537,7 @@ VOICE MODE RULES:
         max_tokens: 400,
         system,
         messages: conversation,
-        tools: TOOLS,
+        tools: availableTools,
       })
 
       const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
@@ -540,7 +549,9 @@ VOICE MODE RULES:
       conversation.push({ role: 'assistant', content: response.content })
       const results: Anthropic.ToolResultBlockParam[] = []
       for (const tu of toolUses) {
-        const result = await executeTool(supabase, tu.name, tu.input as Record<string, unknown>, user, actions)
+        const result = noPay && PAYMENT_TOOL_NAMES.has(tu.name)
+          ? { error: 'Payments are not available to this user.' }
+          : await executeTool(supabase, tu.name, tu.input as Record<string, unknown>, user, actions)
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) })
       }
       conversation.push({ role: 'user', content: results })
