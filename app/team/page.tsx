@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Play, Pause, Square, Wallet, DollarSign, Flame, ChevronDown, Loader2, Inbox } from 'lucide-react'
+import { Play, Pause, Square, Wallet, DollarSign, Flame, ChevronDown, Loader2, Inbox, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,7 @@ import { Tachometer } from '@/components/team/Tachometer'
 import { BankMeter } from '@/components/team/BankMeter'
 import { Confetti } from '@/components/team/Confetti'
 import { CompletedCard } from '@/components/team/CompletedCard'
+import { EditEntryDialog } from '@/components/team/EditEntryDialog'
 
 function fmtClock(secs: number): string {
   const h = Math.floor(secs / 3600)
@@ -30,6 +31,7 @@ function fmtClock(secs: number): string {
 export default function TeamPage() {
   const { user } = useAuth()
   const isAdmin = user?.userType === 'admin'
+  const [editEntry, setEditEntry] = useState<TeamTimeEntry | null>(null)
   const isVa = isTeamVa(user?.id)
 
   // Which VA's board are we looking at
@@ -252,6 +254,11 @@ export default function TeamPage() {
                       <Button size="sm" className="h-9 gap-1.5" onClick={() => timerAction(e.id, 'start')}>
                         <Play className="w-3.5 h-3.5" /> Start
                       </Button>
+                      {isAdmin && (
+                        <button onClick={() => setEditEntry(e)} title="Edit / delete" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
@@ -332,6 +339,13 @@ export default function TeamPage() {
                   })() : (
                     <span className="ml-auto text-[11px] text-muted-foreground/40">pay-only</span>
                   ))}
+                  {isAdmin && (
+                    <div className={cn('flex items-center gap-1', !e.is_standard && 'ml-auto')}>
+                      <button onClick={() => setEditEntry(e)} title="Edit entry" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -351,7 +365,7 @@ export default function TeamPage() {
             ) : (
               <div className="space-y-2">
                 {completed.map(e => (
-                  <CompletedCard key={e.id} entry={e} cfg={cfg} onDelete={isAdmin ? () => deleteEntry(e.id) : undefined} />
+                  <CompletedCard key={e.id} entry={e} cfg={cfg} onEdit={isAdmin ? () => setEditEntry(e) : undefined} onDelete={isAdmin ? () => deleteEntry(e.id) : undefined} />
                 ))}
               </div>
             )}
@@ -455,6 +469,10 @@ export default function TeamPage() {
             )}
           </div>
         </div>
+      )}
+
+      {isAdmin && (
+        <EditEntryDialog entry={editEntry} onClose={() => setEditEntry(null)} onSaved={load} />
       )}
     </div>
   )

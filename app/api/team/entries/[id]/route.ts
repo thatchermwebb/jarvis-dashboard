@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { callerIsAdmin } from '@/lib/auth-server'
 import type { TeamTimeEntry } from '@/types'
 
 // Timer state machine + edits for a single entry.
 // PATCH body: { action: 'start'|'pause'|'resume'|'complete' } OR field edits
-// ({ description, is_standard }).
+// ({ description, is_standard, worked_minutes }).
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   const { id } = await params
   const body = await req.json()
 
-  // Field edits (no action) — description / standard toggle
+  // Field edits (no action) — description / standard toggle / retroactive time
   if (!body.action) {
     const patch: Record<string, unknown> = {}
     if (body.description !== undefined) patch.description = body.description
     if (body.is_standard !== undefined) patch.is_standard = body.is_standard
+    // Retroactive worked-time correction (admins only). Freezes any live
+    // segment so the edited value sticks instead of continuing to accrue.
+    if (body.worked_minutes !== undefined) {
+      if (!(await callerIsAdmin())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      patch.accumulated_seconds = Math.max(0, Math.round(Number(body.worked_minutes) * 60))
+      patch.running_since = null
+    }
     if (!Object.keys(patch).length) return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
     const { data, error } = await supabase
       .from('team_time_entries').update(patch).eq('id', id)
@@ -101,6 +109,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Retroactive deletion is an admin-only power.
+  if (!(await callerIsAdmin())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const { id } = await params
   const { error } = await supabase.from('team_time_entries').delete().eq('id', id)

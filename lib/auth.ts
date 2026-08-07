@@ -56,6 +56,11 @@ export function isReadOnly(user: AppUser | undefined | null): boolean {
   return user?.userType === 'associate'
 }
 
+/** Admins (full permissions; can retroactively edit/delete team entries, etc.). */
+export function isAdmin(user: AppUser | undefined | null): boolean {
+  return user?.userType === 'admin'
+}
+
 /** Pages hidden from noPayments users (payments ledger + revenue reporting). */
 export const NO_PAYMENTS_HREFS = ['/payments', '/reports']
 

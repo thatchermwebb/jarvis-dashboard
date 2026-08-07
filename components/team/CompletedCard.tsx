@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, XCircle, Trash2, Zap, Timer } from 'lucide-react'
+import { CheckCircle2, XCircle, Trash2, Zap, Timer, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { workedHours, workedSeconds, kpiHit, kpiCountable, kpiEligible, responseSeconds, type VaConfig } from '@/lib/team'
 import type { TeamTimeEntry } from '@/types'
@@ -21,9 +21,10 @@ function fmtDur(secs: number | null): string {
 
 // A finished task: time in/out (browser-local tz), worked hours as decimals,
 // standard badge, and a KPI hit/miss stamp.
-export function CompletedCard({ entry, cfg, onDelete }: {
+export function CompletedCard({ entry, cfg, onEdit, onDelete }: {
   entry: TeamTimeEntry
   cfg: VaConfig
+  onEdit?: () => void
   onDelete?: () => void
 }) {
   const hrs = workedHours(entry)
@@ -91,8 +92,13 @@ export function CompletedCard({ entry, cfg, onDelete }: {
           ) : standard && hasAssignment && !eligible ? (
             <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">off-hours</span>
           ) : null}
+          {onEdit && (
+            <button onClick={onEdit} title="Edit entry" className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-foreground transition-all">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
           {onDelete && (
-            <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-red-400 transition-all">
+            <button onClick={onDelete} title="Delete entry" className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-red-400 transition-all">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}

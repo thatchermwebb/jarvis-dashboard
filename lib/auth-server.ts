@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { getUserById, affiliateScope, isReadOnly, type AppUser } from './auth'
+import { getUserById, affiliateScope, isReadOnly, isAdmin, type AppUser } from './auth'
 
 /**
  * Resolve the signed-in user inside a route handler / server component.
@@ -23,4 +23,9 @@ export async function getAffiliateScope(): Promise<string | null> {
 /** True when the caller may not mutate data (associates). */
 export async function callerIsReadOnly(): Promise<boolean> {
   return isReadOnly(await getServerUser())
+}
+
+/** True when the caller is an admin (full permissions). */
+export async function callerIsAdmin(): Promise<boolean> {
+  return isAdmin(await getServerUser())
 }
