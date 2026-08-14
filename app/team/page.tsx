@@ -398,7 +398,7 @@ export default function TeamPage() {
 
         {/* Right rail */}
         <div className="space-y-4">
-          <BankMeter amount={bank} rate={cfg.rate} hours={totalHours} />
+          <BankMeter amount={bank} rate={cfg.rate} hours={totalHours} bonusEligible={kpi.pct != null && kpi.pct >= 90} />
 
           <div className="bg-card border border-border rounded-2xl p-5">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-2 text-center">Turnaround KPI · assigned → done</div>

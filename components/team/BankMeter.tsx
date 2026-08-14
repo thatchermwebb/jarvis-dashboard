@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // Animated count-up bank total. Ticks from the previous value to the new one
 // whenever `amount` changes — satisfying to watch it climb.
-export function BankMeter({ amount, rate, hours }: { amount: number; rate: number; hours: number }) {
+export function BankMeter({ amount, rate, hours, bonusEligible = false }: { amount: number; rate: number; hours: number; bonusEligible?: boolean }) {
   const [display, setDisplay] = useState(amount)
   const prev = useRef(amount)
 
@@ -36,6 +36,15 @@ export function BankMeter({ amount, rate, hours }: { amount: number; rate: numbe
       <div className="mt-1 text-xs text-muted-foreground">
         {hours.toFixed(2)} hrs · ${rate.toFixed(2)}/hr
       </div>
+      {bonusEligible && (
+        <div className="mt-2 flex items-center justify-between rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5">
+          <span className="text-[11px] font-semibold text-emerald-300">🔥 +10% KPI bonus</span>
+          <span className="text-xs font-bold tabular-nums text-emerald-300">
+            +${(display * 0.1).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <span className="text-emerald-400/70 font-medium"> → ${(display * 1.1).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </span>
+        </div>
+      )}
     </div>
   )
 }
