@@ -15,8 +15,8 @@ export function TopBar() {
   const [search, setSearch] = useState('')
   const router = useRouter()
   const { user } = useAuth()
-  // VAs and (read-only) associates don't get the create/log actions.
-  const isVA = user?.userType === 'va' || user?.userType === 'associate'
+  // VAs don't get the create/log actions; associates now do (scoped).
+  const isVA = user?.userType === 'va'
 
   // JARVIS opens/closes the Log Call dialog to drive it on-screen
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
+import { getAffiliateScope, callerCanAccessClient } from '@/lib/auth-server'
 import { addWeeks, addMonths, format, parseISO } from 'date-fns'
 
 function generateDueDates(frequency: string, startDate: Date, endDate?: Date): Date[] {
@@ -44,9 +44,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const body = await req.json()
+  if (!(await callerCanAccessClient(supabase, body.client_id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // Create the schedule
   const { data: schedule, error: schedErr } = await supabase

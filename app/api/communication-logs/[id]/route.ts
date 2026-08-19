@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { callerIsReadOnly } from '@/lib/auth-server'
+import { callerCanAccessClient } from '@/lib/auth-server'
+
+/** 403 unless the caller may write to the client this log belongs to. */
+async function guardLog(supabase: Awaited<ReturnType<typeof createClient>>, id: string): Promise<boolean> {
+  const { data } = await supabase.from('communication_logs').select('client_id').eq('id', id).maybeSingle()
+  return callerCanAccessClient(supabase, data?.client_id)
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  // Associates may create logs but not edit existing ones.
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const { id } = await params
+  if (!(await guardLog(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
 
   const { data, error } = await supabase
@@ -35,9 +40,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const { id } = await params
+  if (!(await guardLog(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { error } = await supabase.from('communication_logs').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

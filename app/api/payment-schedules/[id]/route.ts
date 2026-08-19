@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { callerIsReadOnly } from '@/lib/auth-server'
+import { callerCanAccessClient } from '@/lib/auth-server'
+
+/** 403 unless the caller may write to the client this schedule belongs to. */
+async function guardSchedule(supabase: Awaited<ReturnType<typeof createClient>>, id: string): Promise<boolean> {
+  const { data } = await supabase.from('payment_schedules').select('client_id').eq('id', id).maybeSingle()
+  return callerCanAccessClient(supabase, data?.client_id)
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const supabase = await createClient()
+  if (!(await guardSchedule(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
   const { action, ...fields } = body
 
@@ -38,9 +44,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const supabase = await createClient()
+  if (!(await guardSchedule(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // Void all future pending payments first
   const today = new Date().toISOString().split('T')[0]

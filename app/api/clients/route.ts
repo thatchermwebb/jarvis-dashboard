@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sortClientsByPriority } from '@/lib/scoring'
-import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
+import { getAffiliateScope } from '@/lib/auth-server'
 
 // Throttle the "expire old trials" write so it runs at most once per interval
 // instead of firing a table-wide UPDATE scan on every single list load.
@@ -79,7 +79,6 @@ const CLIENT_FIELDS = new Set([
 ])
 
 export async function POST(req: NextRequest) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const raw = await req.json()
 
@@ -93,6 +92,11 @@ export async function POST(req: NextRequest) {
     if (!CLIENT_FIELDS.has(k)) continue
     body[k] = (typeof v === 'string' && v.trim() === '') ? null : v
   }
+
+  // Affiliate-scoped users can only create clients inside their own book —
+  // force the affiliate regardless of what the form sent.
+  const scope = await getAffiliateScope()
+  if (scope) body.affiliate_id = scope
 
   // Backdate created_at for imported existing clients
   if (isImport && clientSince) {

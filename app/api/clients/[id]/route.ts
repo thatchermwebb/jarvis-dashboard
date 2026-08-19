@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getAffiliateScope, callerIsReadOnly } from '@/lib/auth-server'
+import { getAffiliateScope, callerCanAccessClient, callerIsAdmin } from '@/lib/auth-server'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -27,10 +27,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 const LOST_STAGES = new Set(['churned', 'free_trial_lost'])
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const supabase = await createClient()
+  // Affiliate-scoped users may only edit clients in their own book, and can't
+  // reassign a client's affiliate out of it.
+  if (!(await callerCanAccessClient(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
+  if (await getAffiliateScope()) delete body.affiliate_id
 
   // Marking a client lost/churned wipes any future follow-up. (You can still
   // add one back later by logging a new note with a follow-up date.)
@@ -51,7 +54,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Deleting a whole client record stays admin-only.
+  if (!(await callerIsAdmin())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const supabase = await createClient()
 

@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserById, affiliateScope, isReadOnly, isAdmin, type AppUser } from './auth'
 
 /**
@@ -28,4 +29,18 @@ export async function callerIsReadOnly(): Promise<boolean> {
 /** True when the caller is an admin (full permissions). */
 export async function callerIsAdmin(): Promise<boolean> {
   return isAdmin(await getServerUser())
+}
+
+/**
+ * Whether the caller may write to a given client. Unrestricted users (admin/va)
+ * always may; affiliate-scoped users (associates) only for clients in their own
+ * book. Pass the request's supabase client to reuse it.
+ */
+export async function callerCanAccessClient(supabase: SupabaseClient, clientId: string | null | undefined): Promise<boolean> {
+  const scope = await getAffiliateScope()
+  if (!scope) return true
+  if (!clientId) return false
+  const { data } = await supabase
+    .from('clients').select('id').eq('id', clientId).eq('affiliate_id', scope).maybeSingle()
+  return !!data
 }

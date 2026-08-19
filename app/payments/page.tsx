@@ -12,19 +12,17 @@ import { cn, formatCurrency, localToday } from '@/lib/utils'
 import type { Payment, PaymentEntryStatus, PaymentType } from '@/types'
 import { PaymentDialog } from '@/components/payments/PaymentDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 /**
- * Associates get a read-only view of their own affiliated payments — the API
- * rejects their writes, so don't offer the affordances. Read straight from
- * auth in each row rather than drilling a prop through five components.
+ * No read-only role remains — associates now manage payments for their own
+ * (affiliate-scoped) clients; the API enforces the scope. Kept as a hook so the
+ * per-row call sites don't change.
  */
 function useReadOnly(): boolean {
-  const { user } = useAuth()
-  return user?.userType === 'associate'
+  return false
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────

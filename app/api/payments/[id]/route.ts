@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { callerIsReadOnly } from '@/lib/auth-server'
+import { callerCanAccessClient } from '@/lib/auth-server'
+
+/** 403 unless the caller may write to the client this payment belongs to. */
+async function guardPayment(supabase: Awaited<ReturnType<typeof createClient>>, id: string): Promise<boolean> {
+  const { data } = await supabase.from('payments').select('client_id').eq('id', id).maybeSingle()
+  return callerCanAccessClient(supabase, data?.client_id)
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const { id } = await params
+  if (!(await guardPayment(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
 
   // Marking a payment paid: "late" is authoritatively decided by paid_date vs
@@ -42,9 +48,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (await callerIsReadOnly()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = await createClient()
   const { id } = await params
+  if (!(await guardPayment(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { error } = await supabase.from('payments').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

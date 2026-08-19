@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency, formatDate, localToday } from '@/lib/utils'
 import type { Payment, PaymentSchedule, PaymentType, PaymentFrequency } from '@/types'
 
@@ -42,9 +41,9 @@ interface Props {
 }
 
 export function PaymentPanel({ clientId, clientName }: Props) {
-  const { user } = useAuth()
-  // Associates view their own clients' payments read-only.
-  const readOnly = user?.userType === 'associate'
+  // No read-only role remains; associates manage payments for their own clients
+  // (the API enforces the affiliate scope).
+  const readOnly = false
   const [payments, setPayments] = useState<Payment[]>([])
   const [schedules, setSchedules] = useState<PaymentSchedule[]>([])
   const [loading, setLoading] = useState(true)
@@ -245,8 +244,7 @@ export function PaymentPanel({ clientId, clientName }: Props) {
 function PaymentRow({ payment: p, onMark, onDelete, onEdit }: {
   payment: Payment; onMark: (s: string) => void; onDelete: () => void; onEdit: () => void
 }) {
-  const { user } = useAuth()
-  const readOnly = user?.userType === 'associate'
+  const readOnly = false
   const cfg = STATUS_CONFIG[p.status] ?? STATUS_CONFIG.pending
   const isPaid = p.status === 'paid' || p.status === 'paid_late' || p.status === 'waived'
 

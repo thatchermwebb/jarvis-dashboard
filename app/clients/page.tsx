@@ -507,8 +507,8 @@ function ClientsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  // VAs and (read-only) associates can't create/import clients.
-  const isVA = user?.userType === 'va' || user?.userType === 'associate'
+  // VAs can't create/import clients; associates now can (scoped to their book).
+  const isVA = user?.userType === 'va'
   const isMobile = useIsMobile()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)

@@ -39,21 +39,28 @@ export function getUserById(id: string): AppUser | undefined {
 // ─── Access control ──────────────────────────────────────────────────────────
 
 /** Pages an associate may open. Everything else redirects to /clients. */
-export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments']
+export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments', '/tasks', '/ad-production']
 
 /** API prefixes an associate may call. Everything else is 403. */
 export const ASSOCIATE_ALLOWED_API = [
   '/api/clients',
   '/api/payments',
   '/api/payment-schedules',
-  '/api/communication-logs', // scoped to their own clients; read-only
+  '/api/communication-logs',
+  '/api/tasks',
+  '/api/ad-productions',
+  '/api/slack', // send Slack notifications from fulfillment/ad flows
   '/api/affiliates',
   '/api/auth',
 ]
 
-/** Associates are read-only — they may never mutate anything. */
-export function isReadOnly(user: AppUser | undefined | null): boolean {
-  return user?.userType === 'associate'
+/**
+ * No fully read-only role remains. Associates are affiliate-SCOPED read-write:
+ * they can create/edit clients, payments and logs, but only within their own
+ * affiliate book (enforced per-endpoint via affiliateScope + ownership checks).
+ */
+export function isReadOnly(_user: AppUser | undefined | null): boolean {
+  return false
 }
 
 /** Admins (full permissions; can retroactively edit/delete team entries, etc.). */

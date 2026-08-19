@@ -150,10 +150,13 @@ export default function ClientWarRoom() {
   const [activeTab, setActiveTab] = useState('history')
   const [contractEditOpen, setContractEditOpen] = useState(false)
   const { user } = useAuth()
-  // Associates get a read-only profile for their own affiliated clients...
-  const readOnly = user?.userType === 'associate'
-  // ...except they may log calls on those clients.
-  const canLogCalls = !readOnly || user?.userType === 'associate'
+  // Associates are affiliate-scoped read-write now (edit clients, log calls,
+  // manage payments) — no fully read-only role remains on this page.
+  const readOnly = false
+  const isAdmin = user?.userType === 'admin'
+  const canLogCalls = true
+  // Associates have no JARVIS provider mounted (AppShell), so don't render it.
+  const jarvisEnabled = user?.userType !== 'associate'
   // noPayments users (e.g. Head of Ops) never see the Payments module.
   const hidePayments = !!user?.noPayments
   const stagePickerRef = useRef<HTMLDivElement>(null)
@@ -384,9 +387,11 @@ export default function ClientWarRoom() {
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setScheduleOpen(true)}>
               <Calendar className="w-3 h-3" /> Schedule Call
             </Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setJarvisOpen(true)}>
-              <Bot className="w-3 h-3" /> JARVIS
-            </Button>
+            {jarvisEnabled && (
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setJarvisOpen(true)}>
+                <Bot className="w-3 h-3" /> JARVIS
+              </Button>
+            )}
             {(client.stage === 'free_trial' || client.stage === 'trial_ending_soon') && (
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-violet-500/30 text-violet-300 hover:bg-violet-500/10" onClick={() => setBriefOpen(true)}>
                 <Star className="w-3 h-3" /> Close Brief
@@ -408,7 +413,7 @@ export default function ClientWarRoom() {
                 <Edit className="w-3 h-3" /> Edit
               </Button>
             )}
-            {readOnly ? null : deleteConfirm ? (
+            {!isAdmin ? null : deleteConfirm ? (
               <div className="flex items-center gap-1">
                 <span className="text-xs text-red-400">Delete client?</span>
                 <Button size="sm" variant="outline" className="h-8 text-xs border-red-500/40 text-red-400 hover:bg-red-950/30"
@@ -1104,7 +1109,7 @@ export default function ClientWarRoom() {
 
       {/* JARVIS has no provider for associates (it can read across the whole
           book), and useJarvis() throws without one — so don't mount it. */}
-      {!readOnly && <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />}
+      {jarvisEnabled && <JARVISPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} clientName={client.name} />}
       <BriefGenerator open={briefOpen} onClose={() => setBriefOpen(false)} client={client} />
       {startModalOpen && (
         <StartFulfillmentModal
