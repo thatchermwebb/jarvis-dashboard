@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn, sentimentEmoji, timeAgo, formatCurrency, localToday } from '@/lib/utils'
 import { getTrialDaysLeft } from '@/lib/scoring'
-import type { Client, ClientStage } from '@/types'
+import type { Client, ClientStage, Affiliate } from '@/types'
 
 const LIST_GROUPS = [
   { label: 'Active',                stages: ['active_client', 'won_back'],           color: 'text-emerald-400', border: 'border-l-emerald-500', dot: 'bg-emerald-500' },
@@ -521,6 +521,8 @@ function ClientsContent() {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [tableSortField, setTableSortField] = useState<TableSortField | null>(null)
   const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
+  const [affiliates, setAffiliates] = useState<Affiliate[]>([])
+  const [affiliateFilter, setAffiliateFilter] = useState<string>('all') // 'all' | affiliate_id | 'none'
   const dragId = useRef<string | null>(null)
 
   function cycleTableSort(field: TableSortField) {
@@ -590,6 +592,14 @@ function ClientsContent() {
 
   useEffect(() => { load() }, [load])
 
+  // Affiliates for the top-of-page filter dropdown.
+  useEffect(() => {
+    fetch('/api/affiliates')
+      .then(r => (r.ok ? r.json() : []))
+      .then((data: Affiliate[]) => setAffiliates(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
+
   function handleDragStart(e: React.DragEvent, id: string) {
     dragId.current = id
     e.dataTransfer.effectAllowed = 'move'
@@ -646,7 +656,12 @@ function ClientsContent() {
     return all
   }
 
-  const visible = useMemo(() => applyFilter(clients), [clients, urlFilter, urlStage]) // eslint-disable-line react-hooks/exhaustive-deps
+  const visible = useMemo(() => {
+    let list = applyFilter(clients)
+    if (affiliateFilter === 'none') list = list.filter(c => !c.affiliate_id)
+    else if (affiliateFilter !== 'all') list = list.filter(c => c.affiliate_id === affiliateFilter)
+    return list
+  }, [clients, urlFilter, urlStage, affiliateFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filterLabel =
     urlFilter === 'free_trials'    ? 'Free Trials' :
@@ -707,10 +722,29 @@ function ClientsContent() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className={cn('relative', isMobile ? 'px-1' : 'max-w-sm')}>
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email..." className="pl-9 h-9 bg-secondary/50" />
+      {/* Search + affiliate filter */}
+      <div className={cn('flex gap-2 items-center', isMobile ? 'px-1 flex-wrap' : '')}>
+        <div className={cn('relative flex-1', isMobile ? 'w-full' : 'max-w-sm')}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email..." className="pl-9 h-9 bg-secondary/50" />
+        </div>
+        {affiliates.length > 0 && (
+          <select
+            value={affiliateFilter}
+            onChange={e => setAffiliateFilter(e.target.value)}
+            className={cn(
+              'h-9 rounded-lg border border-border bg-secondary/50 px-3 text-sm text-foreground outline-none focus:border-primary/50 transition-colors',
+              affiliateFilter !== 'all' && 'border-primary/40 text-primary',
+            )}
+            title="Filter by affiliate"
+          >
+            <option value="all">All affiliates</option>
+            {affiliates.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+            <option value="none">— Unaffiliated —</option>
+          </select>
+        )}
       </div>
 
       {loading ? (
