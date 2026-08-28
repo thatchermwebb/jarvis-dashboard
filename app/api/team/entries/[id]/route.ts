@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { callerIsAdmin } from '@/lib/auth-server'
+import { sendOpsSlack } from '@/lib/slack'
 import type { TeamTimeEntry } from '@/types'
 
 // Timer state machine + edits for a single entry.
@@ -77,31 +78,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select('*, client:clients(id, name, business_name)').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Auto-chain the pipeline handoff: completing Wilson's fulfillment ads task
-  // hands off to Samuel — create his onboarding task, assigned right now.
-  if (
-    body.action === 'complete' &&
-    e.va_id === 'wilson' && e.is_standard && e.assigned_at && e.client_id
-  ) {
-    // Dedupe: skip if Samuel already has an open onboarding task for this client
-    const { data: existing } = await supabase
-      .from('team_time_entries')
-      .select('id')
-      .eq('va_id', 'samuel')
-      .eq('client_id', e.client_id)
-      .neq('status', 'completed')
-      .limit(1)
-    if (!existing || existing.length === 0) {
-      const clientName = (data as { client?: { name?: string } })?.client?.name ?? 'Client'
-      await supabase.from('team_time_entries').insert({
-        va_id: 'samuel',
-        description: `${clientName} — Onboarding`,
-        is_standard: true,
-        client_id: e.client_id,
-        assigned_at: nowIso,
-        status: 'idle',
-        accumulated_seconds: 0,
-      })
+  // Pipeline handoff when Wilson completes an ads task: ping Samuel on Slack so
+  // he knows the ad is ready (no more manual "done" messages), and auto-create
+  // his onboarding task on the board.
+  if (body.action === 'complete' && e.va_id === 'wilson' && e.is_standard) {
+    const clientName = (data as { client?: { name?: string } })?.client?.name
+    const label = clientName ?? e.description ?? 'the ads'
+
+    // Awaited so the send completes before the serverless function returns.
+    await sendOpsSlack(`✅ *Ads complete* — Wilson finished ${clientName ? `ads for *${clientName}*` : `*${label}*`}. Ready for Samuel to onboard. 🚀`)
+
+    // Auto-create Samuel's onboarding task, assigned now (KPI anchor), deduped.
+    if (e.assigned_at && e.client_id) {
+      const { data: existing } = await supabase
+        .from('team_time_entries')
+        .select('id')
+        .eq('va_id', 'samuel')
+        .eq('client_id', e.client_id)
+        .neq('status', 'completed')
+        .limit(1)
+      if (!existing || existing.length === 0) {
+        await supabase.from('team_time_entries').insert({
+          va_id: 'samuel',
+          description: `${clientName ?? 'Client'} — Onboarding`,
+          is_standard: true,
+          client_id: e.client_id,
+          assigned_at: nowIso,
+          status: 'idle',
+          accumulated_seconds: 0,
+        })
+      }
     }
   }
 
