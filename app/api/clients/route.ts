@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sortClientsByPriority } from '@/lib/scoring'
-import { getAffiliateScope } from '@/lib/auth-server'
+import { getAffiliateScope, getServerUser } from '@/lib/auth-server'
+import { affiliateScope } from '@/lib/auth'
 
 // Throttle the "expire old trials" write so it runs at most once per interval
 // instead of firing a table-wide UPDATE scan on every single list load.
@@ -95,8 +96,13 @@ export async function POST(req: NextRequest) {
 
   // Affiliate-scoped users can only create clients inside their own book —
   // force the affiliate regardless of what the form sent.
-  const scope = await getAffiliateScope()
+  const creator = await getServerUser()
+  const scope = affiliateScope(creator)
   if (scope) body.affiliate_id = scope
+
+  // Stamp the creator server-side (not from the form, so it can't be spoofed).
+  const creatorName = creator?.name ?? 'Unknown'
+  body.created_by = creatorName
 
   // Backdate created_at for imported existing clients
   if (isImport && clientSince) {
@@ -119,7 +125,7 @@ export async function POST(req: NextRequest) {
     client_id: data.id,
     event_type: 'created',
     description: isImport ? 'Client imported (existing)' : 'Client added to JARVIS',
-    created_by: 'Diego',
+    created_by: creatorName,
   })
 
   return NextResponse.json(data, { status: 201 })

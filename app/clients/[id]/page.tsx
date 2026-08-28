@@ -531,6 +531,15 @@ export default function ClientWarRoom() {
                     </div>
                   </div>
                 )}
+                {client.created_by && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <AuthorBadge createdBy={client.created_by} size="sm" />
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Created By</div>
+                      <div className="text-sm font-medium text-foreground">{client.created_by}</div>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Monthly Retainer" value={client.monthly_retainer ? formatCurrency(client.monthly_retainer) : null} />
                   <Field label="Payment" value={client.payment_frequency} />
