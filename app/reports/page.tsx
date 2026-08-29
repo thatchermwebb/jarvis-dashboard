@@ -254,6 +254,13 @@ export default function ReportsPage() {
     [clients]
   )
 
+  // Trials started = client (contact) records created within the selected range.
+  const trialsStarted = useMemo(() =>
+    clients.filter(c => inRange(c.created_at)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clients, range, rangeStart]
+  )
+
   // ── Day/week range helpers ────────────────────────────────────────────────────
 
   function getDaysInRange(start: Date, end: Date): string[] {
@@ -365,13 +372,19 @@ export default function ReportsPage() {
       : null)
     if (!start) return []
     const weeks = getWeeksInRange(start, now)
-    return weeks.map(weekStart => {
-      // Canonical reconstruction — the last week equals the live currentMrr,
-      // so the chart line agrees with the header.
+    const points = weeks.map(weekStart => {
       const weekMs = new Date(weekStart + 'T23:59:59').getTime()
       const mrr = mrrAtDate(clients, Math.min(weekMs, now.getTime()))
       return { date: weekStart, mrr, label: fmtWeek(weekStart) }
     })
+    // The weekly buckets end on the last week boundary (e.g. a Sunday), which is
+    // usually a few days stale. Append a final "today" point using the live
+    // currentMrr so the line's endpoint matches the "$X current" header exactly.
+    const todayStr = localDateStr(now)
+    if (!points.length || points[points.length - 1].date !== todayStr) {
+      points.push({ date: todayStr, mrr: currentMrr(clients), label: fmtWeek(todayStr) })
+    }
+    return points
   }, [clients, rangeStart])
 
   // ── Click handlers ────────────────────────────────────────────────────────────
@@ -448,7 +461,7 @@ export default function ReportsPage() {
       <ReportsAnalyst />
 
       {/* Top metric cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-card border border-emerald-500/30 bg-emerald-500/5 rounded-xl px-4 py-4">
           <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalCollected)}</div>
           <div className="text-xs text-muted-foreground mt-1">Cash Collected</div>
@@ -458,6 +471,14 @@ export default function ReportsPage() {
           <div className="text-2xl font-bold text-primary">{formatCurrency(mrr)}</div>
           <div className="text-xs text-muted-foreground mt-1">MRR (Current)</div>
           <div className="text-[10px] text-muted-foreground/50 mt-0.5">{activeClients.length} active clients</div>
+        </div>
+        <div
+          className="bg-card border border-violet-500/30 bg-violet-500/5 rounded-xl px-4 py-4 cursor-pointer hover:bg-violet-500/10 transition-colors"
+          onClick={() => setDrillDown({ title: 'Trials Started', subtitle: RANGE_OPTIONS.find(r => r.value === range)?.label ?? '', type: 'clients', clients: trialsStarted })}
+        >
+          <div className="text-2xl font-bold text-violet-400">{trialsStarted.length}</div>
+          <div className="text-xs text-muted-foreground mt-1">Trials Started</div>
+          <div className="text-[10px] text-muted-foreground/50 mt-0.5">{RANGE_OPTIONS.find(r => r.value === range)?.label}</div>
         </div>
         <div
           className="bg-card border border-blue-500/30 bg-blue-500/5 rounded-xl px-4 py-4 cursor-pointer hover:bg-blue-500/10 transition-colors"
