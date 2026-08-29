@@ -592,6 +592,19 @@ function ClientsContent() {
 
   useEffect(() => { load() }, [load])
 
+  // Sync the search box when the top-bar drives it via ?search= — even if we're
+  // already on this page (the initial useState only reads the param once, so
+  // without this a top-bar search does nothing when All Clients is already open).
+  // Only reacts to genuine URL search changes, so it never clobbers typing here.
+  const urlSearch = searchParams.get('search') ?? ''
+  const lastUrlSearch = useRef(urlSearch)
+  useEffect(() => {
+    if (urlSearch !== lastUrlSearch.current) {
+      lastUrlSearch.current = urlSearch
+      setSearch(urlSearch)
+    }
+  }, [urlSearch])
+
   // Affiliates for the top-of-page filter dropdown.
   useEffect(() => {
     fetch('/api/affiliates')

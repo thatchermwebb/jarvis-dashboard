@@ -32,12 +32,15 @@ export default function TeamPage() {
   const { user } = useAuth()
   const isAdmin = user?.userType === 'admin'
   const [editEntry, setEditEntry] = useState<TeamTimeEntry | null>(null)
+  // Admins can delete anyone's entries; a VA can delete their own (their board).
   const isVa = isTeamVa(user?.id)
 
   // Which VA's board are we looking at
   const [selectedVa, setSelectedVa] = useState<TeamVaId>(isTeamVa(user?.id) ? (user!.id as TeamVaId) : 'wilson')
   useEffect(() => { if (isTeamVa(user?.id)) setSelectedVa(user!.id as TeamVaId) }, [user])
   const cfg: VaConfig = VA_CONFIG[selectedVa]
+  // Delete allowed for admins (any board) or a VA on their own board.
+  const canDelete = isAdmin || (isVa && user?.id === selectedVa)
 
   const [entries, setEntries] = useState<TeamTimeEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -143,7 +146,10 @@ export default function TeamPage() {
   }
 
   async function deleteEntry(id: string) {
-    await fetch(`/api/team/entries/${id}`, { method: 'DELETE' })
+    if (!confirm('Delete this time entry? This removes its hours and pay.')) return
+    const res = await fetch(`/api/team/entries/${id}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Failed to delete'); return }
+    toast.success('Entry deleted')
     await load()
   }
 
@@ -254,9 +260,13 @@ export default function TeamPage() {
                       <Button size="sm" className="h-9 gap-1.5" onClick={() => timerAction(e.id, 'start')}>
                         <Play className="w-3.5 h-3.5" /> Start
                       </Button>
-                      {isAdmin && (
+                      {isAdmin ? (
                         <button onClick={() => setEditEntry(e)} title="Edit / delete" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      ) : canDelete && (
+                        <button onClick={() => deleteEntry(e.id)} title="Delete entry" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-red-400 hover:bg-secondary/50 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -339,11 +349,17 @@ export default function TeamPage() {
                   })() : (
                     <span className="ml-auto text-[11px] text-muted-foreground/40">pay-only</span>
                   ))}
-                  {isAdmin && (
+                  {(isAdmin || canDelete) && (
                     <div className={cn('flex items-center gap-1', !e.is_standard && 'ml-auto')}>
-                      <button onClick={() => setEditEntry(e)} title="Edit entry" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      {isAdmin ? (
+                        <button onClick={() => setEditEntry(e)} title="Edit entry" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button onClick={() => deleteEntry(e.id)} title="Delete entry" className="p-1.5 rounded-md text-muted-foreground/50 hover:text-red-400 hover:bg-secondary/50 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -365,7 +381,7 @@ export default function TeamPage() {
             ) : (
               <div className="space-y-2">
                 {completed.map(e => (
-                  <CompletedCard key={e.id} entry={e} cfg={cfg} onEdit={isAdmin ? () => setEditEntry(e) : undefined} onDelete={isAdmin ? () => deleteEntry(e.id) : undefined} />
+                  <CompletedCard key={e.id} entry={e} cfg={cfg} onEdit={isAdmin ? () => setEditEntry(e) : undefined} onDelete={canDelete ? () => deleteEntry(e.id) : undefined} />
                 ))}
               </div>
             )}
