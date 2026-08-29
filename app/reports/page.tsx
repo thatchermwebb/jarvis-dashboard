@@ -36,7 +36,7 @@ interface Payment {
   payment_type?: string
 }
 
-type Range = '7d' | '30d' | '90d' | 'ytd' | 'all'
+type Range = '7d' | '30d' | '90d' | 'ytd' | 'all' | 'custom'
 
 type DrillDown = {
   title: string
@@ -52,6 +52,7 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '90d', label: 'Last 90 Days' },
   { value: 'ytd', label: 'Year to Date' },
   { value: 'all', label: 'All Time' },
+  { value: 'custom', label: 'Custom' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -209,14 +210,30 @@ export default function ReportsPage() {
     load()
   }, [])
 
-  const rangeStart = useMemo(() => getRangeStart(range), [range])
+  // Custom range (from–to). Empty = unbounded on that side.
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd, setCustomEnd] = useState<string>('')
+
+  const rangeStart = useMemo(
+    () => (range === 'custom' ? (customStart ? parseLocalDate(customStart) : null) : getRangeStart(range)),
+    [range, customStart],
+  )
+  // End of the window: a custom end date, else "now" (represented as null).
+  const rangeEnd = useMemo(
+    () => (range === 'custom' && customEnd ? parseLocalDate(customEnd) : null),
+    [range, customEnd],
+  )
 
   function localDateStr(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
   }
 
   const rangeStartStr = useMemo(() => rangeStart ? localDateStr(rangeStart) : null, [rangeStart])
-  const inRange = (dateStr: string) => !rangeStartStr || dateStr.slice(0, 10) >= rangeStartStr
+  const rangeEndStr = useMemo(() => rangeEnd ? localDateStr(rangeEnd) : null, [rangeEnd])
+  const inRange = (dateStr: string) => {
+    const d = dateStr.slice(0, 10)
+    return (!rangeStartStr || d >= rangeStartStr) && (!rangeEndStr || d <= rangeEndStr)
+  }
 
   // ── Revenue metrics ──────────────────────────────────────────────────────────
 
@@ -230,7 +247,7 @@ export default function ReportsPage() {
       p.paid_date && inRange(p.paid_date)
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [payments, range, rangeStartStr]
+    [payments, range, rangeStartStr, rangeEndStr]
   )
 
   const totalCollected = useMemo(() => paidInRange.reduce((s, p) => s + p.amount, 0), [paidInRange])
@@ -240,13 +257,13 @@ export default function ReportsPage() {
   const newDeals = useMemo(() =>
     clients.filter(c => c.stage === 'active_client' && inRange(c.signed_at ?? c.created_at)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clients, range, rangeStart]
+    [clients, range, rangeStart, rangeEndStr]
   )
 
   const churned = useMemo(() =>
     clients.filter(c => (c.stage === 'churned' || c.stage === 'paused') && inRange(c.updated_at)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clients, range, rangeStart]
+    [clients, range, rangeStart, rangeEndStr]
   )
 
   const trialClients = useMemo(() =>
@@ -258,7 +275,7 @@ export default function ReportsPage() {
   const trialsStarted = useMemo(() =>
     clients.filter(c => inRange(c.created_at)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clients, range, rangeStart]
+    [clients, range, rangeStart, rangeEndStr]
   )
 
   // ── Day/week range helpers ────────────────────────────────────────────────────
@@ -300,7 +317,7 @@ export default function ReportsPage() {
     const earliestPaid = paidInRange.length > 0 ? parseLocalDate(paidInRange.map(p => p.paid_date!).sort()[0]) : null
     const start = rangeStart ?? earliestPaid
     if (!start) return []
-    return getDaysInRange(start, new Date()).map(date => ({
+    return getDaysInRange(start, rangeEnd ?? new Date()).map(date => ({
       date, label: fmtDay(date),
       amount: byDay[date]?.amount ?? 0,
       payments: byDay[date]?.payments ?? [],
@@ -322,7 +339,7 @@ export default function ReportsPage() {
     const earliestPaid = paidInRange.length > 0 ? parseLocalDate(paidInRange.map(p => p.paid_date!).sort()[0]) : null
     const start = rangeStart ?? earliestPaid
     if (!start) return []
-    return getWeeksInRange(start, new Date()).map(date => ({
+    return getWeeksInRange(start, rangeEnd ?? new Date()).map(date => ({
       date, label: fmtWeek(date),
       amount: byWeek[date]?.amount ?? 0,
       payments: byWeek[date]?.payments ?? [],
@@ -340,7 +357,7 @@ export default function ReportsPage() {
       ? new Date(Math.min(...newDeals.map(c => new Date(c.signed_at ?? c.created_at).getTime())))
       : null)
     if (!start) return []
-    return getDaysInRange(start, new Date()).map(date => ({
+    return getDaysInRange(start, rangeEnd ?? new Date()).map(date => ({
       date, label: fmtDay(date),
       count: byDay[date]?.length ?? 0,
       clients: byDay[date] ?? [],
@@ -358,7 +375,7 @@ export default function ReportsPage() {
       ? new Date(Math.min(...churned.map(c => new Date(c.updated_at).getTime())))
       : null)
     if (!start) return []
-    return getDaysInRange(start, new Date()).map(date => ({
+    return getDaysInRange(start, rangeEnd ?? new Date()).map(date => ({
       date, label: fmtDay(date),
       count: byDay[date]?.length ?? 0,
       clients: byDay[date] ?? [],
@@ -367,25 +384,28 @@ export default function ReportsPage() {
 
   const mrrOverTimeData = useMemo(() => {
     const now = new Date()
+    const end = rangeEnd ?? now
     const start = rangeStart ?? (clients.length > 0
       ? new Date(Math.min(...clients.filter(c => c.stage === 'active_client').map(c => new Date(c.created_at).getTime())))
       : null)
     if (!start) return []
-    const weeks = getWeeksInRange(start, now)
+    const weeks = getWeeksInRange(start, end)
     const points = weeks.map(weekStart => {
       const weekMs = new Date(weekStart + 'T23:59:59').getTime()
-      const mrr = mrrAtDate(clients, Math.min(weekMs, now.getTime()))
+      const mrr = mrrAtDate(clients, Math.min(weekMs, end.getTime()))
       return { date: weekStart, mrr, label: fmtWeek(weekStart) }
     })
-    // The weekly buckets end on the last week boundary (e.g. a Sunday), which is
-    // usually a few days stale. Append a final "today" point using the live
-    // currentMrr so the line's endpoint matches the "$X current" header exactly.
-    const todayStr = localDateStr(now)
-    if (!points.length || points[points.length - 1].date !== todayStr) {
-      points.push({ date: todayStr, mrr: currentMrr(clients), label: fmtWeek(todayStr) })
+    // The weekly buckets end on the last week boundary (e.g. a Sunday), which
+    // lags the window end. Append a final point at the window end so the line's
+    // endpoint is exact — the live currentMrr when the window runs to today, or
+    // the reconstructed MRR at a custom end date.
+    const endStr = localDateStr(end)
+    if (!points.length || points[points.length - 1].date !== endStr) {
+      const endMrr = rangeEnd ? mrrAtDate(clients, end.getTime()) : currentMrr(clients)
+      points.push({ date: endStr, mrr: endMrr, label: fmtWeek(endStr) })
     }
     return points
-  }, [clients, rangeStart])
+  }, [clients, rangeStart, rangeEnd])
 
   // ── Click handlers ────────────────────────────────────────────────────────────
 
@@ -440,20 +460,49 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Reports & Analytics</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Revenue, deal flow, and churn tracking</p>
         </div>
-        <div className="flex items-center gap-1 bg-card border border-border rounded-xl p-1">
-          {RANGE_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setRange(opt.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                range === opt.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-card border border-border rounded-xl p-1">
+            {RANGE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  setRange(opt.value)
+                  // Seed sensible defaults the first time Custom is opened.
+                  if (opt.value === 'custom' && !customStart && !customEnd) {
+                    const now = new Date()
+                    setCustomStart(localDateStr(new Date(now.getTime() - 30 * 86400000)))
+                    setCustomEnd(localDateStr(now))
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  range === opt.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {range === 'custom' && (
+            <div className="flex items-center gap-1.5 bg-card border border-border rounded-xl px-2 py-1">
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd || undefined}
+                onChange={e => setCustomStart(e.target.value)}
+                className="bg-secondary/50 border border-border/50 rounded-md px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
+              />
+              <span className="text-xs text-muted-foreground">→</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart || undefined}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="bg-secondary/50 border border-border/50 rounded-md px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
+              />
+            </div>
+          )}
         </div>
       </div>
 
