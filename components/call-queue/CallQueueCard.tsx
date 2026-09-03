@@ -19,7 +19,7 @@ import {
 } from '@/lib/utils'
 import type { Client } from '@/types'
 
-export type PaymentDueFlag = 'overdue' | 'today' | 'tomorrow'
+export type PaymentDueFlag = 'overdue' | 'today' | 'tomorrow' | 'soon'
 
 /** Rich payment info surfaced on the call card (amount + plan + timing). */
 export interface PaymentDueInfo {
@@ -34,9 +34,19 @@ export interface PaymentDueInfo {
 export type PaymentDue = PaymentDueFlag
 
 const PAYMENT_DUE_CONFIG: Record<PaymentDueFlag, { label: string; cls: string }> = {
-  overdue:  { label: 'Overdue',     cls: 'bg-red-500/20 text-red-300 border-red-500/40' },
-  today:    { label: 'Due Today',   cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+  overdue:  { label: 'Overdue',      cls: 'bg-red-500/20 text-red-300 border-red-500/40' },
+  today:    { label: 'Due Today',    cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
   tomorrow: { label: 'Due Tomorrow', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+  soon:     { label: 'Due Soon',     cls: 'bg-amber-500/10 text-amber-200/80 border-amber-500/25' },
+}
+
+/** Badge text — "soon" shows the concrete days remaining (e.g. "Due in 4d"). */
+function paymentDueLabel(info: PaymentDueInfo): string {
+  if (info.flag === 'soon') {
+    const d = daysUntil(info.dueDate)
+    return d != null && d > 0 ? `Due in ${d}d` : 'Due Soon'
+  }
+  return PAYMENT_DUE_CONFIG[info.flag].label
 }
 
 /** Ready-to-close signal (mirrors the definition used across the app). */
@@ -133,13 +143,13 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
             <div className="flex items-center gap-1.5 flex-wrap mt-2">
               {paymentDue && (
                 <span
-                  title={`${paymentDue.typeLabel} · ${formatCurrency(paymentDue.amount)} · ${PAYMENT_DUE_CONFIG[paymentDue.flag].label} (${paymentDue.dueDate})`}
+                  title={`${paymentDue.typeLabel} · ${formatCurrency(paymentDue.amount)} · ${paymentDueLabel(paymentDue)} (${paymentDue.dueDate})`}
                   className={cn(
                     'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border',
                     PAYMENT_DUE_CONFIG[paymentDue.flag].cls,
                   )}
                 >
-                  💳 {formatCurrency(paymentDue.amount)} {PAYMENT_DUE_CONFIG[paymentDue.flag].label}
+                  💳 {formatCurrency(paymentDue.amount)} {paymentDueLabel(paymentDue)}
                   <span className="font-normal opacity-70">· {paymentDue.typeLabel}</span>
                 </span>
               )}

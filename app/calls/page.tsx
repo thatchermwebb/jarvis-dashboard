@@ -321,8 +321,9 @@ function CallsPageInner() {
     const payments = await paymentsRes.json().catch(() => [])
     const t = localToday()
     const tom = offsetStr(1)
+    const in5 = offsetStr(5) // surface upcoming payments up to 5 days out
     const flags: Record<string, PaymentDueInfo> = {}
-    const rank: Record<PaymentDueFlag, number> = { overdue: 3, today: 2, tomorrow: 1 }
+    const rank: Record<PaymentDueFlag, number> = { overdue: 4, today: 3, tomorrow: 2, soon: 1 }
     for (const p of (Array.isArray(payments) ? payments : [])) {
       if (!p.client_id || !p.due_date) continue
       if (!['pending', 'overdue'].includes(p.status)) continue // unpaid only
@@ -330,6 +331,7 @@ function CallsPageInner() {
       if (p.status === 'overdue' || p.due_date < t) flag = 'overdue'
       else if (p.due_date === t) flag = 'today'
       else if (p.due_date === tom) flag = 'tomorrow'
+      else if (p.due_date <= in5) flag = 'soon' // 2–5 days out
       if (!flag) continue
       const existing = flags[p.client_id]
       if (!existing || rank[flag] > rank[existing.flag]) {
