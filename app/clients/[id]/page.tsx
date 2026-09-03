@@ -28,7 +28,7 @@ import {
   cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
   daysUntil,
 } from '@/lib/utils'
-import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown } from '@/lib/scoring'
+import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown, priorityBin, binLabel, type PaymentDueState } from '@/lib/scoring'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Client, CommunicationLog, Payment, GrowthStage, ContractStatus } from '@/types'
@@ -1035,17 +1035,29 @@ export default function ClientWarRoom() {
               <TabsContent value="risk" className="mt-3 space-y-3">
                 {/* Priority Score breakdown */}
                 {(() => {
-                  const score = calculatePriorityScore(client)
-                  const factors = getScoreBreakdown(client)
-                  const maxPoints = 80
+                  // Fold real billing urgency in from the Next Payment.
+                  const pd: PaymentDueState = nextPayment ? (() => {
+                    const d = daysUntil(nextPayment.due_date)
+                    if (nextPayment.status === 'overdue' || (d !== null && d < 0)) return 'overdue'
+                    if (d === 0) return 'today'
+                    if (d !== null && d <= 5) return 'soon'
+                    return null
+                  })() : null
+                  const score = calculatePriorityScore(client, pd)
+                  const factors = getScoreBreakdown(client, pd)
+                  const bin = priorityBin(client)
+                  const maxPoints = Math.max(...factors.map(f => f.points), 1)
                   return (
                     <div className="bg-card border border-border rounded-xl p-4 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Priority Score</div>
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5 flex items-center gap-1.5">
+                            Priority
+                            <span className="px-1.5 py-0.5 rounded bg-secondary/60 text-[9px] font-semibold tracking-normal normal-case text-foreground/70">{binLabel(bin)}</span>
+                          </div>
                           <div className={cn(
                             'text-3xl font-bold',
-                            score >= 100 ? 'text-red-400' : score >= 60 ? 'text-orange-400' : score >= 30 ? 'text-amber-400' : 'text-muted-foreground'
+                            score >= 600 ? 'text-red-400' : score >= 300 ? 'text-orange-400' : score >= 100 ? 'text-amber-400' : 'text-muted-foreground'
                           )}>{score}</div>
                         </div>
                         <div className="text-right">
@@ -1073,7 +1085,7 @@ export default function ClientWarRoom() {
                                 </div>
                                 <div className="h-1 bg-secondary rounded-full overflow-hidden">
                                   <div
-                                    className={cn('h-full rounded-full transition-all', f.points >= 60 ? 'bg-red-400' : f.points >= 35 ? 'bg-orange-400' : f.points >= 20 ? 'bg-amber-400' : 'bg-muted-foreground/40')}
+                                    className={cn('h-full rounded-full transition-all', f.points >= 300 ? 'bg-red-400' : f.points >= 150 ? 'bg-orange-400' : f.points >= 60 ? 'bg-amber-400' : 'bg-muted-foreground/40')}
                                     style={{ width: `${Math.min(100, (f.points / maxPoints) * 100)}%` }}
                                   />
                                 </div>

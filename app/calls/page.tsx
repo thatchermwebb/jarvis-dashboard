@@ -11,6 +11,7 @@ import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { AuthorBadge } from '@/components/ui/author-badge'
 import { cn, timeAgo, localToday, daysUntil } from '@/lib/utils'
+import { calculatePriorityScore, priorityBin, binRank, type PaymentDueState } from '@/lib/scoring'
 import type { Client } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -308,14 +309,6 @@ function CallsPageInner() {
     ])
     const data = await clientsRes.json()
     const all: Client[] = Array.isArray(data) ? data : []
-    // Show anyone with a scheduled follow-up regardless of stage, plus all onboardings;
-    // only truly-dead stages with no next step are hidden. Booked closing-calls drop off.
-    const excluded = ['churned', 'free_trial_lost', 'trial_concluded']
-    setAllClients(
-      all.filter(c =>
-        (c.next_followup_date || c.stage === 'onboarding' || !excluded.includes(c.stage))
-      )
-    )
 
     // Build a per-client "most urgent unpaid payment" (amount + plan + timing) for the call cards.
     const payments = await paymentsRes.json().catch(() => [])
@@ -344,6 +337,24 @@ function CallsPageInner() {
       }
     }
     setPaymentFlags(flags)
+
+    // Recompute each client's priority with real billing urgency folded in, so
+    // the bin sort surfaces payment-due clients first.
+    const pdState = (id: string): PaymentDueState => {
+      const flag = flags[id]?.flag
+      if (flag === 'overdue') return 'overdue'
+      if (flag === 'today') return 'today'
+      if (flag === 'tomorrow' || flag === 'soon') return 'soon'
+      return null
+    }
+    // Show anyone with a scheduled follow-up regardless of stage, plus all onboardings;
+    // only truly-dead stages with no next step are hidden. Booked closing-calls drop off.
+    const excluded = ['churned', 'free_trial_lost', 'trial_concluded']
+    setAllClients(
+      all
+        .filter(c => (c.next_followup_date || c.stage === 'onboarding' || !excluded.includes(c.stage)))
+        .map(c => ({ ...c, priority_score: calculatePriorityScore(c, pdState(c.id)) }))
+    )
     setLoadingQueue(false)
   }, [])
 
@@ -407,8 +418,13 @@ function CallsPageInner() {
         return (b.priority_score ?? 0) - (a.priority_score ?? 0)
       })
     }
-    // priority: already sorted by API
-    return filtered
+    // priority: hard bin separation (Clients → Onboarding → Trials → Inactive),
+    // then within-bin urgency (payment-aware priority_score, baked in loadQueue).
+    return [...filtered].sort((a, b) => {
+      const byBin = binRank(priorityBin(b)) - binRank(priorityBin(a))
+      if (byBin !== 0) return byBin
+      return (b.priority_score ?? 0) - (a.priority_score ?? 0)
+    })
   }, [allClients, ownerFilter, sortMode])
 
   // Calendar shows all clients with followup dates

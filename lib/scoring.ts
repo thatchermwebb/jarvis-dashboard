@@ -1,70 +1,119 @@
-import { differenceInDays } from 'date-fns'
 import type { Client } from '@/types'
-import { localToday, daysUntil, daysBetween } from './utils'
+import { localToday, daysUntil } from './utils'
 
-export function calculatePriorityScore(client: Client): number {
-  let score = 0
-  const todayStr = localToday()
+// ─── Priority model ──────────────────────────────────────────────────────────
+// Calls are hard-separated into lifecycle BINS, then sorted by urgency WITHIN
+// each bin. Bin order (most → least attention-demanding for the daily call list):
+//   Clients  →  Onboarding  →  Trials  →  Inactive
+// Within a bin the score is a cumulation of urgency factors only — billing,
+// churn/sentiment/attention flags, trial timing. Performance results (bookings,
+// CPL, ad status) are deliberately NOT part of priority.
 
-  const daysUntilTrialEnd = client.trial_end ? daysUntil(client.trial_end) : null
+export type PriorityBin = 'client' | 'onboarding' | 'trial' | 'other'
+/** Most-urgent unpaid payment state for a client (from the payments ledger). */
+export type PaymentDueState = 'overdue' | 'today' | 'soon' | null
 
-  const daysSinceContact = client.last_contact_date
-    ? Math.abs(daysUntil(client.last_contact_date.slice(0, 10))) // last_contact_date may be full ISO
-    : 999
+const CLIENT_STAGES = new Set(['active_client', 'won_back', 'overdue', 'payment_issue', 'churn_risk', 'paused'])
+const TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon'])
 
-  const isActivePaying = client.stage === 'active_client' || client.stage === 'won_back'
-  const isTrial = client.stage === 'free_trial' || client.stage === 'trial_ending_soon'
-  const sentiment = client.last_client_sentiment
+export function priorityBin(c: Pick<Client, 'stage'>): PriorityBin {
+  if (c.stage === 'onboarding') return 'onboarding'
+  if (TRIAL_STAGES.has(c.stage)) return 'trial'
+  if (CLIENT_STAGES.has(c.stage)) return 'client'
+  return 'other' // churned, free_trial_lost, trial_concluded, etc.
+}
 
-  // --- Tier 1: About to pay or end trial (highest urgency) ---
-  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 0) score += 80
-  if (daysUntilTrialEnd === 1) score += 70
-  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 3) score += 50
+/** Higher rank sorts first. Guarantees hard separation between bins. */
+export function binRank(bin: PriorityBin): number {
+  return bin === 'client' ? 3 : bin === 'onboarding' ? 2 : bin === 'trial' ? 1 : 0
+}
 
-  // Close-ready trials
-  if (isTrial && client.trial_health_score && client.trial_health_score >= 80) score += 60
-  if (isTrial && sentiment === 'close_ready') score += 55
+export function binLabel(bin: PriorityBin): string {
+  return bin === 'client' ? 'Client' : bin === 'onboarding' ? 'Onboarding' : bin === 'trial' ? 'Trial' : 'Inactive'
+}
 
-  // --- Tier 2: Payment issues ---
-  if (client.payment_issue) score += 65
-  if (client.stage === 'payment_issue') score += 20
-  if (client.payment_status === 'failed') score += 30
+interface Factor { label: string; points: number }
 
-  // --- Tier 3: Active client sentiment ---
-  if (isActivePaying) {
-    if (sentiment === 'angry') score += 60
-    else if (sentiment === 'frustrated') score += 50
-    else if (sentiment === 'ghosting') score += 45
-    else if (sentiment === 'concerned') score += 35
-    else if (sentiment === 'confused') score += 20
-    else if (sentiment === 'neutral') score += 5
+// Single source of truth: the same factors drive the score AND the breakdown,
+// so the number always matches the reasons shown on the profile.
+function priorityFactors(c: Client, paymentDue: PaymentDueState): { bin: PriorityBin; factors: Factor[] } {
+  const bin = priorityBin(c)
+  const f: Factor[] = []
+  const s = c.last_client_sentiment
+  const today = localToday()
+  const push = (label: string, points: number) => { if (points) f.push({ label, points }) }
+
+  // Follow-up timing applies in every bin (a small tiebreaker).
+  if (c.next_followup_date) {
+    const d = c.next_followup_date
+    if (d < today) push('Follow-up overdue', 90)
+    else if (d === today) push('Follow-up due today', 80)
+    else if ((daysUntil(d) ?? 99) <= 3) push('Follow-up due soon', 40)
   }
 
-  if (isActivePaying && (client.stage === 'churn_risk' || (client.churn_risk_score && client.churn_risk_score >= 70))) score += 50
-
-  // --- Tier 4: General signals ---
-  if (!isActivePaying && (sentiment === 'angry' || sentiment === 'frustrated')) score += 35
-  if (sentiment === 'ghosting' && !isActivePaying) score += 25
-  if (client.thatcher_needed) score += 40
-
-  // --- Tier 5: Follow-up due date ---
-  if (client.next_followup_date) {
-    const d = client.next_followup_date
-    if (d < todayStr) score += 40          // overdue
-    else if (d === todayStr) score += 35   // due today
-    else if (daysUntil(d) <= 2) score += 15 // due in 1-2 days
+  if (bin === 'client') {
+    // Tier 1 — billing (dominant: any today/overdue payment outranks the rest).
+    if (paymentDue === 'overdue') push('Payment overdue', 800)
+    else if (paymentDue === 'today') push('Payment due today', 700)
+    else if (c.stage === 'overdue' || c.payment_status === 'failed') push('Payment overdue', 800)
+    else if (paymentDue === 'soon') push('Payment due soon', 150)
+    else if (c.payment_issue) push('Payment issue flagged', 400)
+    // Tier 2 — retention / attention.
+    if (c.stage === 'churn_risk' || (c.churn_risk_score ?? 0) >= 70) push('Churn risk', 280)
+    if (s === 'angry') push('Sentiment: angry', 260)
+    else if (s === 'frustrated') push('Sentiment: frustrated', 230)
+    else if (s === 'ghosting') push('Client ghosting', 200)
+    else if (s === 'concerned') push('Sentiment: concerned', 150)
+    else if (s === 'confused') push('Sentiment: confused', 90)
+    if (c.urgency_level === 'critical') push('Urgency: critical', 180)
+    else if (c.urgency_level === 'high') push('Urgency: high', 100)
+    if (c.thatcher_needed) push('Needs Thatcher', 130)
+    if (c.trepp_needed) push('Needs Trepp', 90)
+    if (c.va_needed) push('Needs coaching', 70)
+    // Tier 3 — nothing pressing.
+    if (f.length === 0 && s === 'happy') push('Happy — no action needed', 10)
+  } else if (bin === 'onboarding') {
+    push('Onboarding in progress', 40)
+    if (c.thatcher_needed) push('Needs Thatcher', 130)
+    if (c.trepp_needed) push('Needs Trepp', 90)
+    if (c.va_needed) push('Needs coaching', 70)
+    if (s === 'angry' || s === 'frustrated') push(`Sentiment: ${s}`, 150)
+    else if (s === 'concerned' || s === 'confused') push(`Sentiment: ${s}`, 90)
+    if (c.urgency_level === 'critical') push('Urgency: critical', 120)
+    else if (c.urgency_level === 'high') push('Urgency: high', 70)
+    if (c.payment_issue) push('Payment issue flagged', 120)
+  } else if (bin === 'trial') {
+    // Ending soonest first.
+    const dte = c.trial_end ? daysUntil(c.trial_end) : null
+    if (dte !== null) {
+      if (dte <= 0) push('Trial ended', 500)
+      else if (dte === 1) push('Trial ends tomorrow', 440)
+      else if (dte <= 3) push(`Trial ends in ${dte} days`, 340)
+      else if (dte <= 7) push(`Trial ends in ${dte} days`, 200)
+      else push(`Trial ends in ${dte} days`, 80)
+    }
+    if ((c.trial_health_score ?? 0) >= 80) push('Close-ready (health ≥ 80)', 150)
+    else if (s === 'close_ready') push('Sentiment: close-ready', 150)
+    if (s === 'angry' || s === 'frustrated') push(`Sentiment: ${s}`, 130)
+    else if (s === 'concerned' || s === 'confused' || s === 'ghosting') push(`Sentiment: ${s}`, 80)
+    if (c.urgency_level === 'critical') push('Urgency: critical', 120)
+    else if (c.urgency_level === 'high') push('Urgency: high', 70)
+    if (c.thatcher_needed) push('Needs Thatcher', 100)
+    if (c.trepp_needed) push('Needs Trepp', 70)
+    if (c.payment_issue) push('Payment issue flagged', 120)
   }
 
-  if (daysSinceContact >= 2) score += 20
-  if (client.urgency_level === 'critical') score += 30
-  if (client.urgency_level === 'high') score += 15
+  return { bin, factors: f.sort((a, b) => b.points - a.points) }
+}
 
-  // --- Operational issues ---
-  if (client.ad_status === 'off') score += 25
-  if (client.cpl && client.cpl > 10) score += 20
-  if (!client.bookings) score += 15
+/** Within-bin urgency score (0…~1400). Higher = call sooner. */
+export function calculatePriorityScore(c: Client, paymentDue: PaymentDueState = null): number {
+  return priorityFactors(c, paymentDue).factors.reduce((sum, x) => sum + x.points, 0)
+}
 
-  return score
+/** The factors that made up the score, lifecycle-appropriate, most first. */
+export function getScoreBreakdown(c: Client, paymentDue: PaymentDueState = null): Factor[] {
+  return priorityFactors(c, paymentDue).factors
 }
 
 export function getTrialDaysLeft(trialEnd?: string): number | null {
@@ -96,77 +145,22 @@ export function getCPLStatus(cpl?: number): 'good' | 'okay' | 'bad' | 'emergency
   return 'emergency'
 }
 
-export function getScoreBreakdown(client: Client): { label: string; points: number }[] {
-  const factors: { label: string; points: number }[] = []
-  const todayStr = localToday()
-  const daysUntilTrialEnd = client.trial_end ? daysUntil(client.trial_end) : null
-  const daysSinceContact = client.last_contact_date
-    ? Math.abs(daysUntil(client.last_contact_date.slice(0, 10)))
-    : 999
-  const isActivePaying = client.stage === 'active_client' || client.stage === 'won_back'
-  const isTrial = client.stage === 'free_trial' || client.stage === 'trial_ending_soon'
-  const sentiment = client.last_client_sentiment
-
-  if (daysUntilTrialEnd !== null && daysUntilTrialEnd <= 0)
-    factors.push({ label: 'Trial ended', points: 80 })
-  if (daysUntilTrialEnd === 1)
-    factors.push({ label: 'Trial ends tomorrow', points: 70 })
-  if (daysUntilTrialEnd !== null && daysUntilTrialEnd > 1 && daysUntilTrialEnd <= 3)
-    factors.push({ label: `Trial ends in ${daysUntilTrialEnd} days`, points: 50 })
-  if (isTrial && (client.trial_health_score ?? 0) >= 80)
-    factors.push({ label: `Trial health ${client.trial_health_score}/100 (close-ready)`, points: 60 })
-  if (isTrial && sentiment === 'close_ready')
-    factors.push({ label: 'Sentiment: close-ready', points: 55 })
-  if (client.payment_issue)
-    factors.push({ label: 'Payment issue flagged', points: 65 })
-  if (client.stage === 'payment_issue')
-    factors.push({ label: 'Stage: payment issue', points: 20 })
-  if (client.payment_status === 'failed')
-    factors.push({ label: 'Payment status: failed', points: 30 })
-  if (isActivePaying) {
-    if (sentiment === 'angry')       factors.push({ label: 'Sentiment: angry', points: 60 })
-    else if (sentiment === 'frustrated') factors.push({ label: 'Sentiment: frustrated', points: 50 })
-    else if (sentiment === 'ghosting')   factors.push({ label: 'Client ghosting', points: 45 })
-    else if (sentiment === 'concerned')  factors.push({ label: 'Sentiment: concerned', points: 35 })
-    else if (sentiment === 'confused')   factors.push({ label: 'Sentiment: confused', points: 20 })
-    else if (sentiment === 'neutral')    factors.push({ label: 'Sentiment: neutral', points: 5 })
-  }
-  if (isActivePaying && (client.stage === 'churn_risk' || (client.churn_risk_score ?? 0) >= 70))
-    factors.push({ label: 'Churn risk (active client)', points: 50 })
-  if (!isActivePaying && (sentiment === 'angry' || sentiment === 'frustrated'))
-    factors.push({ label: `Sentiment: ${sentiment}`, points: 35 })
-  if (sentiment === 'ghosting' && !isActivePaying)
-    factors.push({ label: 'Client ghosting', points: 25 })
-  if (client.thatcher_needed)
-    factors.push({ label: 'Needs Thatcher', points: 40 })
-  if (client.next_followup_date) {
-    const d = client.next_followup_date
-    if (d < todayStr)         factors.push({ label: 'Follow-up overdue', points: 40 })
-    else if (d === todayStr)  factors.push({ label: 'Follow-up due today', points: 35 })
-    else if ((daysUntil(d) ?? 99) <= 2) factors.push({ label: 'Follow-up due soon', points: 15 })
-  }
-  if (daysSinceContact >= 2)
-    factors.push({ label: `No contact in ${daysSinceContact === 999 ? 'a long time' : `${daysSinceContact} days`}`, points: 20 })
-  if (client.urgency_level === 'critical')
-    factors.push({ label: 'Urgency: critical', points: 30 })
-  if (client.urgency_level === 'high')
-    factors.push({ label: 'Urgency: high', points: 15 })
-  if (client.ad_status === 'off')
-    factors.push({ label: 'Ads are off', points: 25 })
-  if (client.cpl && client.cpl > 10)
-    factors.push({ label: `High CPL: $${client.cpl}`, points: 20 })
-  if (!client.bookings)
-    factors.push({ label: 'No bookings recorded', points: 15 })
-
-  return factors.sort((a, b) => b.points - a.points)
-}
-
-export function sortClientsByPriority(clients: Client[]): Client[] {
+/**
+ * Sort clients most → least urgent: hard bin separation first
+ * (Clients → Onboarding → Trials → Inactive), then within-bin urgency.
+ * Pass `paymentDueMap` (client id → state) to fold ledger billing urgency in;
+ * without it, billing falls back to the client's own flags.
+ */
+export function sortClientsByPriority(clients: Client[], paymentDueMap?: Record<string, PaymentDueState>): Client[] {
   return clients
     .map((c) => ({
       ...c,
-      priority_score: calculatePriorityScore(c),
+      priority_score: calculatePriorityScore(c, paymentDueMap?.[c.id] ?? null),
       trial_days_left: getTrialDaysLeft(c.trial_end) ?? undefined,
     }))
-    .sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0))
+    .sort((a, b) => {
+      const byBin = binRank(priorityBin(b)) - binRank(priorityBin(a))
+      if (byBin !== 0) return byBin
+      return (b.priority_score ?? 0) - (a.priority_score ?? 0)
+    })
 }
