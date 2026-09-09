@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     client_id?: string
     week?: string
-    ad1?: { id?: string; rating?: AdRating; cpl?: number | null }
-    ad2?: { id?: string; rating?: AdRating; cpl?: number | null }
+    ad1?: { id?: string; rating?: AdRating; cpl?: number | null; creative?: string | null }
+    ad2?: { id?: string; rating?: AdRating; cpl?: number | null; creative?: string | null }
     notes?: string
   }
 
@@ -36,17 +36,17 @@ export async function POST(req: NextRequest) {
       week,
       reviewed_by: user?.name ?? 'Unknown',
       reviewed_at: nowIso,
-      ad1_id: body.ad1?.id ?? null, ad1_rating: r1, ad1_cpl: body.ad1?.cpl ?? null,
-      ad2_id: body.ad2?.id ?? null, ad2_rating: r2, ad2_cpl: body.ad2?.cpl ?? null,
+      ad1_id: body.ad1?.id ?? null, ad1_rating: r1, ad1_cpl: body.ad1?.cpl ?? null, ad1_creative: body.ad1?.creative ?? null,
+      ad2_id: body.ad2?.id ?? null, ad2_rating: r2, ad2_cpl: body.ad2?.cpl ?? null, ad2_creative: body.ad2?.creative ?? null,
       decision: m.decision, winner_slot: m.winnerSlot, notes: body.notes ?? null,
     }, { onConflict: 'client_id,week' })
     .select('*, client:clients(id, name, business_name)')
     .single()
   if (revErr) return NextResponse.json({ error: revErr.message }, { status: 500 })
 
-  // Persist the ratings/CPL onto the ad rows themselves.
-  if (body.ad1?.id) await supabase.from('media_ads').update({ rating: r1, cpl: body.ad1.cpl ?? null }).eq('id', body.ad1.id)
-  if (body.ad2?.id) await supabase.from('media_ads').update({ rating: r2, cpl: body.ad2.cpl ?? null }).eq('id', body.ad2.id)
+  // Persist the ratings/creative onto the ad rows themselves.
+  if (body.ad1?.id) await supabase.from('media_ads').update({ rating: r1, cpl: body.ad1.cpl ?? null, creative: body.ad1.creative ?? null }).eq('id', body.ad1.id)
+  if (body.ad2?.id) await supabase.from('media_ads').update({ rating: r2, cpl: body.ad2.cpl ?? null, creative: body.ad2.creative ?? null }).eq('id', body.ad2.id)
 
   // "All spend to winner" → pause the losing active slot.
   if (m.winnerSlot) {

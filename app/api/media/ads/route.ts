@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       price_point: body.price_point ?? null,
       angle: body.angle ?? null,
       video_link: body.video_link ?? null,
+      creative: body.creative ?? null,
       cpl: body.cpl ?? null,
       rating: body.rating ?? null,
       status,

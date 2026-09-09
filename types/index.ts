@@ -389,6 +389,7 @@ export interface MediaAd {
   price_point?: string
   angle?: string
   video_link?: string
+  creative?: string
   cpl?: number
   rating?: AdRating
   status: MediaAdStatus
@@ -408,9 +409,11 @@ export interface MediaReview {
   ad1_id?: string | null
   ad1_rating?: AdRating
   ad1_cpl?: number
+  ad1_creative?: string
   ad2_id?: string | null
   ad2_rating?: AdRating
   ad2_cpl?: number
+  ad2_creative?: string
   decision?: MediaDecision
   winner_slot?: number | null
   notes?: string

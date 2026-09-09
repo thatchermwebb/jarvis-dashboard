@@ -53,6 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         service_type: wo.service_type ?? null,
         price_point: wo.price_point ?? null,
         angle: wo.angle ?? null,
+        creative: body.creative ?? null,
         video_link: videoLink,
         status: 'active',
         work_order_id: wo.id,

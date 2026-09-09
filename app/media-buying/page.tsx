@@ -6,7 +6,7 @@ import {
   PlayCircle, PackageCheck, Rocket, ClipboardList, Library, CalendarCheck, Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn, formatDate, formatCurrency } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { DECISION_LABEL, RATING_LABEL, WORK_ORDER_STATUS_LABEL } from '@/lib/media'
 import type {
   AdRating, MediaAd, MediaReview, MediaWorkOrder, MediaDecision, WorkOrderStatus,
@@ -162,8 +162,8 @@ function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week
 
   const [r1, setR1] = useState<AdRating | undefined>(existing?.ad1_rating)
   const [r2, setR2] = useState<AdRating | undefined>(existing?.ad2_rating)
-  const [cpl1, setCpl1] = useState(existing?.ad1_cpl != null ? String(existing.ad1_cpl) : (slot1?.cpl != null ? String(slot1.cpl) : ''))
-  const [cpl2, setCpl2] = useState(existing?.ad2_cpl != null ? String(existing.ad2_cpl) : (slot2?.cpl != null ? String(slot2.cpl) : ''))
+  const [cr1, setCr1] = useState(existing?.ad1_creative ?? slot1?.creative ?? '')
+  const [cr2, setCr2] = useState(existing?.ad2_creative ?? slot2?.creative ?? '')
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(!existing)
@@ -180,8 +180,8 @@ function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week
         body: JSON.stringify({
           client_id: client.id,
           week,
-          ad1: { id: slot1?.id, rating: r1, cpl: cpl1 ? Number(cpl1) : null },
-          ad2: { id: slot2?.id, rating: r2, cpl: cpl2 ? Number(cpl2) : null },
+          ad1: { id: slot1?.id, rating: r1, creative: cr1.trim() || null },
+          ad2: { id: slot2?.id, rating: r2, creative: cr2.trim() || null },
           notes: notes || null,
         }),
       })
@@ -249,8 +249,8 @@ function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <AdSlotRater slot={1} ad={slot1} rating={r1} onRating={setR1} cpl={cpl1} onCpl={setCpl1} />
-            <AdSlotRater slot={2} ad={slot2} rating={r2} onRating={setR2} cpl={cpl2} onCpl={setCpl2} />
+            <AdSlotRater slot={1} ad={slot1} rating={r1} onRating={setR1} creative={cr1} onCreative={setCr1} />
+            <AdSlotRater slot={2} ad={slot2} rating={r2} onRating={setR2} creative={cr2} onCreative={setCr2} />
           </div>
 
           <textarea
@@ -278,14 +278,14 @@ function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week
 }
 
 function AdSlotRater({
-  slot, ad, rating, onRating, cpl, onCpl,
+  slot, ad, rating, onRating, creative, onCreative,
 }: {
   slot: number
   ad?: MediaAd
   rating?: AdRating
   onRating: (r: AdRating) => void
-  cpl: string
-  onCpl: (v: string) => void
+  creative: string
+  onCreative: (v: string) => void
 }) {
   const running = daysRunning(ad?.launched_at)
   return (
@@ -322,12 +322,11 @@ function AdSlotRater({
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground/60">CPL</span>
+        <span className="text-xs text-muted-foreground/60">Creative</span>
         <input
-          value={cpl}
-          onChange={e => onCpl(e.target.value)}
-          inputMode="decimal"
-          placeholder="—"
+          value={creative}
+          onChange={e => onCreative(e.target.value)}
+          placeholder="e.g. V300, cr6"
           className="flex-1 bg-secondary/40 border border-border/40 rounded-md px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40"
         />
       </div>
@@ -395,6 +394,7 @@ function OrdersView() {
 function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: () => void }) {
   const [busy, setBusy] = useState(false)
   const [video, setVideo] = useState(order.video_link ?? '')
+  const [creative, setCreative] = useState('')
   const st = WO_STATUS_STYLE[order.status]
 
   async function act(action: string, extra: Record<string, unknown> = {}) {
@@ -469,6 +469,15 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
           className="w-full mt-3 bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
         />
       )}
+      {/* Creative code, assigned when launching */}
+      {order.status === 'produced' && (
+        <input
+          value={creative}
+          onChange={e => setCreative(e.target.value)}
+          placeholder="Creative code (e.g. V300, cr6)"
+          className="w-full mt-2 bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
+        />
+      )}
       {order.video_link && order.status === 'done' && (
         <a href={order.video_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2">
           <ExternalLink className="w-3.5 h-3.5" /> Video
@@ -484,7 +493,7 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
           <ActionBtn onClick={() => act('produced', { video_link: video || null })} busy={busy} icon={PackageCheck} label="Mark produced" />
         )}
         {order.status === 'produced' && (
-          <ActionBtn onClick={() => act('launch', { video_link: video || null })} busy={busy} icon={Rocket} label="Launch to account" primary />
+          <ActionBtn onClick={() => act('launch', { video_link: video || null, creative: creative.trim() || null })} busy={busy} icon={Rocket} label="Launch to account" primary />
         )}
       </div>
     </div>
@@ -615,7 +624,7 @@ function AddAdForm({ clientId, openSlots, onClose, onSaved }: {
   const [serviceType, setServiceType] = useState('')
   const [angle, setAngle] = useState('')
   const [videoLink, setVideoLink] = useState('')
-  const [cpl, setCpl] = useState('')
+  const [creative, setCreative] = useState('')
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -631,7 +640,7 @@ function AddAdForm({ clientId, openSlots, onClose, onSaved }: {
           service_type: serviceType || null,
           angle: angle || null,
           video_link: videoLink || null,
-          cpl: cpl ? Number(cpl) : null,
+          creative: creative.trim() || null,
           status: 'active',
         }),
       })
@@ -659,10 +668,10 @@ function AddAdForm({ clientId, openSlots, onClose, onSaved }: {
           </select>
         </label>
         <Field label="Ad name" value={name} onChange={setName} placeholder="e.g. Ceramic offer v3" />
+        <Field label="Creative code" value={creative} onChange={setCreative} placeholder="e.g. V300, cr6, sV3" />
         <Field label="Service type" value={serviceType} onChange={setServiceType} placeholder="e.g. Ceramic coating" />
         <Field label="Angle" value={angle} onChange={setAngle} placeholder="e.g. Before/after" />
         <Field label="Video link" value={videoLink} onChange={setVideoLink} placeholder="Drive / Frame.io URL" />
-        <Field label="CPL" value={cpl} onChange={setCpl} placeholder="—" inputMode="decimal" />
       </div>
       <div className="flex items-center justify-end gap-2 mt-3">
         <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground px-3 py-2">Cancel</button>
@@ -722,10 +731,10 @@ function AdRow({ ad, retired }: { ad: MediaAd; retired?: boolean }) {
             ].filter(Boolean).join(' · ')}
           </div>
         </div>
-        {ad.cpl != null && (
+        {ad.creative && (
           <div className="text-right">
-            <div className="text-sm font-semibold text-foreground">{formatCurrency(ad.cpl)}</div>
-            <div className="text-[10px] text-muted-foreground/50">CPL</div>
+            <div className="text-sm font-mono font-semibold text-foreground">{ad.creative}</div>
+            <div className="text-[10px] text-muted-foreground/50">creative</div>
           </div>
         )}
         {ad.video_link && (

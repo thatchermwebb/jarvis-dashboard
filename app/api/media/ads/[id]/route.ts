@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const FIELDS = new Set(['slot', 'name', 'service_type', 'price_point', 'angle', 'video_link', 'cpl', 'rating', 'status', 'launched_at', 'retired_at'])
+const FIELDS = new Set(['slot', 'name', 'service_type', 'price_point', 'angle', 'video_link', 'creative', 'cpl', 'rating', 'status', 'launched_at', 'retired_at'])
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
