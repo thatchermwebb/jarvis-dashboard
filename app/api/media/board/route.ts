@@ -9,7 +9,7 @@ export async function GET() {
   const supabase = await createClient()
   const week = weekMonday()
 
-  const [clientsRes, adsRes, reviewsRes] = await Promise.all([
+  const [clientsRes, adsRes, reviewsRes, creativesRes] = await Promise.all([
     supabase
       .from('clients')
       .select('id, name, business_name, market_location, stage, advertised_package, ad_account_link, campaign_link')
@@ -17,6 +17,8 @@ export async function GET() {
       .order('name', { ascending: true }),
     supabase.from('media_ads').select('*').in('status', ['active', 'paused', 'in_production']),
     supabase.from('media_reviews').select('*').eq('week', week),
+    // Active creative codes so the review/library pickers stay linked to the library.
+    supabase.from('media_creatives').select('code, name').eq('status', 'active').order('code', { ascending: true }),
   ])
 
   if (clientsRes.error) return NextResponse.json({ error: clientsRes.error.message }, { status: 500 })
@@ -35,5 +37,5 @@ export async function GET() {
     review: reviewByClient[c.id] ?? null,
   }))
 
-  return NextResponse.json({ week, clients })
+  return NextResponse.json({ week, clients, creatives: creativesRes.data ?? [] })
 }

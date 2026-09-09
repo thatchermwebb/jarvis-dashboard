@@ -28,6 +28,8 @@ interface BoardClient {
   review: MediaReview | null
 }
 
+interface CreativeOption { code: string; name?: string | null }
+
 type Tab = 'week' | 'orders' | 'library' | 'creatives'
 
 // ─── Rating config ──────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export default function MediaBuyingPage() {
 function WeekView() {
   const [week, setWeek] = useState('')
   const [clients, setClients] = useState<BoardClient[]>([])
+  const [creatives, setCreatives] = useState<CreativeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [notifying, setNotifying] = useState(false)
 
@@ -122,6 +125,7 @@ function WeekView() {
       const data = await res.json()
       setWeek(data.week ?? '')
       setClients(data.clients ?? [])
+      setCreatives(data.creatives ?? [])
     } catch {
       toast.error('Failed to load the review board')
     } finally {
@@ -184,14 +188,14 @@ function WeekView() {
 
       <div className="space-y-3">
         {clients.map(c => (
-          <ClientReviewCard key={c.id} client={c} week={week} onSaved={load} />
+          <ClientReviewCard key={c.id} client={c} week={week} creatives={creatives} onSaved={load} />
         ))}
       </div>
     </div>
   )
 }
 
-function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week: string; onSaved: () => void }) {
+function ClientReviewCard({ client, week, creatives, onSaved }: { client: BoardClient; week: string; creatives: CreativeOption[]; onSaved: () => void }) {
   const existing = client.review
   const slot1 = client.ads.find(a => a.slot === 1)
   const slot2 = client.ads.find(a => a.slot === 2)
@@ -285,8 +289,8 @@ function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <AdSlotRater slot={1} ad={slot1} rating={r1} onRating={setR1} creative={cr1} onCreative={setCr1} />
-            <AdSlotRater slot={2} ad={slot2} rating={r2} onRating={setR2} creative={cr2} onCreative={setCr2} />
+            <AdSlotRater slot={1} ad={slot1} rating={r1} onRating={setR1} creative={cr1} onCreative={setCr1} creatives={creatives} />
+            <AdSlotRater slot={2} ad={slot2} rating={r2} onRating={setR2} creative={cr2} onCreative={setCr2} creatives={creatives} />
           </div>
 
           <textarea
@@ -314,7 +318,7 @@ function ClientReviewCard({ client, week, onSaved }: { client: BoardClient; week
 }
 
 function AdSlotRater({
-  slot, ad, rating, onRating, creative, onCreative,
+  slot, ad, rating, onRating, creative, onCreative, creatives,
 }: {
   slot: number
   ad?: MediaAd
@@ -322,6 +326,7 @@ function AdSlotRater({
   onRating: (r: AdRating) => void
   creative: string
   onCreative: (v: string) => void
+  creatives: CreativeOption[]
 }) {
   const running = daysRunning(ad?.launched_at)
   return (
@@ -359,14 +364,32 @@ function AdSlotRater({
 
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground/60">Creative</span>
-        <input
-          value={creative}
-          onChange={e => onCreative(e.target.value)}
-          placeholder="e.g. V300, cr6"
-          className="flex-1 bg-secondary/40 border border-border/40 rounded-md px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40"
-        />
+        <CreativeSelect value={creative} onChange={onCreative} creatives={creatives} className="flex-1" />
       </div>
     </div>
+  )
+}
+
+// Dropdown of library creatives (keeps review/library entries linked to the
+// Creative Library). Preserves an off-list value so a retired/legacy code isn't
+// silently dropped.
+function CreativeSelect({ value, onChange, creatives, className }: {
+  value: string; onChange: (v: string) => void; creatives: CreativeOption[]; className?: string
+}) {
+  const codes = creatives.map(c => c.code)
+  const offList = value && !codes.includes(value)
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className={cn('bg-secondary/40 border border-border/40 rounded-md px-2 py-1 text-sm text-foreground outline-none focus:border-primary/40', className)}
+    >
+      <option value="">— none —</option>
+      {creatives.map(c => (
+        <option key={c.code} value={c.code}>{c.name ? `${c.code} · ${c.name}` : c.code}</option>
+      ))}
+      {offList && <option value={value}>{value} (retired)</option>}
+    </select>
   )
 }
 
@@ -557,6 +580,7 @@ function ActionBtn({ onClick, busy, icon: Icon, label, primary }: {
 
 function LibraryView() {
   const [clients, setClients] = useState<BoardClient[]>([])
+  const [creatives, setCreatives] = useState<CreativeOption[]>([])
   const [selected, setSelected] = useState<string>('')
   const [ads, setAds] = useState<MediaAd[]>([])
   const [loading, setLoading] = useState(true)
@@ -579,6 +603,7 @@ function LibraryView() {
         const res = await fetch('/api/media/board')
         const data = await res.json()
         setClients(data.clients ?? [])
+        setCreatives(data.creatives ?? [])
         if (data.clients?.length) setSelected(data.clients[0].id)
       } catch {
         toast.error('Failed to load clients')
@@ -623,6 +648,7 @@ function LibraryView() {
         <AddAdForm
           clientId={selected}
           openSlots={openSlots}
+          creatives={creatives}
           onClose={() => setAdding(false)}
           onSaved={() => { setAdding(false); loadAds(selected) }}
         />
@@ -652,8 +678,8 @@ function LibraryView() {
   )
 }
 
-function AddAdForm({ clientId, openSlots, onClose, onSaved }: {
-  clientId: string; openSlots: number[]; onClose: () => void; onSaved: () => void
+function AddAdForm({ clientId, openSlots, creatives, onClose, onSaved }: {
+  clientId: string; openSlots: number[]; creatives: CreativeOption[]; onClose: () => void; onSaved: () => void
 }) {
   const [slot, setSlot] = useState(openSlots[0])
   const [name, setName] = useState('')
@@ -704,7 +730,10 @@ function AddAdForm({ clientId, openSlots, onClose, onSaved }: {
           </select>
         </label>
         <Field label="Ad name" value={name} onChange={setName} placeholder="e.g. Ceramic offer v3" />
-        <Field label="Creative code" value={creative} onChange={setCreative} placeholder="e.g. V300, cr6, sV3" />
+        <label className="text-xs text-muted-foreground/70">
+          Creative
+          <CreativeSelect value={creative} onChange={setCreative} creatives={creatives} className="w-full mt-1 px-3 py-2 rounded-lg" />
+        </label>
         <Field label="Service type" value={serviceType} onChange={setServiceType} placeholder="e.g. Ceramic coating" />
         <Field label="Angle" value={angle} onChange={setAngle} placeholder="e.g. Before/after" />
         <Field label="Video link" value={videoLink} onChange={setVideoLink} placeholder="Drive / Frame.io URL" />
