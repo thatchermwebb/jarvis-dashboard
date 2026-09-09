@@ -352,6 +352,7 @@ export interface TeamTimeEntry {
   status: TeamEntryStatus
   paid: boolean
   paid_at?: string | null
+  work_order_id?: string | null
   client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
 }
 

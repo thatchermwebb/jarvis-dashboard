@@ -56,7 +56,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Rebuild this review's outstanding work orders (avoid dupes on re-review).
-  await supabase.from('media_work_orders').delete().eq('review_id', review.id).eq('status', 'todo')
+  // Pull the ids first so we can also clear the not-yet-started Team-queue
+  // entries they spawned (leave any Wilson has already started alone).
+  const { data: staleOrders } = await supabase
+    .from('media_work_orders').select('id').eq('review_id', review.id).eq('status', 'todo')
+  const staleIds = (staleOrders ?? []).map(o => o.id)
+  if (staleIds.length) {
+    await supabase.from('team_time_entries')
+      .delete().in('work_order_id', staleIds).is('started_at', null)
+    await supabase.from('media_work_orders').delete().in('id', staleIds)
+  }
 
   let ordersCreated = 0
   if (m.ordersToCreate.length) {
@@ -81,11 +90,27 @@ export async function POST(req: NextRequest) {
         status: 'todo',
       }
     })
-    const { error: woErr } = await supabase.from('media_work_orders').insert(orders)
+    const { data: createdOrders, error: woErr } = await supabase
+      .from('media_work_orders').insert(orders).select('id, replaces_slot, service_type')
     if (woErr) return NextResponse.json({ error: woErr.message }, { status: 500 })
-    ordersCreated = orders.length
-    // No Slack ping here — work orders live in the Media Buying → Work Orders tab.
-    // Pinging per review would flood Slack with ~20 messages every Monday.
+    ordersCreated = createdOrders?.length ?? 0
+
+    // Drop each order into Wilson's Team queue as an assigned entry he can start
+    // immediately. No per-order Slack ping (Samuel sends one summary when done);
+    // completing the entry auto-advances the work order (see team entries PATCH).
+    const clientName = (review as { client?: { name?: string } })?.client?.name ?? 'Client'
+    const nowIso = new Date().toISOString()
+    const queueEntries = (createdOrders ?? []).map(o => ({
+      va_id: 'wilson',
+      description: `🎬 New ad — ${clientName} (Ad slot ${o.replaces_slot}${o.service_type ? `, ${o.service_type}` : ''})`,
+      is_standard: true,
+      client_id: body.client_id,
+      assigned_at: nowIso,
+      status: 'idle',
+      accumulated_seconds: 0,
+      work_order_id: o.id,
+    }))
+    if (queueEntries.length) await supabase.from('team_time_entries').insert(queueEntries)
   }
 
   return NextResponse.json({ review, decision: m.decision, winner_slot: m.winnerSlot, orders_created: ordersCreated })

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Megaphone, ExternalLink, Check, Loader2, ChevronDown, Trash2,
-  PlayCircle, PackageCheck, Rocket, ClipboardList, Library, CalendarCheck, Plus, Send,
+  PlayCircle, Rocket, ClipboardList, Library, CalendarCheck, Plus, Send, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
@@ -489,23 +489,22 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
         )}
       </div>
 
-      {/* Video link field (once in production) */}
-      {(order.status === 'in_production' || order.status === 'produced') && (
-        <input
-          value={video}
-          onChange={e => setVideo(e.target.value)}
-          placeholder="Video link (Drive, Frame.io, etc.)"
-          className="w-full mt-3 bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
-        />
-      )}
-      {/* Creative code, assigned when launching */}
+      {/* Launch inputs — Samuel pastes the produced video + assigns its code */}
       {order.status === 'produced' && (
-        <input
-          value={creative}
-          onChange={e => setCreative(e.target.value)}
-          placeholder="Creative code (e.g. V300, cr6)"
-          className="w-full mt-2 bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
-        />
+        <>
+          <input
+            value={video}
+            onChange={e => setVideo(e.target.value)}
+            placeholder="Video link (Drive, Frame.io, etc.)"
+            className="w-full mt-3 bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
+          />
+          <input
+            value={creative}
+            onChange={e => setCreative(e.target.value)}
+            placeholder="Creative code (e.g. V300, cr6)"
+            className="w-full mt-2 bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
+          />
+        </>
       )}
       {order.video_link && order.status === 'done' && (
         <a href={order.video_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2">
@@ -513,13 +512,13 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
         </a>
       )}
 
-      {/* Actions */}
+      {/* Actions — Wilson produces from his Team queue; Samuel launches here */}
       <div className="flex items-center gap-2 mt-3">
-        {order.status === 'todo' && (
-          <ActionBtn onClick={() => act('start')} busy={busy} icon={PlayCircle} label="Start production" />
-        )}
-        {order.status === 'in_production' && (
-          <ActionBtn onClick={() => act('produced', { video_link: video || null })} busy={busy} icon={PackageCheck} label="Mark produced" />
+        {(order.status === 'todo' || order.status === 'in_production') && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground/60">
+            <Clock className="w-3.5 h-3.5" />
+            {order.status === 'todo' ? "Queued in Wilson's Team tab" : 'Wilson is producing this…'}
+          </span>
         )}
         {order.status === 'produced' && (
           <ActionBtn onClick={() => act('launch', { video_link: video || null, creative: creative.trim() || null })} busy={busy} icon={Rocket} label="Launch to account" primary />

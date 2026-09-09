@@ -78,10 +78,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select('*, client:clients(id, name, business_name)').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Pipeline handoff when Wilson completes an ads task: ping Samuel on Slack so
-  // he knows the ad is ready (no more manual "done" messages), and auto-create
-  // his onboarding task on the board.
-  if (body.action === 'complete' && e.va_id === 'wilson' && e.is_standard) {
+  // Media-buying pipeline: this entry produces a specific ad work order. Keep the
+  // work order's status in lockstep with Wilson's timer so the Media Buying tab
+  // reflects reality, and ping Samuel to upload when it's produced.
+  if (e.work_order_id) {
+    if (body.action === 'start' || body.action === 'resume') {
+      await supabase.from('media_work_orders')
+        .update({ status: 'in_production', produced_by: e.va_id })
+        .eq('id', e.work_order_id).eq('status', 'todo')
+    } else if (body.action === 'complete') {
+      await supabase.from('media_work_orders')
+        .update({ status: 'produced', produced_by: e.va_id, produced_at: nowIso })
+        .eq('id', e.work_order_id).in('status', ['todo', 'in_production'])
+      const clientName = (data as { client?: { name?: string } })?.client?.name
+      await sendOpsSlack(`🎬 *Ad ready to upload* — Wilson produced a new ad${clientName ? ` for *${clientName}*` : ''}. Samuel: grab the video and launch it in Media Buying → Work Orders.`)
+    }
+  }
+
+  // Pipeline handoff when Wilson completes a fulfillment ads task (onboarding
+  // flow): ping Samuel and auto-create his onboarding task. Media-buying ad
+  // orders (work_order_id set) run the media handoff above instead.
+  if (body.action === 'complete' && e.va_id === 'wilson' && e.is_standard && !e.work_order_id) {
     const clientName = (data as { client?: { name?: string } })?.client?.name
     const label = clientName ?? e.description ?? 'the ads'
 
