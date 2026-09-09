@@ -16,6 +16,7 @@ import {
   Package,
   CheckSquare,
   Users2,
+  Megaphone,
 } from 'lucide-react'
 
 const ALL_NAV_ITEMS = [
@@ -24,13 +25,14 @@ const ALL_NAV_ITEMS = [
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Fulfillment', icon: Package },
+  { href: '/media-buying', label: 'Media Buying', icon: Megaphone },
   { href: '/team', label: 'Team', icon: Users2 },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/tasks', '/team', '/settings']
+const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/media-buying', '/tasks', '/team', '/settings']
 
 export function Sidebar() {
   const pathname = usePathname()

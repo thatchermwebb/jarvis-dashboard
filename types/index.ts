@@ -371,3 +371,68 @@ export interface DashboardStats {
   monthly_recurring_revenue: number
   weekly_recurring_revenue: number
 }
+
+// ─── Media Buying ──────────────────────────────────────────────────────────────
+
+export type AdRating = 'good' | 'decent' | 'bad'
+export type MediaAdStatus = 'in_production' | 'active' | 'paused' | 'retired'
+export type MediaDecision = 'leave' | 'spend_to_winner' | 'spend_to_winner_order_1' | 'order_2'
+export type WorkOrderStatus = 'todo' | 'in_production' | 'produced' | 'uploaded' | 'done'
+
+export interface MediaAd {
+  id: string
+  created_at: string
+  client_id: string
+  slot?: number | null
+  name?: string
+  service_type?: string
+  price_point?: string
+  angle?: string
+  video_link?: string
+  cpl?: number
+  rating?: AdRating
+  status: MediaAdStatus
+  work_order_id?: string | null
+  launched_at?: string | null
+  retired_at?: string | null
+  client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
+}
+
+export interface MediaReview {
+  id: string
+  created_at: string
+  client_id: string
+  week: string
+  reviewed_by?: string
+  reviewed_at?: string
+  ad1_id?: string | null
+  ad1_rating?: AdRating
+  ad1_cpl?: number
+  ad2_id?: string | null
+  ad2_rating?: AdRating
+  ad2_cpl?: number
+  decision?: MediaDecision
+  winner_slot?: number | null
+  notes?: string
+  client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
+}
+
+export interface MediaWorkOrder {
+  id: string
+  created_at: string
+  client_id: string
+  review_id?: string | null
+  replaces_slot?: number | null
+  service_type?: string
+  price_point?: string
+  angle?: string
+  notes?: string
+  status: WorkOrderStatus
+  produced_ad_id?: string | null
+  produced_by?: string
+  produced_at?: string
+  video_link?: string
+  uploaded_by?: string
+  uploaded_at?: string
+  client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
+}
