@@ -100,12 +100,14 @@ export async function POST(req: NextRequest) {
     // Drop each order into Wilson's Team queue as an assigned entry he can start
     // immediately. No per-order Slack ping (Samuel sends one summary when done);
     // completing the entry auto-advances the work order (see team entries PATCH).
-    // Wilson only needs the client + the package — slot/service-type are internal.
+    // The package is resolved live from the client at display time (Team page /
+    // Work Orders card), so it stays correct even if it's set/changed later — the
+    // description carries just the client.
     const clientName = (review as { client?: { name?: string } })?.client?.name ?? 'Client'
     const nowIso = new Date().toISOString()
     const queueEntries = (createdOrders ?? []).map(o => ({
       va_id: 'wilson',
-      description: `🎬 Produce ad — ${clientName}${pkg ? ` · ${pkg}` : ''}`,
+      description: `🎬 Produce ad — ${clientName}`,
       is_standard: true,
       client_id: body.client_id,
       assigned_at: nowIso,

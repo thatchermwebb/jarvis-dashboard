@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('team_time_entries')
-    .select('*, client:clients(id, name, business_name)')
+    .select('*, client:clients(id, name, business_name, advertised_package)')
     .order('created_at', { ascending: false })
     .limit(500)
 

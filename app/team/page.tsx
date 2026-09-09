@@ -19,6 +19,15 @@ import { Confetti } from '@/components/team/Confetti'
 import { CompletedCard } from '@/components/team/CompletedCard'
 import { EditEntryDialog } from '@/components/team/EditEntryDialog'
 
+// Media-buying "produce ad" entries show the client's advertised package live
+// (resolved at render, not baked in) so it stays correct if it's set/changed later.
+function entryLabel(e: TeamTimeEntry, fallback: string): string {
+  const base = e.description || fallback
+  return e.work_order_id && e.client?.advertised_package
+    ? `${base} · ${e.client.advertised_package}`
+    : base
+}
+
 function fmtClock(secs: number): string {
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
@@ -245,7 +254,7 @@ export default function TeamPage() {
                 return (
                   <div key={e.id} className={cn('rounded-2xl border p-4 flex items-center justify-between gap-4', border)}>
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{e.description || 'Assigned task'}</div>
+                      <div className="text-sm font-semibold truncate">{entryLabel(e, 'Assigned task')}</div>
                       <div className={cn('text-[11px] mt-0.5 font-medium', clockColor)}>
                         {!eligible ? 'Off-hours · not counted'
                           : left > 0 ? `${Math.ceil(left / 60)} min of turnaround budget left`
@@ -312,7 +321,7 @@ export default function TeamPage() {
                 running ? 'border-primary/40 bg-primary/[0.04]' : 'border-border bg-card')}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold truncate">{e.description || 'Untitled task'}</div>
+                    <div className="text-sm font-semibold truncate">{entryLabel(e, 'Untitled task')}</div>
                     <button onClick={() => toggleStandard(e.id, !e.is_standard)}
                       className={cn('mt-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors',
                         e.is_standard ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground/60 hover:text-foreground')}>
@@ -400,7 +409,7 @@ export default function TeamPage() {
                   <div className="text-xs text-muted-foreground/50 px-1 py-2">No paid history yet.</div>
                 ) : history.map(e => (
                   <div key={e.id} className="flex items-center justify-between text-xs text-muted-foreground bg-secondary/20 rounded-lg px-3 py-2">
-                    <span className="truncate">{e.description || 'Untitled'}</span>
+                    <span className="truncate">{entryLabel(e, 'Untitled')}</span>
                     <span className="flex items-center gap-3 flex-shrink-0">
                       <span className="tabular-nums">{workedHours(e).toFixed(2)}h</span>
                       <span className="text-muted-foreground/40">{e.paid_at ? new Date(e.paid_at).toLocaleDateString() : ''}</span>

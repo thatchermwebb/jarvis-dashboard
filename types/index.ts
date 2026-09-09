@@ -353,7 +353,7 @@ export interface TeamTimeEntry {
   paid: boolean
   paid_at?: string | null
   work_order_id?: string | null
-  client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
+  client?: Pick<Client, 'id' | 'name' | 'business_name' | 'advertised_package'> | null
 }
 
 export interface DashboardStats {
@@ -438,5 +438,5 @@ export interface MediaWorkOrder {
   video_link?: string
   uploaded_by?: string
   uploaded_at?: string
-  client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
+  client?: Pick<Client, 'id' | 'name' | 'business_name' | 'advertised_package'> | null
 }

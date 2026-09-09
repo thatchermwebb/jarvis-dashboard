@@ -470,7 +470,7 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
             </span>
           </div>
           <div className="text-xs text-muted-foreground/70 mt-1">
-            {order.notes || 'Produce a new ad'}
+            {order.client?.advertised_package || order.notes || 'Produce a new ad'}
           </div>
           {order.produced_by && (
             <div className="text-[11px] text-muted-foreground/50 mt-1">
