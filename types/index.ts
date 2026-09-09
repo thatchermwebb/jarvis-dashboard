@@ -421,6 +421,27 @@ export interface MediaReview {
   client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
 }
 
+export interface MediaCreative {
+  id: string
+  created_at: string
+  code: string
+  name?: string
+  notes?: string
+  status: 'active' | 'retired'
+  created_by?: string
+}
+
+// Dashboard row: a creative plus its computed network performance.
+export interface MediaCreativeStats extends MediaCreative {
+  deployments: number
+  good: number
+  decent: number
+  bad: number
+  avg_cpl: number | null
+  score: number | null       // good=2, decent=1, bad=0 mean; null if no ratings
+  running_now: number        // # clients currently running it (active/paused)
+}
+
 export interface MediaWorkOrder {
   id: string
   created_at: string
@@ -431,6 +452,7 @@ export interface MediaWorkOrder {
   price_point?: string
   angle?: string
   notes?: string
+  target_creative?: string | null
   status: WorkOrderStatus
   produced_ad_id?: string | null
   produced_by?: string

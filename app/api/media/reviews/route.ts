@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth-server'
 import { decide, weekMonday } from '@/lib/media'
+import { assignCreative, aggregateCreativeStats, type CreativeStat, type ClientCreativeHistory } from '@/lib/media-assign'
 import type { AdRating, MediaAd } from '@/types'
 
 // Submit Samuel's weekly review for one client. The matrix decides the move,
@@ -69,18 +70,49 @@ export async function POST(req: NextRequest) {
 
   let ordersCreated = 0
   if (m.ordersToCreate.length) {
-    // Spec defaults: inherit from the ad being replaced, else the client's package.
-    const { data: clientRow } = await supabase
-      .from('clients').select('advertised_package').eq('id', body.client_id).single()
-    const { data: existingAds } = await supabase
-      .from('media_ads').select('*').eq('client_id', body.client_id).in('status', ['active', 'paused'])
-    const bySlot: Record<number, MediaAd> = {}
-    for (const a of (existingAds ?? []) as MediaAd[]) if (a.slot) bySlot[a.slot] = a
+    // Gather everything the assignment engine needs: the client's package, the
+    // active creative pool, network-wide performance, and this client's history.
+    const [clientRes, poolRes, networkRes, clientAdsRes] = await Promise.all([
+      supabase.from('clients').select('advertised_package').eq('id', body.client_id).single(),
+      supabase.from('media_creatives').select('code').eq('status', 'active'),
+      supabase.from('media_ads').select('creative, rating, cpl, status, client_id'),
+      supabase.from('media_ads').select('creative, rating, status, slot, service_type, price_point').eq('client_id', body.client_id),
+    ])
 
-    // The package Wilson produces against — the client's advertised offer.
-    const pkg = clientRow?.advertised_package ?? null
+    const pkg = clientRes.data?.advertised_package ?? null
+    const clientAds = (clientAdsRes.data ?? []) as MediaAd[]
+    const bySlot: Record<number, MediaAd> = {}
+    for (const a of clientAds) if (a.slot && (a.status === 'active' || a.status === 'paused')) bySlot[a.slot] = a
+
+    // Per-creative network stats → the engine's pool.
+    const stats = aggregateCreativeStats(networkRes.data ?? [])
+    const pool: CreativeStat[] = (poolRes.data ?? []).map(c => {
+      const s = stats.get(c.code)
+      return {
+        code: c.code,
+        deployments: s?.deployments ?? 0,
+        openCount: s?.openCount ?? 0,
+        ratedCount: s?.ratedCount ?? 0,
+        score: s?.score ?? null,
+        avgCpl: s?.avgCpl ?? null,
+      }
+    })
+
+    // This client's creative history (running now / known losers / ever run).
+    const history: ClientCreativeHistory = { running: new Set(), bad: new Set(), everRan: new Set() }
+    for (const a of clientAds) {
+      if (!a.creative) continue
+      history.everRan.add(a.creative)
+      if (a.status === 'active' || a.status === 'paused') history.running.add(a.creative)
+      if (a.rating === 'bad') history.bad.add(a.creative)
+    }
+
+    // Pick a distinct creative per order (fully automatic).
+    const picked = new Set<string>()
     const orders = m.ordersToCreate.map(slot => {
       const prev = bySlot[slot]
+      const target = assignCreative(pool, history, picked)
+      if (target) picked.add(target)
       return {
         client_id: body.client_id,
         review_id: review.id,
@@ -89,25 +121,25 @@ export async function POST(req: NextRequest) {
         price_point: prev?.price_point ?? null,
         angle: null,
         notes: pkg,                          // what to produce: the client's package
+        target_creative: target,             // which creative the engine chose
         status: 'todo',
       }
     })
     const { data: createdOrders, error: woErr } = await supabase
-      .from('media_work_orders').insert(orders).select('id')
+      .from('media_work_orders').insert(orders).select('id, target_creative')
     if (woErr) return NextResponse.json({ error: woErr.message }, { status: 500 })
     ordersCreated = createdOrders?.length ?? 0
 
     // Drop each order into Wilson's Team queue as an assigned entry he can start
     // immediately. No per-order Slack ping (Samuel sends one summary when done);
     // completing the entry auto-advances the work order (see team entries PATCH).
-    // The package is resolved live from the client at display time (Team page /
-    // Work Orders card), so it stays correct even if it's set/changed later — the
-    // description carries just the client.
+    // The package resolves live at display time (Team page / Work Orders card); the
+    // assigned creative is fixed, so it's baked into the description.
     const clientName = (review as { client?: { name?: string } })?.client?.name ?? 'Client'
     const nowIso = new Date().toISOString()
     const queueEntries = (createdOrders ?? []).map(o => ({
       va_id: 'wilson',
-      description: `🎬 Produce ad — ${clientName}`,
+      description: o.target_creative ? `🎬 Produce ${o.target_creative} — ${clientName}` : `🎬 Produce ad — ${clientName}`,
       is_standard: true,
       client_id: body.client_id,
       assigned_at: nowIso,

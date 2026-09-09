@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Megaphone, ExternalLink, Check, Loader2, ChevronDown, Trash2,
-  PlayCircle, Rocket, ClipboardList, Library, CalendarCheck, Plus, Send, Clock,
+  PlayCircle, Rocket, ClipboardList, Library, CalendarCheck, Plus, Send, Clock, Clapperboard,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
 import { DECISION_LABEL, RATING_LABEL, WORK_ORDER_STATUS_LABEL } from '@/lib/media'
 import type {
-  AdRating, MediaAd, MediaReview, MediaWorkOrder, MediaDecision, WorkOrderStatus,
+  AdRating, MediaAd, MediaReview, MediaWorkOrder, MediaDecision, WorkOrderStatus, MediaCreativeStats,
 } from '@/types'
 
 // ─── Types for the board endpoint ───────────────────────────────────────────────
@@ -27,7 +28,7 @@ interface BoardClient {
   review: MediaReview | null
 }
 
-type Tab = 'week' | 'orders' | 'library'
+type Tab = 'week' | 'orders' | 'library' | 'creatives'
 
 // ─── Rating config ──────────────────────────────────────────────────────────────
 
@@ -61,6 +62,15 @@ function daysRunning(iso?: string | null): number | null {
 
 export default function MediaBuyingPage() {
   const [tab, setTab] = useState<Tab>('week')
+  const { user } = useAuth()
+  const isAdmin = user?.userType === 'admin'
+
+  const tabs = ([
+    { id: 'week', label: 'This Week', icon: CalendarCheck },
+    { id: 'orders', label: 'Work Orders', icon: ClipboardList },
+    { id: 'library', label: 'Ad Library', icon: Library },
+    ...(isAdmin ? [{ id: 'creatives' as Tab, label: 'Creatives', icon: Clapperboard }] : []),
+  ] as { id: Tab; label: string; icon: typeof CalendarCheck }[])
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -75,11 +85,7 @@ export default function MediaBuyingPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border/40 mb-6">
-        {([
-          { id: 'week', label: 'This Week', icon: CalendarCheck },
-          { id: 'orders', label: 'Work Orders', icon: ClipboardList },
-          { id: 'library', label: 'Ad Library', icon: Library },
-        ] as { id: Tab; label: string; icon: typeof CalendarCheck }[]).map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -96,6 +102,7 @@ export default function MediaBuyingPage() {
       {tab === 'week' && <WeekView />}
       {tab === 'orders' && <OrdersView />}
       {tab === 'library' && <LibraryView />}
+      {tab === 'creatives' && isAdmin && <CreativesView />}
     </div>
   )
 }
@@ -423,7 +430,7 @@ function OrdersView() {
 function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: () => void }) {
   const [busy, setBusy] = useState(false)
   const [video, setVideo] = useState(order.video_link ?? '')
-  const [creative, setCreative] = useState('')
+  const [creative, setCreative] = useState(order.target_creative ?? '')
   const st = WO_STATUS_STYLE[order.status]
 
   async function act(action: string, extra: Record<string, unknown> = {}) {
@@ -465,6 +472,11 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-foreground">{order.client?.name ?? 'Client'}</span>
+            {order.target_creative && (
+              <span className="inline-flex items-center text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-primary/15 text-primary border border-primary/25">
+                {order.target_creative}
+              </span>
+            )}
             <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border', st.color)}>
               <span className={cn('w-1.5 h-1.5 rounded-full', st.dot)} />{WORK_ORDER_STATUS_LABEL[order.status]}
             </span>
@@ -767,6 +779,158 @@ function AdRow({ ad, retired }: { ad: MediaAd; retired?: boolean }) {
           </a>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Creatives: admin-only library + performance ────────────────────────────────
+
+function CreativesView() {
+  const [rows, setRows] = useState<MediaCreativeStats[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/media/creatives')
+      if (!res.ok) throw new Error((await res.json()).error)
+      setRows(await res.json())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load creatives')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function addCreative() {
+    if (!code.trim()) { toast.error('Enter a creative code'); return }
+    setAdding(true)
+    try {
+      const res = await fetch('/api/media/creatives', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim(), name: name.trim() || null, notes: notes.trim() || null }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      toast.success(`Added ${code.trim()}`)
+      setCode(''); setName(''); setNotes('')
+      load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to add creative')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function patchCreative(id: string, body: Record<string, unknown>) {
+    const res = await fetch(`/api/media/creatives/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    if (!res.ok) { toast.error((await res.json()).error ?? 'Update failed'); return }
+    load()
+  }
+
+  async function removeCreative(id: string, codeLabel: string) {
+    if (!confirm(`Delete creative ${codeLabel}? Its past ad history stays; it just leaves the assignment pool.`)) return
+    const res = await fetch(`/api/media/creatives/${id}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Delete failed'); return }
+    toast.success('Deleted'); load()
+  }
+
+  if (loading) return <Loading />
+
+  return (
+    <div>
+      {/* Add creative */}
+      <div className="rounded-xl border border-border/50 bg-card p-4 mb-5">
+        <div className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Add creative</div>
+        <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-2">
+          <input value={code} onChange={e => setCode(e.target.value)} placeholder="Code (V300)"
+            className="bg-secondary/40 border border-border/40 rounded-lg px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40" />
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Name / label (optional)"
+            className="bg-secondary/40 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40" />
+        </div>
+        <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Direction / clips / template notes (optional)"
+          className="w-full mt-2 bg-secondary/40 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40" />
+        <div className="flex justify-end mt-2">
+          <button onClick={addCreative} disabled={adding}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors">
+            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState text="No creatives yet. Add your master creatives here — the engine assigns them to clients automatically." />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border/50">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wider text-muted-foreground/60 bg-secondary/30">
+                <th className="text-left font-medium px-3 py-2">Creative</th>
+                <th className="text-center font-medium px-3 py-2">Score</th>
+                <th className="text-center font-medium px-3 py-2">Deploys</th>
+                <th className="text-center font-medium px-3 py-2">G / D / B</th>
+                <th className="text-center font-medium px-3 py-2">Avg CPL</th>
+                <th className="text-center font-medium px-3 py-2">Running</th>
+                <th className="text-right font-medium px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className={cn('border-t border-border/40', r.status === 'retired' && 'opacity-50')}>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold text-foreground">{r.code}</span>
+                      {r.status === 'retired' && <span className="text-[10px] uppercase text-muted-foreground/60">retired</span>}
+                    </div>
+                    {r.name && <div className="text-[11px] text-muted-foreground/60">{r.name}</div>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    {r.score == null ? <span className="text-muted-foreground/40">—</span> : (
+                      <span className={cn('font-semibold', r.score >= 1.5 ? 'text-emerald-400' : r.score >= 0.75 ? 'text-blue-400' : 'text-red-400')}>
+                        {r.score.toFixed(2)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-muted-foreground">{r.deployments}</td>
+                  <td className="px-3 py-2.5 text-center text-xs">
+                    <span className="text-emerald-400">{r.good}</span>
+                    <span className="text-muted-foreground/40"> / </span>
+                    <span className="text-blue-400">{r.decent}</span>
+                    <span className="text-muted-foreground/40"> / </span>
+                    <span className="text-red-400">{r.bad}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-muted-foreground">{r.avg_cpl == null ? '—' : `$${r.avg_cpl.toFixed(0)}`}</td>
+                  <td className="px-3 py-2.5 text-center text-muted-foreground">{r.running_now}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => patchCreative(r.id, { status: r.status === 'active' ? 'retired' : 'active' })}
+                        className="text-[11px] font-medium px-2 py-1 rounded-md border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {r.status === 'active' ? 'Retire' : 'Reactivate'}
+                      </button>
+                      <button onClick={() => removeCreative(r.id, r.code)} className="text-muted-foreground/40 hover:text-red-400 transition-colors p-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground/50 mt-3">
+        Score = mean of Good(2)/Decent(1)/Bad(0). The engine deploys high scorers and fast-tracks under-tested creatives so new designs get reps.
+      </p>
     </div>
   )
 }

@@ -46,6 +46,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // keep both in history (launched_at / retired_at).
       const slot = wo.replaces_slot ?? null
       const videoLink = body.video_link ?? wo.video_link ?? null
+      // Default to the engine-assigned creative; Samuel can still override.
+      const creative = (body.creative ?? wo.target_creative ?? null) || null
       const { data: newAd, error: adErr } = await supabase.from('media_ads').insert({
         client_id: wo.client_id,
         slot,
@@ -53,13 +55,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         service_type: wo.service_type ?? null,
         price_point: wo.price_point ?? null,
         angle: wo.angle ?? null,
-        creative: body.creative ?? null,
+        creative,
         video_link: videoLink,
         status: 'active',
         work_order_id: wo.id,
         launched_at: nowIso,
       }).select().single()
       if (adErr) return NextResponse.json({ error: adErr.message }, { status: 500 })
+
+      // Auto-register the creative in the library if it's new.
+      if (creative) {
+        await supabase.from('media_creatives').upsert({ code: creative, created_by: 'auto' }, { onConflict: 'code', ignoreDuplicates: true })
+      }
 
       if (slot) {
         await supabase.from('media_ads')
