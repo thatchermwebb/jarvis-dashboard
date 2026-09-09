@@ -29,6 +29,7 @@ import {
   daysUntil,
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown, priorityBin, binLabel, type PaymentDueState } from '@/lib/scoring'
+import { PACKAGE_OPTIONS, packageOption } from '@/lib/packages'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Client, CommunicationLog, Payment, GrowthStage, ContractStatus } from '@/types'
@@ -160,6 +161,9 @@ export default function ClientWarRoom() {
   // noPayments users (e.g. Head of Ops) never see the Payments module.
   const hidePayments = !!user?.noPayments
   const stagePickerRef = useRef<HTMLDivElement>(null)
+  const [pkgPickerOpen, setPkgPickerOpen] = useState(false)
+  const [pkgCustom, setPkgCustom] = useState('')
+  const pkgPickerRef = useRef<HTMLDivElement>(null)
 
   const refreshSummary = useCallback(async (clientId: string) => {
     if (readOnly) return // associates can't regenerate (API would 403)
@@ -176,6 +180,9 @@ export default function ClientWarRoom() {
     function handleClick(e: MouseEvent) {
       if (stagePickerRef.current && !stagePickerRef.current.contains(e.target as Node)) {
         setStagePickerOpen(false)
+      }
+      if (pkgPickerRef.current && !pkgPickerRef.current.contains(e.target as Node)) {
+        setPkgPickerOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -514,12 +521,81 @@ export default function ClientWarRoom() {
               <Separator className="bg-border" />
 
               <Section title="Deal">
-                {client.advertised_package && (
-                  <>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Advertised Package</div>
-                    <div className="text-sm font-medium text-foreground mb-3">{client.advertised_package}</div>
-                  </>
-                )}
+                <div className="mb-3" ref={pkgPickerRef}>
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Advertised Package</div>
+                  <div className="relative">
+                    {(() => {
+                      const matched = packageOption(client.advertised_package)
+                      return (
+                        <button
+                          onClick={() => {
+                            if (readOnly) return
+                            setPkgCustom(matched ? '' : (client.advertised_package ?? ''))
+                            setPkgPickerOpen(o => !o)
+                          }}
+                          disabled={readOnly || updating}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full border transition-all',
+                            matched ? matched.chip
+                              : client.advertised_package ? 'bg-secondary/60 text-foreground border-border/50'
+                              : 'bg-secondary/30 text-muted-foreground border-dashed border-border/60',
+                            readOnly && 'cursor-default',
+                          )}
+                        >
+                          {matched ? matched.label : (client.advertised_package || 'Set package')}
+                          {!readOnly && <ChevronDown className={cn('w-3 h-3 transition-transform', pkgPickerOpen && 'rotate-180')} />}
+                        </button>
+                      )
+                    })()}
+                    {pkgPickerOpen && (
+                      <div className="absolute top-full left-0 mt-1.5 z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden min-w-[260px] p-1.5">
+                        {PACKAGE_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={async () => { setPkgPickerOpen(false); await quickUpdate({ advertised_package: opt.value }) }}
+                            className={cn(
+                              'w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-xs rounded-lg transition-colors',
+                              opt.value === client.advertised_package ? opt.chip : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                            )}
+                          >
+                            <span className={cn('w-2 h-2 rounded-full flex-shrink-0', opt.dot)} />
+                            {opt.label}
+                            {opt.value === client.advertised_package && <span className="ml-auto text-[10px] opacity-60">current</span>}
+                          </button>
+                        ))}
+                        <div className="border-t border-border/50 mt-1 pt-1.5">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 px-1.5">Custom</div>
+                          <form
+                            onSubmit={async e => {
+                              e.preventDefault()
+                              const v = pkgCustom.trim()
+                              if (!v) return
+                              setPkgPickerOpen(false)
+                              await quickUpdate({ advertised_package: v })
+                            }}
+                            className="flex items-center gap-1.5 px-1"
+                          >
+                            <input
+                              value={pkgCustom}
+                              onChange={e => setPkgCustom(e.target.value)}
+                              placeholder="Write in a package…"
+                              className="flex-1 bg-secondary/50 border border-border/40 rounded-md px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
+                            />
+                            <button type="submit" className="text-xs font-medium px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Set</button>
+                          </form>
+                        </div>
+                        {client.advertised_package && (
+                          <button
+                            onClick={async () => { setPkgPickerOpen(false); await quickUpdate({ advertised_package: null } as unknown as Partial<Client>) }}
+                            className="w-full text-left text-[11px] text-muted-foreground/60 hover:text-red-400 px-2.5 py-1.5 mt-0.5 transition-colors"
+                          >
+                            Clear package
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 {client.affiliate && (
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-7 h-7 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
