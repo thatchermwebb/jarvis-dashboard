@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth-server'
-import { sendOpsSlack } from '@/lib/slack'
-import { decide, weekMonday, DECISION_LABEL } from '@/lib/media'
+import { decide, weekMonday } from '@/lib/media'
 import type { AdRating, MediaAd } from '@/types'
 
 // Submit Samuel's weekly review for one client. The matrix decides the move,
@@ -85,9 +84,8 @@ export async function POST(req: NextRequest) {
     const { error: woErr } = await supabase.from('media_work_orders').insert(orders)
     if (woErr) return NextResponse.json({ error: woErr.message }, { status: 500 })
     ordersCreated = orders.length
-
-    const name = (review as { client?: { name?: string } })?.client?.name ?? 'a client'
-    await sendOpsSlack(`🎬 *New ad work order${ordersCreated > 1 ? 's' : ''}* for *${name}* — ${DECISION_LABEL[m.decision]}. ${ordersCreated} ad${ordersCreated > 1 ? 's' : ''} for Wilson to produce.`)
+    // No Slack ping here — work orders live in the Media Buying → Work Orders tab.
+    // Pinging per review would flood Slack with ~20 messages every Monday.
   }
 
   return NextResponse.json({ review, decision: m.decision, winner_slot: m.winnerSlot, orders_created: ordersCreated })
