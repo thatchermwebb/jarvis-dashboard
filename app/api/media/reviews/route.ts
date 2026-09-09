@@ -77,32 +77,35 @@ export async function POST(req: NextRequest) {
     const bySlot: Record<number, MediaAd> = {}
     for (const a of (existingAds ?? []) as MediaAd[]) if (a.slot) bySlot[a.slot] = a
 
+    // The package Wilson produces against — the client's advertised offer.
+    const pkg = clientRow?.advertised_package ?? null
     const orders = m.ordersToCreate.map(slot => {
       const prev = bySlot[slot]
       return {
         client_id: body.client_id,
         review_id: review.id,
-        replaces_slot: slot,
+        replaces_slot: slot,                 // internal: which slot the new ad fills
         service_type: prev?.service_type ?? null,
         price_point: prev?.price_point ?? null,
         angle: null,
-        notes: prev ? `Replace ${prev.name ?? 'ad'} (slot ${slot})` : (clientRow?.advertised_package ?? null),
+        notes: pkg,                          // what to produce: the client's package
         status: 'todo',
       }
     })
     const { data: createdOrders, error: woErr } = await supabase
-      .from('media_work_orders').insert(orders).select('id, replaces_slot, service_type')
+      .from('media_work_orders').insert(orders).select('id')
     if (woErr) return NextResponse.json({ error: woErr.message }, { status: 500 })
     ordersCreated = createdOrders?.length ?? 0
 
     // Drop each order into Wilson's Team queue as an assigned entry he can start
     // immediately. No per-order Slack ping (Samuel sends one summary when done);
     // completing the entry auto-advances the work order (see team entries PATCH).
+    // Wilson only needs the client + the package — slot/service-type are internal.
     const clientName = (review as { client?: { name?: string } })?.client?.name ?? 'Client'
     const nowIso = new Date().toISOString()
     const queueEntries = (createdOrders ?? []).map(o => ({
       va_id: 'wilson',
-      description: `🎬 New ad — ${clientName} (Ad slot ${o.replaces_slot}${o.service_type ? `, ${o.service_type}` : ''})`,
+      description: `🎬 Produce ad — ${clientName}${pkg ? ` · ${pkg}` : ''}`,
       is_standard: true,
       client_id: body.client_id,
       assigned_at: nowIso,

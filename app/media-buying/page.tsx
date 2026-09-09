@@ -465,17 +465,13 @@ function WorkOrderCard({ order, onChange }: { order: MediaWorkOrder; onChange: (
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-foreground">{order.client?.name ?? 'Client'}</span>
-            {order.replaces_slot && (
-              <span className="text-[11px] text-muted-foreground/70">→ Ad slot {order.replaces_slot}</span>
-            )}
             <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border', st.color)}>
               <span className={cn('w-1.5 h-1.5 rounded-full', st.dot)} />{WORK_ORDER_STATUS_LABEL[order.status]}
             </span>
           </div>
           <div className="text-xs text-muted-foreground/70 mt-1">
-            {[order.service_type, order.price_point, order.angle].filter(Boolean).join(' · ') || 'Ad production'}
+            {order.notes || 'Produce a new ad'}
           </div>
-          {order.notes && <div className="text-xs text-muted-foreground/60 mt-1">{order.notes}</div>}
           {order.produced_by && (
             <div className="text-[11px] text-muted-foreground/50 mt-1">
               {order.produced_by}{order.produced_at ? ` · produced ${formatDate(order.produced_at)}` : ''}
