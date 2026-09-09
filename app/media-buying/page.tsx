@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Megaphone, ExternalLink, Check, Loader2, ChevronDown, Trash2,
-  PlayCircle, PackageCheck, Rocket, ClipboardList, Library, CalendarCheck, Plus,
+  PlayCircle, PackageCheck, Rocket, ClipboardList, Library, CalendarCheck, Plus, Send,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
@@ -106,6 +106,7 @@ function WeekView() {
   const [week, setWeek] = useState('')
   const [clients, setClients] = useState<BoardClient[]>([])
   const [loading, setLoading] = useState(true)
+  const [notifying, setNotifying] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,6 +124,24 @@ function WeekView() {
 
   useEffect(() => { load() }, [load])
 
+  async function notifyWilson() {
+    setNotifying(true)
+    try {
+      const res = await fetch('/api/media/notify', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(
+        data.sent
+          ? `Sent to Wilson — ${data.count} work order${data.count > 1 ? 's' : ''} across ${data.clients} client${data.clients > 1 ? 's' : ''}`
+          : 'No new work orders to send this week',
+      )
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to notify Wilson')
+    } finally {
+      setNotifying(false)
+    }
+  }
+
   if (loading) return <Loading />
 
   const reviewed = clients.filter(c => c.review).length
@@ -130,15 +149,25 @@ function WeekView() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="text-sm text-muted-foreground">
           Week of <span className="text-foreground font-medium">{week ? formatDate(week) : '—'}</span>
         </div>
-        <div className="text-sm">
-          <span className={cn('font-semibold', reviewed === total && total > 0 ? 'text-emerald-400' : 'text-foreground')}>
-            {reviewed}
-          </span>
-          <span className="text-muted-foreground"> of {total} reviewed this week</span>
+        <div className="flex items-center gap-4">
+          <div className="text-sm">
+            <span className={cn('font-semibold', reviewed === total && total > 0 ? 'text-emerald-400' : 'text-foreground')}>
+              {reviewed}
+            </span>
+            <span className="text-muted-foreground"> of {total} reviewed this week</span>
+          </div>
+          <button
+            onClick={notifyWilson}
+            disabled={notifying}
+            className="inline-flex items-center gap-2 text-sm font-medium px-3.5 py-2 rounded-lg bg-secondary/60 text-foreground hover:bg-secondary border border-border/40 disabled:opacity-50 transition-colors"
+          >
+            {notifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Notify Wilson
+          </button>
         </div>
       </div>
 
