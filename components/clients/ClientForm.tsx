@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
 import type { Client, ClientStage, Affiliate } from '@/types'
 
 interface Props {
@@ -412,6 +413,8 @@ function buildFormState(client?: Client, defaultStage?: ClientStage) {
 }
 
 export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Props) {
+  const { user } = useAuth()
+  const hideMoney = !!user?.hideRevenue
   const [loading, setLoading] = useState(false)
   const [affiliates, setAffiliates] = useState<Affiliate[]>([])
   const [form, setForm] = useState(() => buildFormState(client, defaultStage))
@@ -553,20 +556,24 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
           {/* Divider */}
           <div className="border-t border-border/30" />
 
-          {/* Row 4: Stage + Retainer + Frequency */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Row 4: Stage + Retainer + Frequency (money hidden for revenue-blind roles) */}
+          <div className={cn('grid gap-4', hideMoney ? 'grid-cols-1' : 'grid-cols-3')}>
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stage</Label>
               <StageSelect value={form.stage} onChange={(v) => set('stage', v)} />
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Monthly Retainer ($)</Label>
-              <Input value={form.monthly_retainer} onChange={(e) => set('monthly_retainer', e.target.value)} placeholder="1000" type="number" className="bg-secondary/50 h-11 text-base border-border/50" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment Frequency</Label>
-              <FrequencySelect value={form.payment_frequency} onChange={(v) => set('payment_frequency', v)} />
-            </div>
+            {!hideMoney && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Monthly Retainer ($)</Label>
+                <Input value={form.monthly_retainer} onChange={(e) => set('monthly_retainer', e.target.value)} placeholder="1000" type="number" className="bg-secondary/50 h-11 text-base border-border/50" />
+              </div>
+            )}
+            {!hideMoney && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment Frequency</Label>
+                <FrequencySelect value={form.payment_frequency} onChange={(v) => set('payment_frequency', v)} />
+              </div>
+            )}
           </div>
 
           {/* Row 5: Trial dates */}

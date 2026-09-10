@@ -160,6 +160,8 @@ export default function ClientWarRoom() {
   const jarvisEnabled = user?.userType !== 'associate'
   // noPayments users (e.g. Head of Ops) never see the Payments module.
   const hidePayments = !!user?.noPayments
+  // Money-blind roles (appointment setters) also hide all revenue figures.
+  const hideMoney = !!user?.hideRevenue
   const stagePickerRef = useRef<HTMLDivElement>(null)
   const [pkgPickerOpen, setPkgPickerOpen] = useState(false)
   const [pkgCustom, setPkgCustom] = useState('')
@@ -617,20 +619,20 @@ export default function ClientWarRoom() {
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Monthly Retainer" value={client.monthly_retainer ? formatCurrency(client.monthly_retainer) : null} />
-                  <Field label="Payment" value={client.payment_frequency} />
-                  <Field label="Payment Status" value={client.payment_status} />
+                  {!hideMoney && <Field label="Monthly Retainer" value={client.monthly_retainer ? formatCurrency(client.monthly_retainer) : null} />}
+                  {!hideMoney && <Field label="Payment" value={client.payment_frequency} />}
+                  {!hideMoney && <Field label="Payment Status" value={client.payment_status} />}
                   <Field label="Assigned VA" value={client.assigned_va} />
                 </div>
-                {(client.ad_status || client.campaign_link || client.ad_account_link || client.budget != null || client.spend != null) && (
+                {(client.ad_status || client.campaign_link || client.ad_account_link || (!hideMoney && (client.budget != null || client.spend != null))) && (
                   <>
                     <div className="border-t border-border my-2" />
                     <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Ad Info</div>
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Ad Status" value={client.ad_status} />
-                      <Field label="Budget" value={client.budget ? formatCurrency(client.budget) : null} />
-                      <Field label="Spend" value={client.spend ? formatCurrency(client.spend) : null} />
-                      <Field label="CPL" value={client.cpl ? `$${client.cpl}` : null} />
+                      {!hideMoney && <Field label="Budget" value={client.budget ? formatCurrency(client.budget) : null} />}
+                      {!hideMoney && <Field label="Spend" value={client.spend ? formatCurrency(client.spend) : null} />}
+                      {!hideMoney && <Field label="CPL" value={client.cpl ? `$${client.cpl}` : null} />}
                     </div>
                     {client.campaign_link && (
                       <a href={client.campaign_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1">

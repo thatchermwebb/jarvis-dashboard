@@ -1,4 +1,4 @@
-export type UserType = 'admin' | 'va' | 'associate'
+export type UserType = 'admin' | 'va' | 'associate' | 'setter'
 
 export interface AppUser {
   id: string
@@ -13,6 +13,12 @@ export interface AppUser {
   affiliateId?: string
   /** Hides the entire Payments module (nav, pages, tabs, widgets, API). */
   noPayments?: boolean
+  /**
+   * Strips every money figure (retainer, budget, spend, payment amounts) from
+   * the data this user receives — for money-blind roles like appointment
+   * setters who see clients/notes/dates but no revenue. Implies noPayments.
+   */
+  hideRevenue?: boolean
 }
 
 export const USERS: AppUser[] = [
@@ -30,6 +36,15 @@ export const USERS: AppUser[] = [
     userType: 'associate',
     affiliateId: 'd9f2779d-1269-4cd9-90bd-bdc968e923ed',
   },
+  {
+    id: 'toney',
+    name: 'Toney Baker',
+    role: 'Appointment Setter',
+    initials: 'TB',
+    userType: 'setter',
+    noPayments: true,
+    hideRevenue: true,
+  },
 ]
 
 export function getUserById(id: string): AppUser | undefined {
@@ -40,6 +55,19 @@ export function getUserById(id: string): AppUser | undefined {
 
 /** Pages an associate may open. Everything else redirects to /clients. */
 export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments', '/tasks', '/ad-production']
+
+/** Pages an appointment setter (money-blind) may open. */
+export const SETTER_ALLOWED_HREFS = ['/clients', '/calls']
+
+/** API prefixes a setter may call. Money/revenue APIs are excluded entirely. */
+export const SETTER_ALLOWED_API = [
+  '/api/clients',            // list + detail + situation (all under this prefix)
+  '/api/communication-logs', // notes + call logs
+  '/api/tasks',
+  '/api/affiliates',
+  '/api/slack',
+  '/api/auth',
+]
 
 /** API prefixes an associate may call. Everything else is 403. */
 export const ASSOCIATE_ALLOWED_API = [
@@ -76,8 +104,16 @@ export const NO_PAYMENTS_API_PREFIXES = ['/api/payments', '/api/payment-schedule
 
 /** Whether the Payments/revenue module is hidden for this user. */
 export function paymentsHidden(user: AppUser | undefined | null): boolean {
-  return !!user?.noPayments
+  return !!user?.noPayments || !!user?.hideRevenue
 }
+
+/** Whether all money figures should be stripped from this user's data. */
+export function revenueHidden(user: AppUser | undefined | null): boolean {
+  return !!user?.hideRevenue
+}
+
+/** Money fields stripped from client records for revenue-hidden users. */
+export const CLIENT_MONEY_FIELDS = ['monthly_retainer', 'budget', 'spend', 'payment_status', 'payment_frequency'] as const
 
 /**
  * The affiliate a user is restricted to, or null for unrestricted (admin/VA).

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { ASSOCIATE_ALLOWED_HREFS, NO_PAYMENTS_HREFS } from '@/lib/auth'
+import { ASSOCIATE_ALLOWED_HREFS, SETTER_ALLOWED_HREFS, NO_PAYMENTS_HREFS } from '@/lib/auth'
 import { JARVISWidget } from '@/components/assistant/JARVISWidget'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { cn } from '@/lib/utils'
@@ -56,6 +56,8 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
     ? ALL_NAV_ITEMS.filter(item => VA_ALLOWED_HREFS.includes(item.href))
     : user?.userType === 'associate'
     ? ALL_NAV_ITEMS.filter(item => ASSOCIATE_ALLOWED_HREFS.includes(item.href))
+    : user?.userType === 'setter'
+    ? ALL_NAV_ITEMS.filter(item => SETTER_ALLOWED_HREFS.includes(item.href))
     : ALL_NAV_ITEMS
   ).filter(item => !(user?.noPayments && NO_PAYMENTS_HREFS.includes(item.href)))
 

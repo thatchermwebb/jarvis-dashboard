@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getUserById, ASSOCIATE_ALLOWED_HREFS, ASSOCIATE_ALLOWED_API, NO_PAYMENTS_API_PREFIXES, NO_PAYMENTS_HREFS } from '@/lib/auth'
+import { getUserById, ASSOCIATE_ALLOWED_HREFS, ASSOCIATE_ALLOWED_API, SETTER_ALLOWED_HREFS, SETTER_ALLOWED_API, NO_PAYMENTS_API_PREFIXES, NO_PAYMENTS_HREFS } from '@/lib/auth'
 
 export function middleware(req: NextRequest) {
   const cookie = req.cookies.get('cza_user')
@@ -12,6 +12,10 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api')) {
     if (user?.userType === 'associate') {
       const allowed = ASSOCIATE_ALLOWED_API.some(p => pathname === p || pathname.startsWith(p + '/'))
+      if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (user?.userType === 'setter') {
+      const allowed = SETTER_ALLOWED_API.some(p => pathname === p || pathname.startsWith(p + '/'))
       if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     // noPayments users can't touch the payments/revenue APIs at all.
@@ -26,12 +30,19 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
   if (cookie && pathname === '/login') {
-    return NextResponse.redirect(new URL(user?.userType === 'associate' ? '/clients' : '/', req.url))
+    const home = user?.userType === 'associate' || user?.userType === 'setter' ? '/clients' : '/'
+    return NextResponse.redirect(new URL(home, req.url))
   }
 
   // Associates are confined to their two pages (client detail lives under /clients).
   if (user?.userType === 'associate' && pathname !== '/login') {
     const allowed = ASSOCIATE_ALLOWED_HREFS.some(p => pathname === p || pathname.startsWith(p + '/'))
+    if (!allowed) return NextResponse.redirect(new URL('/clients', req.url))
+  }
+
+  // Appointment setters are confined to Clients + Calls.
+  if (user?.userType === 'setter' && pathname !== '/login') {
+    const allowed = SETTER_ALLOWED_HREFS.some(p => pathname === p || pathname.startsWith(p + '/'))
     if (!allowed) return NextResponse.redirect(new URL('/clients', req.url))
   }
 

@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sortClientsByPriority } from '@/lib/scoring'
 import { getAffiliateScope, getServerUser } from '@/lib/auth-server'
-import { affiliateScope } from '@/lib/auth'
+import { affiliateScope, revenueHidden, CLIENT_MONEY_FIELDS } from '@/lib/auth'
+
+/** Remove every money field from a client record (for revenue-blind users). */
+function stripMoney<T extends Record<string, unknown>>(client: T): T {
+  const c = { ...client }
+  for (const f of CLIENT_MONEY_FIELDS) delete c[f]
+  return c
+}
 
 // Throttle the "expire old trials" write so it runs at most once per interval
 // instead of firing a table-wide UPDATE scan on every single list load.
@@ -54,7 +61,11 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const clients = prioritized ? sortClientsByPriority(data ?? []) : (data ?? [])
+  let clients = prioritized ? sortClientsByPriority(data ?? []) : (data ?? [])
+
+  // Money-blind roles (appointment setters) never receive revenue figures.
+  if (revenueHidden(await getServerUser())) clients = clients.map(stripMoney)
+
   return NextResponse.json(clients)
 }
 
