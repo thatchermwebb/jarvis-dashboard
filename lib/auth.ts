@@ -22,20 +22,10 @@ export interface AppUser {
 }
 
 export const USERS: AppUser[] = [
-  { id: 'thatcher', name: 'Thatcher Webb',  role: 'Co-Founder', initials: 'TW', userType: 'admin' },
-  { id: 'trepp',    name: 'Trepp Grandich', role: 'Co-Founder', initials: 'TG', userType: 'admin' },
-  { id: 'diego',    name: 'Diego Carranza', role: 'VP',         initials: 'DC', userType: 'admin' },
-  { id: 'jacques',  name: 'Jacques Brock',  role: 'Head of Operations', initials: 'JB', userType: 'admin', noPayments: true },
-  { id: 'wilson',   name: 'Wilson',         role: 'Ads VA',     initials: 'WL', userType: 'va'    },
-  { id: 'samuel',   name: 'Samuel',         role: 'Backend VA', initials: 'SM', userType: 'va'    },
-  {
-    id: 'malakai',
-    name: 'Malakai Fung-A-Wing',
-    role: 'Associate',
-    initials: 'MF',
-    userType: 'associate',
-    affiliateId: 'd9f2779d-1269-4cd9-90bd-bdc968e923ed',
-  },
+  { id: 'thatcher', name: 'Thatcher Webb',  role: 'Co-Founder',     initials: 'TW', userType: 'admin' },
+  { id: 'trepp',    name: 'Trepp Grandich', role: 'Co-Founder',     initials: 'TG', userType: 'admin' },
+  { id: 'diego',    name: 'Diego Carranza', role: 'Vice President',  initials: 'DC', userType: 'admin' },
+  { id: 'jacques',  name: 'Jacques Brock',  role: 'Onboarding Specialist', initials: 'JB', userType: 'admin', noPayments: true },
   {
     id: 'toney',
     name: 'Toney Baker',
@@ -45,6 +35,16 @@ export const USERS: AppUser[] = [
     noPayments: true,
     hideRevenue: true,
   },
+  {
+    id: 'malakai',
+    name: 'Malakai Fung-A-Wing',
+    role: 'Sales',
+    initials: 'MF',
+    userType: 'associate',
+    affiliateId: 'd9f2779d-1269-4cd9-90bd-bdc968e923ed',
+  },
+  { id: 'wilson',   name: 'Wilson',         role: 'Ads VA',     initials: 'WL', userType: 'va' },
+  { id: 'samuel',   name: 'Samuel',         role: 'Backend VA', initials: 'SM', userType: 'va' },
 ]
 
 export function getUserById(id: string): AppUser | undefined {
