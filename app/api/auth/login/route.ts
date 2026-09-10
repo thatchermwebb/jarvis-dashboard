@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     wilson:   process.env.PW_WILSON,
     samuel:   process.env.PW_SAMUEL,
     malakai:  process.env.PW_MALAKAI,
+    toney:    process.env.PW_TONEY,
   }
 
   const expected = passwords[userId]

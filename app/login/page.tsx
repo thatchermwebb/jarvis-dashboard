@@ -38,7 +38,7 @@ export default function LoginPage() {
     const user = USERS.find(u => u.id === selected)
     router.replace(
       user?.userType === 'va' ? '/ad-production'
-      : user?.userType === 'associate' ? '/clients'
+      : user?.userType === 'associate' || user?.userType === 'setter' ? '/clients'
       : '/'
     )
   }
