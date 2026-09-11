@@ -277,6 +277,7 @@ function CallsPageInner() {
 
   // View / tab state
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
+  const [callbackView, setCallbackView] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('mine')
@@ -375,7 +376,8 @@ function CallsPageInner() {
     const t = localToday()
     const tom = offsetStr(1)
     const in7 = offsetStr(7)
-    const pool = allClients.filter(c => !c.close_call_booked)
+    // Callbacks live in their own bin — never in the main queue.
+    const pool = allClients.filter(c => !c.close_call_booked && !c.callback)
 
     let filtered: Client[]
     switch (tab) {
@@ -435,6 +437,22 @@ function CallsPageInner() {
 
   const tabClients = useMemo(() => getTabClients(queueTab), [getTabClients, queueTab])
 
+  // The Call Backs bin: every callback-flagged client (owner-filtered + sorted the
+  // same way), regardless of follow-up date — a flat "deferred" list.
+  const callbackClients = useMemo(() => {
+    let filtered = allClients.filter(c => c.callback && !c.close_call_booked)
+    if (ownerFilter === 'mine') filtered = filtered.filter(c => !c.thatcher_needed && !c.trepp_needed && !c.va_needed)
+    else if (ownerFilter === 'thatcher') filtered = filtered.filter(c => c.thatcher_needed)
+    else if (ownerFilter === 'trepp') filtered = filtered.filter(c => c.trepp_needed || c.va_needed)
+    return [...filtered].sort((a, b) => {
+      const byBin = binRank(priorityBin(b)) - binRank(priorityBin(a))
+      if (byBin !== 0) return byBin
+      return (b.priority_score ?? 0) - (a.priority_score ?? 0)
+    })
+  }, [allClients, ownerFilter])
+
+  const visibleClients = callbackView ? callbackClients : tabClients
+
   const tabCounts = useMemo(() => ({
     today: getTabClients('today').length,
     tomorrow: getTabClients('tomorrow').length,
@@ -452,7 +470,7 @@ function CallsPageInner() {
     })
   }
   function selectAllVisible() {
-    setSelectedIds(new Set(tabClients.map(c => c.id)))
+    setSelectedIds(new Set(visibleClients.map(c => c.id)))
   }
   function clearSelection() {
     setSelectedIds(new Set())
@@ -587,9 +605,30 @@ function CallsPageInner() {
       {/* Row 2 (queue only): time tabs (left) + type filter (right) */}
       {viewMode === 'queue' && (
         <div className="flex items-center justify-between gap-3 flex-wrap border-b border-border/40 -mt-2">
-          {/* Time-range tabs */}
-          <div className="flex items-end overflow-x-auto">
-            {([
+          {/* Queue / Call Backs toggle + time-range tabs */}
+          <div className="flex items-end gap-3 overflow-x-auto">
+            {/* Queue vs Call Backs bin */}
+            <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 mb-2 flex-shrink-0">
+              <button
+                onClick={() => setCallbackView(false)}
+                className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                  !callbackView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+              >
+                Queue
+              </button>
+              <button
+                onClick={() => setCallbackView(true)}
+                className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors inline-flex items-center gap-1.5',
+                  callbackView ? 'bg-background text-indigo-300 shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+              >
+                Call Backs
+                {callbackClients.length > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">{callbackClients.length}</span>
+                )}
+              </button>
+            </div>
+
+            {!callbackView && ([
               { key: 'today', label: 'Today' },
               { key: 'tomorrow', label: 'Tomorrow' },
               { key: 'this_week', label: 'This Week' },
@@ -666,8 +705,14 @@ function CallsPageInner() {
             [...Array(3)].map((_, i) => (
               <div key={i} className="h-36 bg-card border border-border rounded-xl animate-pulse" />
             ))
-          ) : tabClients.length === 0 ? (
-            queueTab === 'today' ? (
+          ) : visibleClients.length === 0 ? (
+            callbackView ? (
+              <div className="bg-card border border-border rounded-xl p-12 text-center space-y-2">
+                <div className="text-2xl">↩️</div>
+                <div className="text-sm font-medium text-muted-foreground">No call backs</div>
+                <div className="text-xs text-muted-foreground/60">Tap &quot;Call Back&quot; on any call to move it here.</div>
+              </div>
+            ) : queueTab === 'today' ? (
               <div className="bg-card border border-border rounded-xl p-14 text-center space-y-3">
                 <div className="text-4xl">✅</div>
                 <div className="text-base font-semibold">You&apos;re all set!</div>
@@ -680,7 +725,7 @@ function CallsPageInner() {
               </div>
             )
           ) : (
-            tabClients.map(c => (
+            visibleClients.map(c => (
               <CallQueueCard
                 key={c.id}
                 client={c}

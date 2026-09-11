@@ -165,6 +165,8 @@ export interface Client {
   va_needed?: boolean
   trepp_needed?: boolean
   payment_issue?: boolean
+  /** Moves this call into the separate "Call Backs" bin on the Calls queue. */
+  callback?: boolean
   urgency_level?: UrgencyLevel
 
   // AI situation summary (cached)
