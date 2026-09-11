@@ -140,7 +140,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         fetch('/api/slack', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, channel: 'onboarding' }),
         }).catch(() => {})
         // Seed Wilson's Team board with a standard Ads task, stamped assigned.
         fetch('/api/team/entries', {

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  const { message, scheduled_for } = await req.json()
+  const { message, scheduled_for, channel } = await req.json()
 
-  const webhookUrl = process.env.SLACK_OPERATIONS_WEBHOOK_URL
+  // Onboarding notifications post to their own channel (#new-onboardings) when a
+  // webhook is configured; everything else — and onboarding if that webhook is
+  // unset — falls back to #operations so nothing silently drops.
+  const opsUrl = process.env.SLACK_OPERATIONS_WEBHOOK_URL
+  const webhookUrl = channel === 'onboarding'
+    ? (process.env.SLACK_ONBOARDING_WEBHOOK_URL || opsUrl)
+    : opsUrl
   if (!webhookUrl) {
     return NextResponse.json({ error: 'SLACK_OPERATIONS_WEBHOOK_URL not configured' }, { status: 503 })
   }

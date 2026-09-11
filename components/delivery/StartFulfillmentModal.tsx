@@ -17,11 +17,14 @@ interface Props {
 
 export function StartFulfillmentModal({ client, onConfirm, onClose }: Props) {
   const name = client.business_name || client.name
+  // Same rich template the Fulfillment pipeline uses, so onboarding posts read
+  // identically no matter which "Start" button kicked them off.
   const defaultMessage = [
     `<!channel>`,
-    `New Onboarding`,
-    client.name,
-    client.market_location || '',
+    `⚡ *New Onboarding — ${name}*`,
+    client.market_location ? `Market: ${client.market_location}` : '',
+    client.advertised_package ? `Ad: ${client.advertised_package}` : '',
+    client.trial_start ? `Trial Start Date: ${client.trial_start}` : '',
   ].filter(Boolean).join('\n')
 
   const [message, setMessage] = useState(defaultMessage)
@@ -71,7 +74,7 @@ export function StartFulfillmentModal({ client, onConfirm, onClose }: Props) {
               <Send className="w-3.5 h-3.5" /> Slack Message
             </div>
             <div className="text-[10px] text-muted-foreground/60 mb-2">
-              This will post to #operations. Edit before sending.
+              This will post to #new-onboardings. Edit before sending.
             </div>
             <textarea
               value={message}

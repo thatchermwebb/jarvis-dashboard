@@ -269,7 +269,7 @@ export default function ClientWarRoom() {
       await fetch('/api/slack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, channel: 'onboarding' }),
       })
       // Seed a standard Ads task on Wilson's Team board, stamped with the
       // assigned time — anchors the team assigned→completed KPI. Non-blocking.
