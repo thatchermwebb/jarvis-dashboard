@@ -500,6 +500,13 @@ export default function ClientWarRoom() {
           >
             🚨 Churn Risk
           </button>
+          <button
+            onClick={() => quickUpdate({ callback: !client.callback })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.callback ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'border-border text-muted-foreground hover:border-indigo-500/30 hover:text-indigo-300')}
+            disabled={updating}
+          >
+            ↩️ Call Back{client.callback ? ' ✓' : ''}
+          </button>
         </div>
 
         {/* Main two-column layout */}
