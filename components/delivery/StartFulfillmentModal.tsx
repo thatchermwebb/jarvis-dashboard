@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, ExternalLink, MapPin, Calendar, MessageSquare, Send } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { richTextToPlain } from '@/components/ui/rich-text'
 import type { Client, AdProduction, CommunicationLog } from '@/types'
 
 interface ClientWithAds extends Client {
@@ -157,7 +158,7 @@ export function StartFulfillmentModal({ client, onConfirm, onClose }: Props) {
                         {(log.followup_date || log.created_at?.slice(0, 10))} · {log.log_type?.replace(/_/g, ' ')}
                       </div>
                       <div className="text-foreground/80 leading-relaxed line-clamp-3">
-                        {log.summary || log.outcome || '—'}
+                        {richTextToPlain(log.summary || '') || log.outcome || '—'}
                       </div>
                     </div>
                   ))}

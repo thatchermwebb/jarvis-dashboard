@@ -30,6 +30,7 @@ import {
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown, priorityBin, binLabel, type PaymentDueState } from '@/lib/scoring'
 import { PACKAGE_OPTIONS, packageOption } from '@/lib/packages'
+import { RichText } from '@/components/ui/rich-text'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Client, CommunicationLog, Payment, GrowthStage, ContractStatus } from '@/types'
@@ -1097,7 +1098,7 @@ export default function ClientWarRoom() {
                           </div>
                         </div>
                         {log.summary && (
-                          <div className="text-sm text-foreground/90 mt-1.5 whitespace-pre-wrap break-words">{log.summary}</div>
+                          <RichText html={log.summary} className="text-sm text-foreground/90 mt-1.5 break-words [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic" />
                         )}
                         {log.next_step && (
                           <div className="text-xs text-violet-400 mt-1">Next: {log.next_step}</div>

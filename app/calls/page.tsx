@@ -10,6 +10,7 @@ import { CallQueueCard, type PaymentDueFlag, type PaymentDueInfo } from '@/compo
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { AuthorBadge } from '@/components/ui/author-badge'
+import { RichText, richTextToPlain } from '@/components/ui/rich-text'
 import { cn, timeAgo, localToday, daysUntil } from '@/lib/utils'
 import { calculatePriorityScore, priorityBin, binRank, type PaymentDueState } from '@/lib/scoring'
 import type { Client } from '@/types'
@@ -805,7 +806,7 @@ function CallsPageInner() {
                         {log.ad_creative && <span className="text-[10px] bg-secondary/60 text-muted-foreground px-1.5 py-0.5 rounded">{log.ad_creative}</span>}
                       </div>
                       {log.summary && (
-                        <div className="text-xs text-muted-foreground truncate mt-0.5">{log.summary}</div>
+                        <div className="text-xs text-muted-foreground truncate mt-0.5">{richTextToPlain(log.summary)}</div>
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -820,7 +821,7 @@ function CallsPageInner() {
                       {log.summary && (
                         <div>
                           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Summary</div>
-                          <div className="text-sm whitespace-pre-wrap break-words">{log.summary}</div>
+                          <RichText html={log.summary} className="text-sm break-words [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic" />
                         </div>
                       )}
                       {log.promises_made && (

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { Search, X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, GripVertical, Plus, CalendarPlus } from 'lucide-react'
+import { Search, X, ChevronDown, GripVertical, Plus, Bold, Italic, Underline } from 'lucide-react'
+import { richTextToPlain } from '@/components/ui/rich-text'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { InlineCalendar } from '@/components/ui/inline-calendar'
 import { getUserById } from '@/lib/auth'
@@ -187,6 +187,76 @@ function AdCreativeSelect({ value, onChange }: { value: string; onChange: (v: st
   )
 }
 
+// ─── Rich text notes field (bold / italic / underline + shortcuts) ─────────────
+
+function RichTextField({ value, onChange, placeholder, className }: {
+  value: string
+  onChange: (html: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Sync external value → DOM only when it differs and the user isn't typing
+  // (keeps the caret stable on input; lets JARVIS-driven updates show through).
+  useEffect(() => {
+    const el = ref.current
+    if (el && el.innerHTML !== value && document.activeElement !== el) {
+      el.innerHTML = value || ''
+    }
+  }, [value])
+
+  function apply(cmd: 'bold' | 'italic' | 'underline') {
+    ref.current?.focus()
+    document.execCommand(cmd)
+    onChange(ref.current?.innerHTML ?? '')
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (!(e.metaKey || e.ctrlKey)) return
+    const k = e.key.toLowerCase()
+    const cmd = k === 'b' ? 'bold' : k === 'i' ? 'italic' : k === 'u' ? 'underline' : null
+    if (cmd) { e.preventDefault(); apply(cmd) }
+  }
+
+  const isEmpty = richTextToPlain(value) === ''
+
+  return (
+    <div>
+      <div className="flex items-center gap-1 mb-1.5">
+        {([['bold', Bold], ['italic', Italic], ['underline', Underline]] as const).map(([cmd, Icon]) => (
+          <button
+            key={cmd}
+            type="button"
+            tabIndex={-1}
+            onMouseDown={e => { e.preventDefault(); apply(cmd) }}
+            title={`${cmd[0].toUpperCase()}${cmd.slice(1)} (⌘${cmd[0].toUpperCase()})`}
+            className="w-7 h-7 flex items-center justify-center rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            <Icon className="w-3.5 h-3.5" />
+          </button>
+        ))}
+      </div>
+      <div className="relative">
+        {isEmpty && (
+          <div className="pointer-events-none absolute left-3 top-2.5 text-sm text-muted-foreground select-none">{placeholder}</div>
+        )}
+        <div
+          ref={ref}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={() => onChange(ref.current?.innerHTML ?? '')}
+          onKeyDown={onKeyDown}
+          className={cn(
+            'bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm leading-relaxed overflow-y-auto focus:outline-none focus:border-primary/50 [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic',
+            className,
+          )}
+        />
+      </div>
+    </div>
+  )
+}
+
 // ─── EditableLog interface ────────────────────────────────────────────────────
 
 interface EditableLog {
@@ -223,11 +293,6 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
   const [loading, setLoading] = useState(false)
   const [trialNotesOpen, setTrialNotesOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
-
-  // Task creation alongside log
-  const [createTask, setCreateTask] = useState(false)
-  const [taskAssignedTo, setTaskAssignedTo] = useState('Diego')
-  const [taskDueDate, setTaskDueDate] = useState('')
 
   const [form, setForm] = useState({
     log_type: 'call' as LogType,
@@ -364,7 +429,6 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
     if (!open) {
       setForm({ log_type: 'call', outcome: '', summary: '', sentiment: '', promises_made: '', next_step: '', followup_date: '', followup_time: '', created_by: 'Diego', ad_creative: '', trial_notes: '' })
       setSearch(''); setShowDropdown(false); setTrialNotesOpen(false)
-      setCreateTask(false); setTaskAssignedTo('Diego'); setTaskDueDate('')
     }
   }, [open])
 
@@ -379,7 +443,7 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.summary.trim()) return toast.error('Summary / Notes is required')
+    if (!richTextToPlain(form.summary)) return toast.error('Summary / Notes is required')
     const clientId = editLog?.client_id ?? selectedClient?.id ?? preselectedClient?.id
     if (!clientId) return toast.error('Select a client')
     setLoading(true)
@@ -404,21 +468,6 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
         })
         if (!res.ok) throw new Error('Failed to log')
-        // Create linked task if requested
-        if (createTask && form.promises_made.trim()) {
-          await fetch('/api/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: form.promises_made.trim(),
-              client_id: clientId,
-              assigned_to: taskAssignedTo,
-              due_date: taskDueDate || null,
-              priority: 'medium',
-              status: 'open',
-            }),
-          })
-        }
         toast.success('Call logged')
       }
       onLogged?.()
@@ -544,11 +593,11 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 <Label className="text-sm font-medium">
                   Summary / Notes <span className="text-primary text-xs ml-1">*</span>
                 </Label>
-                <Textarea
+                <RichTextField
                   value={form.summary}
-                  onChange={e => set('summary', e.target.value)}
+                  onChange={v => set('summary', v)}
                   placeholder="What happened? What did they say? Key points..."
-                  className={cn('bg-secondary/50 min-h-[100px] text-sm resize-none', driveGlow('summary'))}
+                  className={cn('min-h-[260px]', driveGlow('summary'))}
                 />
               </div>
 
@@ -591,105 +640,10 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
                 )}
               </div>
 
-              {/* Action Item / Task + Next Step */}
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Action Item <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised / needs to happen?" className={cn('bg-secondary/50 h-10 text-sm', driveGlow('promises_made'))} />
-
-                  {/* Create Task toggle — only on new logs */}
-                  {!editLog && (
-                    <button
-                      type="button"
-                      onClick={() => setCreateTask(t => !t)}
-                      className={cn(
-                        'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-all',
-                        createTask
-                          ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/15'
-                          : 'border-border/50 text-muted-foreground hover:text-foreground hover:border-border bg-secondary/30'
-                      )}
-                    >
-                      <CalendarPlus className="w-4 h-4" />
-                      {createTask ? 'Creating task from this action item' : '+ Create task from this action item'}
-                    </button>
-                  )}
-
-                  {/* Task details panel */}
-                  {createTask && (
-                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
-                      <div className="text-[10px] uppercase tracking-widest text-primary/50 font-semibold">Task Details</div>
-
-                      {/* Assigned to */}
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Assigned to</Label>
-                        <div className="flex gap-2">
-                          {(['Diego','Thatcher','Trepp'] as const).map(a => {
-                            const initials = { Diego: 'DC', Thatcher: 'TW', Trepp: 'TG' }[a]
-                            const active = taskAssignedTo === a
-                            const color = {
-                              Diego:    'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-                              Thatcher: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-                              Trepp:    'bg-violet-500/20 text-violet-300 border-violet-500/40',
-                            }[a]
-                            return (
-                              <button
-                                key={a}
-                                type="button"
-                                onClick={() => setTaskAssignedTo(a)}
-                                className={cn(
-                                  'flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-medium transition-all',
-                                  active ? color : 'border-border/40 text-muted-foreground hover:text-foreground'
-                                )}
-                              >
-                                <span className={cn(
-                                  'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold border flex-shrink-0',
-                                  active ? color : 'border-border/40 text-muted-foreground/50'
-                                )}>{initials}</span>
-                                {a}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Due date */}
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Due date (optional)</Label>
-                        <InlineCalendar value={taskDueDate} onChange={setTaskDueDate} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Next Step <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
-                  <Input value={form.next_step} onChange={e => set('next_step', e.target.value)} placeholder="What needs to happen next?" className={cn('bg-secondary/50 h-10 text-sm', driveGlow('next_step'))} />
-                </div>
-              </div>
-
-              {/* Trial Notes (collapsible) */}
-              <div className="border border-border/40 rounded-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setTrialNotesOpen(o => !o)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium hover:bg-secondary/30 transition-colors"
-                >
-                  <span className="flex items-center gap-2">
-                    Trial Notes
-                    {isTrialStage && <span className="text-[9px] bg-violet-500/20 text-violet-400 px-1.5 py-0.5 rounded font-normal">Trial</span>}
-                  </span>
-                  {trialNotesOpen ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
-                </button>
-                {trialNotesOpen && (
-                  <div className="px-4 pb-3 pt-1">
-                    <Textarea
-                      value={form.trial_notes}
-                      onChange={e => set('trial_notes', e.target.value)}
-                      placeholder="Trial progress, health notes, close probability context..."
-                      className="bg-secondary/50 min-h-[80px] text-sm resize-none border-0"
-                    />
-                  </div>
-                )}
+              {/* Action Item */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Action Item <span className="text-muted-foreground/50 font-normal text-xs">(optional)</span></Label>
+                <Input value={form.promises_made} onChange={e => set('promises_made', e.target.value)} placeholder="What was promised / needs to happen?" className={cn('bg-secondary/50 h-10 text-sm', driveGlow('promises_made'))} />
               </div>
             </div>
           </div>
