@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { InlineCalendar } from '@/components/ui/inline-calendar'
-import { getUserById } from '@/lib/auth'
+import { getUserById, USERS, userColor } from '@/lib/auth'
 import { TimePicker } from '@/components/ui/time-picker'
 import { AuthorBadge } from '@/components/ui/author-badge'
 import { cn } from '@/lib/utils'
@@ -196,6 +196,8 @@ function RichTextField({ value, onChange, placeholder, className }: {
   className?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [mention, setMention] = useState<{ query: string; rect: { top: number; left: number } } | null>(null)
+  const [mentionIdx, setMentionIdx] = useState(0)
 
   // Sync external value → DOM only when it differs and the user isn't typing
   // (keeps the caret stable on input; lets JARVIS-driven updates show through).
@@ -212,11 +214,71 @@ function RichTextField({ value, onChange, placeholder, className }: {
     onChange(ref.current?.innerHTML ?? '')
   }
 
+  // Detect a "@query" being typed right before the caret.
+  function currentMention(): { query: string; node: Text; atIndex: number } | null {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null
+    const node = sel.focusNode
+    if (!node || node.nodeType !== Node.TEXT_NODE) return null
+    const offset = sel.focusOffset
+    const before = (node.textContent ?? '').slice(0, offset)
+    const m = /(?:^|\s)@(\w*)$/.exec(before)
+    if (!m) return null
+    return { query: m[1], node: node as Text, atIndex: offset - m[1].length - 1 }
+  }
+
+  const matches = mention
+    ? USERS.filter(u =>
+        u.name.toLowerCase().includes(mention.query.toLowerCase()) ||
+        u.id.includes(mention.query.toLowerCase()))
+    : []
+
+  function syncMention() {
+    const info = currentMention()
+    if (!info) { setMention(null); return }
+    const rect = window.getSelection()?.getRangeAt(0).getBoundingClientRect()
+    setMention({ query: info.query, rect: { top: (rect?.bottom ?? 0) + 4, left: rect?.left ?? 0 } })
+    setMentionIdx(0)
+  }
+
+  function insertMention(user: typeof USERS[number]) {
+    const info = currentMention()
+    const el = ref.current
+    if (!info || !el) { setMention(null); return }
+    const range = document.createRange()
+    range.setStart(info.node, info.atIndex)
+    range.setEnd(info.node, info.atIndex + 1 + info.query.length)
+    range.deleteContents()
+    const span = document.createElement('span')
+    span.setAttribute('data-mention', user.id)
+    span.setAttribute('contenteditable', 'false')
+    span.style.color = userColor(user.id)
+    span.style.fontWeight = '600'
+    span.textContent = '@' + user.name.split(' ')[0]
+    range.insertNode(span)
+    const space = document.createTextNode(' ')
+    span.after(space)
+    const sel = window.getSelection()
+    const after = document.createRange()
+    after.setStartAfter(space); after.collapse(true)
+    sel?.removeAllRanges(); sel?.addRange(after)
+    onChange(el.innerHTML)
+    setMention(null)
+    el.focus()
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
-    if (!(e.metaKey || e.ctrlKey)) return
-    const k = e.key.toLowerCase()
-    const cmd = k === 'b' ? 'bold' : k === 'i' ? 'italic' : k === 'u' ? 'underline' : null
-    if (cmd) { e.preventDefault(); apply(cmd) }
+    if (mention && matches.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx(i => (i + 1) % matches.length); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx(i => (i - 1 + matches.length) % matches.length); return }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(matches[mentionIdx]); return }
+      if (e.key === 'Escape') { e.preventDefault(); setMention(null); return }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      const k = e.key.toLowerCase()
+      const cmd = k === 'b' ? 'bold' : k === 'i' ? 'italic' : k === 'u' ? 'underline' : null
+      if (cmd) { e.preventDefault(); apply(cmd) }
+    }
   }
 
   const isEmpty = richTextToPlain(value) === ''
@@ -236,6 +298,7 @@ function RichTextField({ value, onChange, placeholder, className }: {
             <Icon className="w-3.5 h-3.5" />
           </button>
         ))}
+        <span className="ml-1 text-[10px] text-muted-foreground/50 select-none">Type @ to mention</span>
       </div>
       <div className="relative">
         {isEmpty && (
@@ -245,13 +308,38 @@ function RichTextField({ value, onChange, placeholder, className }: {
           ref={ref}
           contentEditable
           suppressContentEditableWarning
-          onInput={() => onChange(ref.current?.innerHTML ?? '')}
+          onInput={() => { onChange(ref.current?.innerHTML ?? ''); syncMention() }}
+          onKeyUp={syncMention}
+          onClick={syncMention}
+          onBlur={() => setTimeout(() => setMention(null), 150)}
           onKeyDown={onKeyDown}
           className={cn(
             'bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm leading-relaxed overflow-y-auto focus:outline-none focus:border-primary/50 [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic',
             className,
           )}
         />
+        {mention && matches.length > 0 && (
+          <div
+            className="fixed z-[60] w-56 bg-card border border-border rounded-xl shadow-2xl overflow-hidden py-1"
+            style={{ top: mention.rect.top, left: mention.rect.left }}
+          >
+            {matches.map((u, i) => (
+              <button
+                key={u.id}
+                type="button"
+                onMouseDown={e => { e.preventDefault(); insertMention(u) }}
+                onMouseEnter={() => setMentionIdx(i)}
+                className={cn('w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-sm transition-colors',
+                  i === mentionIdx ? 'bg-secondary/70' : 'hover:bg-secondary/40')}
+              >
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: userColor(u.id) + '33', color: userColor(u.id) }}>{u.initials}</span>
+                <span className="font-medium" style={{ color: userColor(u.id) }}>{u.name.split(' ')[0]}</span>
+                <span className="text-xs text-muted-foreground ml-auto truncate">{u.role}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

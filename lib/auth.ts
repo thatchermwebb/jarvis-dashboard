@@ -51,6 +51,23 @@ export function getUserById(id: string): AppUser | undefined {
   return USERS.find(u => u.id === id)
 }
 
+// Per-user accent color for @-mentions in notes (aligns with the assignee colors
+// used elsewhere: Diego emerald, Thatcher blue, Trepp violet).
+export const USER_COLORS: Record<string, string> = {
+  thatcher: '#60a5fa', // blue
+  trepp:    '#a78bfa', // violet
+  diego:    '#34d399', // emerald
+  jacques:  '#22d3ee', // cyan
+  toney:    '#fbbf24', // amber
+  malakai:  '#f472b6', // pink
+  wilson:   '#818cf8', // indigo
+  samuel:   '#2dd4bf', // teal
+}
+
+export function userColor(id?: string | null): string {
+  return (id && USER_COLORS[id]) || '#9ca3af'
+}
+
 // ─── Access control ──────────────────────────────────────────────────────────
 
 /** Pages an associate may open. Everything else redirects to /clients. */
