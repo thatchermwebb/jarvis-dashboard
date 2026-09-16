@@ -137,71 +137,76 @@ function SituationTimeline({ client, nextPayment, hideMoney }: {
   nextPayment: Payment | null
   hideMoney: boolean
 }) {
-  interface Node { key: string; label: string; sub: string; day: number; pri: number; color: string; dot: string; today?: boolean }
+  interface Node { key: string; label: string; value: string; date: string; diff: number; pri: number; color: string; dot: string; today?: boolean }
   const nodes: Node[] = []
-  // Local day-number so date-only and datetime values compare on the same footing;
-  // `pri` breaks same-day ties into the natural sequence (contact→today→…).
-  const dayOf = (v: string | number | Date) => {
-    const d = new Date(v)
-    return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000)
-  }
-  const rel = (d: number | null) => d == null ? '' : d < 0 ? `${Math.abs(d)}d ago` : d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d}d`
+
+  // `daysUntil` is the app-wide local calendar-day delta (negative = past); using
+  // it for BOTH ordering and labels keeps them consistent. `pri` breaks same-day
+  // ties into the natural sequence: contact → today → follow-up → payment → trial.
+  const rel = (d: number) =>
+    d < 0 ? (d === -1 ? 'Yesterday' : `${-d}d ago`) : d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d}d`
+  const short = (s: string) => formatDate(s).replace(/,?\s*\d{4}$/, '') // "Sep 16, 2026" → "Sep 16"
 
   if (client.last_contact_date) {
-    nodes.push({ key: 'contact', label: 'Last contact', sub: timeAgo(client.last_contact_date), day: dayOf(client.last_contact_date), pri: 0, color: 'text-slate-300', dot: 'bg-slate-400' })
+    const d = daysUntil(client.last_contact_date.slice(0, 10)) ?? 0
+    nodes.push({ key: 'contact', label: 'Last contact', value: rel(d), date: short(client.last_contact_date.slice(0, 10)), diff: d, pri: 0, color: 'text-slate-300', dot: 'bg-slate-400' })
   }
-  nodes.push({ key: 'today', label: 'Today', sub: formatDate(localToday()), day: dayOf(new Date()), pri: 1, color: 'text-primary', dot: 'bg-primary', today: true })
+
+  nodes.push({ key: 'today', label: 'Today', value: 'Today', date: short(localToday()), diff: 0, pri: 1, color: 'text-primary', dot: 'bg-primary', today: true })
 
   if (client.next_followup_date) {
-    const d = daysUntil(client.next_followup_date)
-    const overdue = d != null && d < 0
-    const isToday = d === 0
+    const d = daysUntil(client.next_followup_date) ?? 0
+    const overdue = d < 0, isToday = d === 0
     nodes.push({
       key: 'followup', label: 'Follow-up',
-      sub: overdue ? 'Overdue' : rel(d),
-      day: dayOf(client.next_followup_date), pri: 2,
+      value: overdue ? 'Overdue' : rel(d), date: short(client.next_followup_date), diff: d, pri: 2,
       color: overdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-blue-400',
       dot: overdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-blue-400',
     })
   }
 
   if (nextPayment) {
-    const d = daysUntil(nextPayment.due_date)
-    const overdue = nextPayment.status === 'overdue' || (d != null && d < 0)
-    const amount = hideMoney ? '' : formatCurrency(nextPayment.amount)
+    const d = daysUntil(nextPayment.due_date) ?? 0
+    const overdue = nextPayment.status === 'overdue' || d < 0
     nodes.push({
       key: 'payment', label: 'Next payment',
-      sub: [amount, overdue ? 'Overdue' : rel(d)].filter(Boolean).join(' · '),
-      day: dayOf(nextPayment.due_date), pri: 3,
+      value: hideMoney ? 'Payment' : formatCurrency(nextPayment.amount),
+      date: [overdue ? 'Overdue' : rel(d), short(nextPayment.due_date)].join(' · '),
+      diff: d, pri: 3,
       color: overdue ? 'text-red-400' : 'text-emerald-400',
       dot: overdue ? 'bg-red-400' : 'bg-emerald-400',
     })
   }
 
   if (client.trial_end && TIMELINE_TRIAL_STAGES.has(client.stage)) {
-    const d = daysUntil(client.trial_end)
+    const d = daysUntil(client.trial_end) ?? 0
     nodes.push({
       key: 'trial', label: 'Trial ends',
-      sub: d != null && d < 0 ? 'Ended' : rel(d),
-      day: dayOf(client.trial_end), pri: 4,
+      value: d < 0 ? 'Ended' : rel(d), date: short(client.trial_end), diff: d, pri: 4,
       color: 'text-violet-400', dot: 'bg-violet-400',
     })
   }
 
-  nodes.sort((a, b) => a.day - b.day || a.pri - b.pri)
+  nodes.sort((a, b) => a.diff - b.diff || a.pri - b.pri)
   if (nodes.length <= 1) return null // nothing beyond "today" to plot
 
   return (
-    <div className="overflow-x-auto pb-1 -mx-1">
-      <div className="flex items-start min-w-max">
+    <div className="overflow-x-auto pb-1 pt-1">
+      <div className="flex w-full min-w-[340px]">
         {nodes.map((n, i) => (
-          <div key={n.key} className="relative flex-1 min-w-[88px] px-1">
-            {i > 0 && <div className="absolute top-[6px] left-[-50%] right-1/2 h-px bg-border/60" />}
-            <div className="relative flex flex-col items-center text-center">
-              <span className={cn('w-3 h-3 rounded-full border-2 border-card z-10', n.dot, n.today && 'ring-2 ring-primary/40')} />
-              <div className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mt-1.5 leading-tight">{n.label}</div>
-              <div className={cn('text-[11px] font-medium mt-0.5 leading-tight', n.color)}>{n.sub}</div>
+          <div key={n.key} className="relative flex-1 min-w-[80px] flex flex-col items-center text-center">
+            {/* connector: line from this dot's center back to the previous dot's center */}
+            {i > 0 && <div className="absolute top-[9px] right-1/2 w-full h-px bg-border/50" />}
+            <div className="relative z-10 h-[18px] flex items-center">
+              {n.today ? (
+                <span className="w-3.5 h-3.5 rounded-full bg-primary ring-4 ring-primary/20" />
+              ) : (
+                <span className={cn('w-2.5 h-2.5 rounded-full ring-4 ring-card', n.dot)} />
+              )}
             </div>
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1 leading-none">{n.label}</div>
+            <div className={cn('text-xs font-semibold mt-1 leading-none', n.color)}>{n.value}</div>
+            <div className="text-[10px] text-muted-foreground/50 mt-1 leading-none">{n.date}</div>
           </div>
         ))}
       </div>
@@ -1034,12 +1039,6 @@ export default function ClientWarRoom() {
                       html={client.last_call_summary}
                       className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2 break-words [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic"
                     />
-                  </div>
-                )}
-                {client.promises_made && (
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Promises Made</div>
-                    <div className="text-sm text-amber-300">{client.promises_made}</div>
                   </div>
                 )}
                 {client.objections && (
