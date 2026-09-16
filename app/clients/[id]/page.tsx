@@ -26,7 +26,7 @@ import { AuthorBadge } from '@/components/ui/author-badge'
 import {
   cn, stageLabel, stageColor, sentimentEmoji, sentimentColor,
   cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
-  daysUntil,
+  daysUntil, localToday,
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown, priorityBin, binLabel, type PaymentDueState } from '@/lib/scoring'
 import { PACKAGE_OPTIONS, packageOption } from '@/lib/packages'
@@ -127,6 +127,88 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
   { value: 'free_trial_lost',    label: 'Free Trial (Lost)',      color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
 ]
 
+// Stages where a trial-end date is meaningful on the timeline.
+const TIMELINE_TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon', 'trial_concluded', 'onboarding'])
+
+// Horizontal "where things stand" timeline: last contact → today → follow-up →
+// next payment (→ trial end), ordered by date. Money-blind roles get no payment node.
+function SituationTimeline({ client, nextPayment, hideMoney }: {
+  client: Client
+  nextPayment: Payment | null
+  hideMoney: boolean
+}) {
+  interface Node { key: string; label: string; sub: string; day: number; pri: number; color: string; dot: string; today?: boolean }
+  const nodes: Node[] = []
+  // Local day-number so date-only and datetime values compare on the same footing;
+  // `pri` breaks same-day ties into the natural sequence (contact→today→…).
+  const dayOf = (v: string | number | Date) => {
+    const d = new Date(v)
+    return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000)
+  }
+  const rel = (d: number | null) => d == null ? '' : d < 0 ? `${Math.abs(d)}d ago` : d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d}d`
+
+  if (client.last_contact_date) {
+    nodes.push({ key: 'contact', label: 'Last contact', sub: timeAgo(client.last_contact_date), day: dayOf(client.last_contact_date), pri: 0, color: 'text-slate-300', dot: 'bg-slate-400' })
+  }
+  nodes.push({ key: 'today', label: 'Today', sub: formatDate(localToday()), day: dayOf(new Date()), pri: 1, color: 'text-primary', dot: 'bg-primary', today: true })
+
+  if (client.next_followup_date) {
+    const d = daysUntil(client.next_followup_date)
+    const overdue = d != null && d < 0
+    const isToday = d === 0
+    nodes.push({
+      key: 'followup', label: 'Follow-up',
+      sub: overdue ? 'Overdue' : rel(d),
+      day: dayOf(client.next_followup_date), pri: 2,
+      color: overdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-blue-400',
+      dot: overdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-blue-400',
+    })
+  }
+
+  if (nextPayment) {
+    const d = daysUntil(nextPayment.due_date)
+    const overdue = nextPayment.status === 'overdue' || (d != null && d < 0)
+    const amount = hideMoney ? '' : formatCurrency(nextPayment.amount)
+    nodes.push({
+      key: 'payment', label: 'Next payment',
+      sub: [amount, overdue ? 'Overdue' : rel(d)].filter(Boolean).join(' · '),
+      day: dayOf(nextPayment.due_date), pri: 3,
+      color: overdue ? 'text-red-400' : 'text-emerald-400',
+      dot: overdue ? 'bg-red-400' : 'bg-emerald-400',
+    })
+  }
+
+  if (client.trial_end && TIMELINE_TRIAL_STAGES.has(client.stage)) {
+    const d = daysUntil(client.trial_end)
+    nodes.push({
+      key: 'trial', label: 'Trial ends',
+      sub: d != null && d < 0 ? 'Ended' : rel(d),
+      day: dayOf(client.trial_end), pri: 4,
+      color: 'text-violet-400', dot: 'bg-violet-400',
+    })
+  }
+
+  nodes.sort((a, b) => a.day - b.day || a.pri - b.pri)
+  if (nodes.length <= 1) return null // nothing beyond "today" to plot
+
+  return (
+    <div className="overflow-x-auto pb-1 -mx-1">
+      <div className="flex items-start min-w-max">
+        {nodes.map((n, i) => (
+          <div key={n.key} className="relative flex-1 min-w-[88px] px-1">
+            {i > 0 && <div className="absolute top-[6px] left-[-50%] right-1/2 h-px bg-border/60" />}
+            <div className="relative flex flex-col items-center text-center">
+              <span className={cn('w-3 h-3 rounded-full border-2 border-card z-10', n.dot, n.today && 'ring-2 ring-primary/40')} />
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mt-1.5 leading-tight">{n.label}</div>
+              <div className={cn('text-[11px] font-medium mt-0.5 leading-tight', n.color)}>{n.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ClientWarRoom() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -146,8 +228,6 @@ export default function ClientWarRoom() {
   const [adStarted, setAdStarted] = useState(false)
   const [startingAds, setStartingAds] = useState(false)
   const [startModalOpen, setStartModalOpen] = useState(false)
-  const [aiSummary, setAiSummary] = useState<string | null>(null)
-  const [summaryLoading, setSummaryLoading] = useState(false)
   const [nextPayment, setNextPayment] = useState<Payment | null>(null)
   const [activeTab, setActiveTab] = useState('history')
   const [contractEditOpen, setContractEditOpen] = useState(false)
@@ -167,17 +247,6 @@ export default function ClientWarRoom() {
   const [pkgPickerOpen, setPkgPickerOpen] = useState(false)
   const [pkgCustom, setPkgCustom] = useState('')
   const pkgPickerRef = useRef<HTMLDivElement>(null)
-
-  const refreshSummary = useCallback(async (clientId: string) => {
-    if (readOnly) return // associates can't regenerate (API would 403)
-    setSummaryLoading(true)
-    try {
-      const res = await fetch(`/api/clients/${clientId}/situation`, { method: 'POST' })
-      const data = await res.json()
-      if (res.ok && data.summary) setAiSummary(data.summary)
-    } catch { /* keep whatever we have */ }
-    finally { setSummaryLoading(false) }
-  }, [readOnly])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -211,19 +280,7 @@ export default function ClientWarRoom() {
     setNextPayment(unpaid[0] ?? null)
     const ads = Array.isArray(adsData) ? adsData : []
     setAdStarted(ads.some((a: any) => a.status === 'in_progress' || a.status === 'done'))
-
-    // AI situation summary: use the cached one if it's newer than the last
-    // contact; otherwise regenerate in the background.
-    const cached = clientData.ai_situation_summary as string | null
-    const cachedAt = clientData.ai_summary_updated_at ? new Date(clientData.ai_summary_updated_at).getTime() : 0
-    const lastContact = clientData.last_contact_date ? new Date(clientData.last_contact_date).getTime() : 0
-    if (cached && cachedAt >= lastContact) {
-      setAiSummary(cached)
-    } else if (clientData.last_contact_date) {
-      setAiSummary(cached ?? null)
-      void refreshSummary(clientData.id)
-    }
-  }, [id, router, refreshSummary, hidePayments])
+  }, [id, router, hidePayments])
 
   useEffect(() => { load() }, [load])
 
@@ -958,47 +1015,25 @@ export default function ClientWarRoom() {
             {/* Current situation */}
             <div className="bg-card border border-border rounded-xl p-4 space-y-3">
               <Section title="Current Situation">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Sentiment</div>
-                    <div className={cn('text-sm font-medium', sentimentColor(client.last_client_sentiment))}>
-                      {sentimentEmoji(client.last_client_sentiment)} {client.last_client_sentiment ?? '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Last Contact</div>
-                    <div className="text-sm text-foreground">{timeAgo(client.last_contact_date)}</div>
-                  </div>
+                {/* Sentiment chip */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Sentiment</span>
+                  <span className={cn('text-sm font-medium', sentimentColor(client.last_client_sentiment))}>
+                    {sentimentEmoji(client.last_client_sentiment)} {client.last_client_sentiment ?? '—'}
+                  </span>
                 </div>
-                {(aiSummary || summaryLoading || client.last_call_summary) && (
+
+                {/* Visual timeline: last contact → today → follow-up → payment (→ trial end) */}
+                <SituationTimeline client={client} nextPayment={hidePayments ? null : nextPayment} hideMoney={hideMoney} />
+
+                {/* Latest note — rendered rich (formatting + colored @mentions) */}
+                {client.last_call_summary && (
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <Bot className="w-3 h-3" /> Situation Summary
-                      </div>
-                      {!readOnly && (
-                        <button
-                          onClick={() => refreshSummary(client.id)}
-                          disabled={summaryLoading}
-                          className="text-[10px] text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
-                        >
-                          {summaryLoading ? 'Updating…' : 'Refresh'}
-                        </button>
-                      )}
-                    </div>
-                    {aiSummary ? (
-                      <div className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2 whitespace-pre-wrap">
-                        {aiSummary}
-                      </div>
-                    ) : summaryLoading ? (
-                      <div className="text-sm text-muted-foreground bg-secondary/30 rounded-md px-3 py-2 animate-pulse">
-                        Summarizing recent activity…
-                      </div>
-                    ) : (
-                      <div className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2">
-                        {client.last_call_summary}
-                      </div>
-                    )}
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Latest note</div>
+                    <RichText
+                      html={client.last_call_summary}
+                      className="text-sm text-foreground/90 bg-secondary/30 rounded-md px-3 py-2 break-words [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic"
+                    />
                   </div>
                 )}
                 {client.promises_made && (
