@@ -17,6 +17,7 @@ import {
   daysUntil,
   formatTime,
 } from '@/lib/utils'
+import { richTextToPlain } from '@/components/ui/rich-text'
 import type { Client } from '@/types'
 
 export type PaymentDueFlag = 'overdue' | 'today' | 'tomorrow' | 'soon'
@@ -239,10 +240,10 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
           )}
         </div>
 
-        {/* Call summary */}
+        {/* Call summary (rich notes stored as HTML → show as plain text preview) */}
         {client.last_call_summary && (
           <div className="px-6 pb-3 text-sm text-muted-foreground/80 line-clamp-1">
-            {client.last_call_summary}
+            {richTextToPlain(client.last_call_summary)}
           </div>
         )}
 

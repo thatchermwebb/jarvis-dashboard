@@ -279,6 +279,7 @@ function CallsPageInner() {
   // View / tab state
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
   const [callbackView, setCallbackView] = useState(false)
+  const [showChurned, setShowChurned] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('mine')
@@ -349,14 +350,9 @@ function CallsPageInner() {
       if (flag === 'tomorrow' || flag === 'soon') return 'soon'
       return null
     }
-    // Show anyone with a scheduled follow-up regardless of stage, plus all onboardings;
-    // only truly-dead stages with no next step are hidden. Booked closing-calls drop off.
-    const excluded = ['churned', 'free_trial_lost', 'trial_concluded']
-    setAllClients(
-      all
-        .filter(c => (c.next_followup_date || c.stage === 'onboarding' || !excluded.includes(c.stage)))
-        .map(c => ({ ...c, priority_score: calculatePriorityScore(c, pdState(c.id)) }))
-    )
+    // Keep the whole book here; the queue's stage visibility (hiding dead stages,
+    // the churned toggle) is applied at display time in getTabClients.
+    setAllClients(all.map(c => ({ ...c, priority_score: calculatePriorityScore(c, pdState(c.id)) })))
     setLoadingQueue(false)
   }, [])
 
@@ -377,8 +373,16 @@ function CallsPageInner() {
     const t = localToday()
     const tom = offsetStr(1)
     const in7 = offsetStr(7)
-    // Callbacks live in their own bin — never in the main queue.
-    const pool = allClients.filter(c => !c.close_call_booked && !c.callback)
+    // Callbacks live in their own bin — never in the main queue. Dead stages are
+    // hidden unless they have a follow-up/are onboarding; churned & lost are further
+    // gated behind the "Churned" toggle.
+    const pool = allClients.filter(c => {
+      if (c.close_call_booked || c.callback) return false
+      if (c.next_followup_date || c.stage === 'onboarding') return true
+      if (c.stage === 'trial_concluded') return false
+      if ((c.stage === 'churned' || c.stage === 'free_trial_lost') && !showChurned) return false
+      return true
+    })
 
     let filtered: Client[]
     switch (tab) {
@@ -428,7 +432,7 @@ function CallsPageInner() {
       if (byBin !== 0) return byBin
       return (b.priority_score ?? 0) - (a.priority_score ?? 0)
     })
-  }, [allClients, ownerFilter, sortMode])
+  }, [allClients, ownerFilter, sortMode, showChurned])
 
   // Calendar shows all clients with followup dates
   const calendarClients = useMemo(() => allClients.filter(c => c.next_followup_date), [allClients])
@@ -656,25 +660,41 @@ function CallsPageInner() {
             ))}
           </div>
 
-          {/* Owner filter: Mine / Thatcher / Trepp / All */}
-          <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 mb-2 flex-shrink-0">
-            {([
-              { key: 'mine', label: 'Diego' },
-              { key: 'thatcher', label: 'Thatcher' },
-              { key: 'trepp', label: 'Trepp' },
-              { key: 'all', label: 'All' },
-            ] as { key: OwnerFilter; label: string }[]).map(({ key, label }) => (
+          <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+            {/* Churned toggle — dead clients are hidden by default */}
+            {!callbackView && (
               <button
-                key={key}
-                onClick={() => setOwnerFilter(key)}
+                onClick={() => setShowChurned(v => !v)}
+                title="Show churned / lost clients"
                 className={cn(
-                  'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                  ownerFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  'px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                  showChurned ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-border/40 text-muted-foreground hover:text-foreground'
                 )}
               >
-                {label}
+                {showChurned ? 'Churned ✓' : 'Churned'}
               </button>
-            ))}
+            )}
+
+            {/* Owner filter: Mine / Thatcher / Trepp / All */}
+            <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5">
+              {([
+                { key: 'mine', label: 'Diego' },
+                { key: 'thatcher', label: 'Thatcher' },
+                { key: 'trepp', label: 'Trepp' },
+                { key: 'all', label: 'All' },
+              ] as { key: OwnerFilter; label: string }[]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setOwnerFilter(key)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    ownerFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
