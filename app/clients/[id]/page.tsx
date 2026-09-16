@@ -26,7 +26,7 @@ import { AuthorBadge } from '@/components/ui/author-badge'
 import {
   cn, stageLabel, stageColor, sentimentEmoji, sentimentColor,
   cplStatusColor, timeAgo, formatDate, formatCurrency, urgencyColor,
-  daysUntil, localToday,
+  daysUntil,
 } from '@/lib/utils'
 import { getTrialHealthLabel, getChurnRiskLabel, calculatePriorityScore, getScoreBreakdown, priorityBin, binLabel, type PaymentDueState } from '@/lib/scoring'
 import { PACKAGE_OPTIONS, packageOption } from '@/lib/packages'
@@ -127,89 +127,74 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
   { value: 'free_trial_lost',    label: 'Free Trial (Lost)',      color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
 ]
 
-// Stages where a trial-end date is meaningful on the timeline.
+// Stages where a trial-end date is meaningful.
 const TIMELINE_TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon', 'trial_concluded', 'onboarding'])
 
-// Horizontal "where things stand" timeline: last contact → today → follow-up →
-// next payment (→ trial end), ordered by date. Money-blind roles get no payment node.
-function SituationTimeline({ client, nextPayment, hideMoney }: {
+// "Where things stand" as a row of key-date tiles (everything is implicitly
+// relative to today, so there's no redundant "today" node). Money-blind roles
+// get no payment tile.
+function SituationDates({ client, nextPayment, hideMoney }: {
   client: Client
   nextPayment: Payment | null
   hideMoney: boolean
 }) {
-  interface Node { key: string; label: string; value: string; date: string; diff: number; pri: number; color: string; dot: string; today?: boolean }
-  const nodes: Node[] = []
-
-  // `daysUntil` is the app-wide local calendar-day delta (negative = past); using
-  // it for BOTH ordering and labels keeps them consistent. `pri` breaks same-day
-  // ties into the natural sequence: contact → today → follow-up → payment → trial.
+  interface Tile { key: string; label: string; icon: typeof Phone; value: string; sub: string; color: string; accent: string }
+  const tiles: Tile[] = []
   const rel = (d: number) =>
     d < 0 ? (d === -1 ? 'Yesterday' : `${-d}d ago`) : d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d}d`
   const short = (s: string) => formatDate(s).replace(/,?\s*\d{4}$/, '') // "Sep 16, 2026" → "Sep 16"
 
   if (client.last_contact_date) {
-    const d = daysUntil(client.last_contact_date.slice(0, 10)) ?? 0
-    nodes.push({ key: 'contact', label: 'Last contact', value: rel(d), date: short(client.last_contact_date.slice(0, 10)), diff: d, pri: 0, color: 'text-slate-300', dot: 'bg-slate-400' })
+    const day = client.last_contact_date.slice(0, 10)
+    const d = daysUntil(day) ?? 0
+    tiles.push({ key: 'contact', label: 'Last contact', icon: Phone, value: rel(d), sub: short(day), color: 'text-foreground', accent: 'border-border/50' })
   }
-
-  nodes.push({ key: 'today', label: 'Today', value: 'Today', date: short(localToday()), diff: 0, pri: 1, color: 'text-primary', dot: 'bg-primary', today: true })
 
   if (client.next_followup_date) {
     const d = daysUntil(client.next_followup_date) ?? 0
     const overdue = d < 0, isToday = d === 0
-    nodes.push({
-      key: 'followup', label: 'Follow-up',
-      value: overdue ? 'Overdue' : rel(d), date: short(client.next_followup_date), diff: d, pri: 2,
+    tiles.push({
+      key: 'followup', label: 'Follow-up', icon: Calendar,
+      value: overdue ? 'Overdue' : rel(d), sub: short(client.next_followup_date),
       color: overdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-blue-400',
-      dot: overdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-blue-400',
+      accent: overdue ? 'border-red-500/30' : isToday ? 'border-amber-500/30' : 'border-blue-500/25',
     })
   }
 
   if (nextPayment) {
     const d = daysUntil(nextPayment.due_date) ?? 0
     const overdue = nextPayment.status === 'overdue' || d < 0
-    nodes.push({
-      key: 'payment', label: 'Next payment',
-      value: hideMoney ? 'Payment' : formatCurrency(nextPayment.amount),
-      date: [overdue ? 'Overdue' : rel(d), short(nextPayment.due_date)].join(' · '),
-      diff: d, pri: 3,
+    tiles.push({
+      key: 'payment', label: 'Next payment', icon: CreditCard,
+      value: overdue ? 'Overdue' : rel(d),
+      sub: [hideMoney ? '' : formatCurrency(nextPayment.amount), short(nextPayment.due_date)].filter(Boolean).join(' · '),
       color: overdue ? 'text-red-400' : 'text-emerald-400',
-      dot: overdue ? 'bg-red-400' : 'bg-emerald-400',
+      accent: overdue ? 'border-red-500/30' : 'border-emerald-500/25',
     })
   }
 
   if (client.trial_end && TIMELINE_TRIAL_STAGES.has(client.stage)) {
     const d = daysUntil(client.trial_end) ?? 0
-    nodes.push({
-      key: 'trial', label: 'Trial ends',
-      value: d < 0 ? 'Ended' : rel(d), date: short(client.trial_end), diff: d, pri: 4,
-      color: 'text-violet-400', dot: 'bg-violet-400',
+    tiles.push({
+      key: 'trial', label: 'Trial ends', icon: Star,
+      value: d < 0 ? 'Ended' : rel(d), sub: short(client.trial_end),
+      color: 'text-violet-400', accent: 'border-violet-500/25',
     })
   }
 
-  nodes.sort((a, b) => a.diff - b.diff || a.pri - b.pri)
-  if (nodes.length <= 1) return null // nothing beyond "today" to plot
+  if (!tiles.length) return null
 
   return (
-    <div className="overflow-x-auto pb-1 pt-1">
-      <div className="flex w-full min-w-[340px]">
-        {nodes.map((n, i) => (
-          <div key={n.key} className="relative flex-1 min-w-[80px] flex flex-col items-center text-center">
-            {/* connector: line from this dot's center back to the previous dot's center */}
-            {i > 0 && <div className="absolute top-[9px] right-1/2 w-full h-px bg-border/50" />}
-            <div className="relative z-10 h-[18px] flex items-center">
-              {n.today ? (
-                <span className="w-3.5 h-3.5 rounded-full bg-primary ring-4 ring-primary/20" />
-              ) : (
-                <span className={cn('w-2.5 h-2.5 rounded-full ring-4 ring-card', n.dot)} />
-              )}
-            </div>
-            <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1 leading-none">{n.label}</div>
-            <div className={cn('text-xs font-semibold mt-1 leading-none', n.color)}>{n.value}</div>
-            <div className="text-[10px] text-muted-foreground/50 mt-1 leading-none">{n.date}</div>
+    <div className="flex flex-wrap gap-2">
+      {tiles.map(t => (
+        <div key={t.key} className={cn('flex-1 min-w-[112px] rounded-lg border bg-secondary/20 px-3 py-2', t.accent)}>
+          <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/60">
+            <t.icon className="w-3 h-3" /> {t.label}
           </div>
-        ))}
-      </div>
+          <div className={cn('text-base font-bold leading-tight mt-1', t.color)}>{t.value}</div>
+          <div className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{t.sub}</div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1028,8 +1013,8 @@ export default function ClientWarRoom() {
                   </span>
                 </div>
 
-                {/* Visual timeline: last contact → today → follow-up → payment (→ trial end) */}
-                <SituationTimeline client={client} nextPayment={hidePayments ? null : nextPayment} hideMoney={hideMoney} />
+                {/* Key dates: last contact · follow-up · next payment (· trial end) */}
+                <SituationDates client={client} nextPayment={hidePayments ? null : nextPayment} hideMoney={hideMoney} />
 
                 {/* Latest note — rendered rich (formatting + colored @mentions) */}
                 {client.last_call_summary && (
