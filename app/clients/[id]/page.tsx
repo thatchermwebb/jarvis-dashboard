@@ -130,16 +130,16 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
 // Stages where a trial-end date is meaningful.
 const TIMELINE_TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon', 'trial_concluded', 'onboarding'])
 
-// "Where things stand" as a row of key-date tiles (everything is implicitly
-// relative to today, so there's no redundant "today" node). Money-blind roles
-// get no payment tile.
+// "Where things stand" as a constellation: each key date is a glowing star on a
+// night-sky panel, wired together in chronological order. No "today" node —
+// everything reads relative to now. Money-blind roles get no payment star.
 function SituationDates({ client, nextPayment, hideMoney }: {
   client: Client
   nextPayment: Payment | null
   hideMoney: boolean
 }) {
-  interface Tile { key: string; label: string; icon: typeof Phone; value: string; sub: string; color: string; accent: string }
-  const tiles: Tile[] = []
+  interface Star { key: string; label: string; value: string; sub: string; hex: string; diff: number; big?: boolean }
+  const stars: Star[] = []
   const rel = (d: number) =>
     d < 0 ? (d === -1 ? 'Yesterday' : `${-d}d ago`) : d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d}d`
   const short = (s: string) => formatDate(s).replace(/,?\s*\d{4}$/, '') // "Sep 16, 2026" → "Sep 16"
@@ -147,52 +147,54 @@ function SituationDates({ client, nextPayment, hideMoney }: {
   if (client.last_contact_date) {
     const day = client.last_contact_date.slice(0, 10)
     const d = daysUntil(day) ?? 0
-    tiles.push({ key: 'contact', label: 'Last contact', icon: Phone, value: rel(d), sub: short(day), color: 'text-foreground', accent: 'border-border/50' })
+    stars.push({ key: 'contact', label: 'Last contact', value: rel(d), sub: short(day), hex: '#94a3b8', diff: d })
   }
-
   if (client.next_followup_date) {
     const d = daysUntil(client.next_followup_date) ?? 0
     const overdue = d < 0, isToday = d === 0
-    tiles.push({
-      key: 'followup', label: 'Follow-up', icon: Calendar,
-      value: overdue ? 'Overdue' : rel(d), sub: short(client.next_followup_date),
-      color: overdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-blue-400',
-      accent: overdue ? 'border-red-500/30' : isToday ? 'border-amber-500/30' : 'border-blue-500/25',
-    })
+    stars.push({ key: 'followup', label: 'Follow-up', value: overdue ? 'Overdue' : rel(d), sub: short(client.next_followup_date), hex: overdue ? '#f87171' : isToday ? '#fbbf24' : '#60a5fa', diff: d, big: true })
   }
-
   if (nextPayment) {
     const d = daysUntil(nextPayment.due_date) ?? 0
     const overdue = nextPayment.status === 'overdue' || d < 0
-    tiles.push({
-      key: 'payment', label: 'Next payment', icon: CreditCard,
-      value: overdue ? 'Overdue' : rel(d),
-      sub: [hideMoney ? '' : formatCurrency(nextPayment.amount), short(nextPayment.due_date)].filter(Boolean).join(' · '),
-      color: overdue ? 'text-red-400' : 'text-emerald-400',
-      accent: overdue ? 'border-red-500/30' : 'border-emerald-500/25',
-    })
+    stars.push({ key: 'payment', label: 'Next payment', value: overdue ? 'Overdue' : rel(d), sub: [hideMoney ? '' : formatCurrency(nextPayment.amount), short(nextPayment.due_date)].filter(Boolean).join(' · '), hex: overdue ? '#f87171' : '#34d399', diff: d, big: true })
   }
-
   if (client.trial_end && TIMELINE_TRIAL_STAGES.has(client.stage)) {
     const d = daysUntil(client.trial_end) ?? 0
-    tiles.push({
-      key: 'trial', label: 'Trial ends', icon: Star,
-      value: d < 0 ? 'Ended' : rel(d), sub: short(client.trial_end),
-      color: 'text-violet-400', accent: 'border-violet-500/25',
-    })
+    stars.push({ key: 'trial', label: 'Trial ends', value: d < 0 ? 'Ended' : rel(d), sub: short(client.trial_end), hex: '#a78bfa', diff: d })
   }
 
-  if (!tiles.length) return null
+  if (!stars.length) return null
+  stars.sort((a, b) => a.diff - b.diff)
+
+  const H = 158, padX = 15
+  const n = stars.length
+  const yFrac = [0.60, 0.33, 0.58, 0.36] // organic star heights (fraction of H)
+  const pts = stars.map((s, i) => ({ ...s, x: n === 1 ? 50 : padX + (100 - 2 * padX) * (i / (n - 1)), y: yFrac[i % yFrac.length] * H }))
+  const line = pts.map(p => `${p.x},${p.y}`).join(' ')
+  // A few faint background stars for ambiance.
+  const dust = [[8, 24], [22, 118], [46, 30], [63, 132], [78, 22], [90, 96], [34, 66], [55, 100]]
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {tiles.map(t => (
-        <div key={t.key} className={cn('flex-1 min-w-[112px] rounded-lg border bg-secondary/20 px-3 py-2', t.accent)}>
-          <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/60">
-            <t.icon className="w-3 h-3" /> {t.label}
-          </div>
-          <div className={cn('text-base font-bold leading-tight mt-1', t.color)}>{t.value}</div>
-          <div className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{t.sub}</div>
+    <div className="relative rounded-xl border border-border/40 overflow-hidden" style={{ height: H, background: 'radial-gradient(120% 120% at 50% -20%, #141a2b 0%, #0b0e17 70%)' }}>
+      <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+        {dust.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={0.35} fill="#64748b" opacity={0.4} />)}
+        {n > 1 && <polyline points={line} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {/* Stars (aligned to the polyline points) */}
+      {pts.map(p => (
+        <span key={p.key} className="absolute rounded-full" style={{
+          left: `${p.x}%`, top: p.y, transform: 'translate(-50%,-50%)',
+          width: p.big ? 12 : 9, height: p.big ? 12 : 9,
+          background: p.hex, boxShadow: `0 0 10px 2px ${p.hex}, 0 0 20px 4px ${p.hex}55`,
+        }} />
+      ))}
+      {/* Labels below each star */}
+      {pts.map(p => (
+        <div key={p.key + '-l'} className="absolute text-center" style={{ left: `${p.x}%`, top: p.y + 10, transform: 'translateX(-50%)', width: 96 }}>
+          <div className="text-[8px] uppercase tracking-wider text-muted-foreground/50 leading-none">{p.label}</div>
+          <div className="text-[13px] font-bold leading-tight mt-0.5" style={{ color: p.hex }}>{p.value}</div>
+          <div className="text-[9px] text-muted-foreground/50 leading-none mt-0.5 truncate">{p.sub}</div>
         </div>
       ))}
     </div>
