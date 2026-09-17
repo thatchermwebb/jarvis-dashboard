@@ -97,6 +97,25 @@
   }
 }
 
+/* ─── Midnight skin (constellation aesthetic) ─────────────────────────────── */
+/* Palette tokens are set inline by lib/themes.ts (applySkin); this layer adds the
+   parts tokens can't express: the ombre sky gradient and the faint card glow. */
+.skin-midnight body {
+  background-image:
+    radial-gradient(135% 95% at 50% -20%, oklch(0.30 0.07 265 / 0.55) 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% -10%, oklch(0.28 0.09 290 / 0.30) 0%, transparent 55%),
+    radial-gradient(80% 70% at 0% 5%, oklch(0.26 0.07 250 / 0.22) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+/* Cards float on the sky: hairline top highlight + soft deep shadow. */
+.skin-midnight .bg-card {
+  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 5%), 0 10px 34px -14px oklch(0 0 0 / 0.65);
+}
+.skin-midnight .bg-card\/80,
+.skin-midnight .bg-card\/95 {
+  backdrop-filter: blur(8px);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

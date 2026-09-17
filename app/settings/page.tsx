@@ -1,8 +1,9 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { ChevronRight, Trash2, Bot } from 'lucide-react'
+import { ChevronRight, Trash2, Bot, Check } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import type { JarvisMemory } from '@/types'
 
@@ -404,7 +405,7 @@ function JarvisMemorySection({ userName }: { userName: string }) {
 }
 
 export default function SettingsPage() {
-  const { user, accentColor, bgColor, setAccentColor, setBgColor } = useAuth()
+  const { user, accentColor, bgColor, skin, setAccentColor, setBgColor, setSkin } = useAuth()
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -431,6 +432,45 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* App Skin */}
+      <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+        <div>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">App Skin</h2>
+          <p className="text-xs text-muted-foreground">Switch the overall look of the app. Saved per-user.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { key: 'default', label: 'Classic', desc: 'The standard dark theme.', bg: 'linear-gradient(160deg, #131318, #0c0c10)' },
+            { key: 'midnight', label: 'Midnight', desc: 'Deep navy, glow & ombre.', bg: 'radial-gradient(120% 100% at 50% -20%, #26314d 0%, #0b0e17 60%)' },
+          ] as const).map(opt => {
+            const active = skin === opt.key
+            return (
+              <button
+                key={opt.key}
+                onClick={() => setSkin(opt.key)}
+                className={cn(
+                  'relative rounded-xl border p-4 text-left transition-all overflow-hidden',
+                  active ? 'border-primary/60 ring-2 ring-primary/25' : 'border-border/60 hover:border-border'
+                )}
+                style={{ background: opt.bg }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">{opt.label}</span>
+                  {active && <Check className="w-3.5 h-3.5 text-primary" />}
+                </div>
+                <div className="text-[11px] text-white/60 mt-0.5">{opt.desc}</div>
+                {/* mini star row for a hint of the aesthetic */}
+                <div className="flex items-center gap-1.5 mt-3">
+                  <span className="w-2 h-2 rounded-full" style={{ background: '#94a3b8', boxShadow: '0 0 6px #94a3b8' }} />
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#fbbf24', boxShadow: '0 0 8px #fbbf24' }} />
+                  <span className="w-2 h-2 rounded-full" style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }} />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* Theme Colors */}
       <div className="bg-card border border-border rounded-2xl p-6 space-y-6">
