@@ -41,6 +41,7 @@ const STAGES: { value: ClientStage; label: string; color: string; bg: string; do
 
 const FREQUENCIES: { value: string; label: string }[] = [
   { value: 'monthly',    label: 'Monthly' },
+  { value: 'quarterly',  label: 'Quarterly (3-mo PIF)' },
   { value: 'bi_weekly',  label: 'Bi-Weekly' },
   { value: 'weekly',     label: 'Weekly' },
   { value: 'one_time',   label: 'One-Time' },
@@ -566,6 +567,9 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Monthly Retainer ($)</Label>
                 <Input value={form.monthly_retainer} onChange={(e) => set('monthly_retainer', e.target.value)} placeholder="1000" type="number" className="bg-secondary/50 h-11 text-base border-border/50" />
+                {form.payment_frequency === 'quarterly' && (
+                  <p className="text-[11px] text-muted-foreground/70">Enter the monthly amount (e.g. $1,000 for a $3k/3-mo PIF) — MRR stays monthly.</p>
+                )}
               </div>
             )}
             {!hideMoney && (

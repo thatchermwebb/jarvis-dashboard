@@ -293,11 +293,12 @@ export interface GHLAppointment {
 
 export type PaymentEntryStatus = 'pending' | 'paid' | 'paid_late' | 'overdue' | 'waived' | 'voided'
 export type PaymentSource = 'stripe' | 'zelle' | 'other'
-export type PaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'one_time'
+export type PaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'one_time'
 export type PaymentType =
   | 'retainer_monthly'
   | 'retainer_biweekly'
   | 'retainer_weekly'
+  | 'retainer_quarterly'
   | 'deposit'
   | 'remaining_balance'
   | 'one_time'

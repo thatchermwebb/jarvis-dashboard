@@ -29,6 +29,7 @@ function useReadOnly(): boolean {
 
 const TYPE_LABELS: Record<string, string> = {
   retainer_monthly:  'Retainer (1mo)',
+  retainer_quarterly:'Retainer (3mo PIF)',
   retainer_biweekly: 'Retainer (2 weeks)',
   retainer_weekly:   'Retainer (1 week)',
   deposit:           'Deposit',

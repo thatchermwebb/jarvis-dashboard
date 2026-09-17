@@ -16,6 +16,7 @@ import type { Payment, PaymentSchedule, PaymentType, PaymentFrequency } from '@/
 
 const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
   { value: 'retainer_monthly', label: 'Retainer (1 month)' },
+  { value: 'retainer_quarterly', label: 'Retainer (3 months)' },
   { value: 'retainer_biweekly', label: 'Retainer (2 weeks)' },
   { value: 'retainer_weekly', label: 'Retainer (1 week)' },
   { value: 'deposit', label: 'Deposit' },
@@ -423,17 +424,22 @@ function EditPaymentDialog({ payment, onClose, onSaved }: { payment: Payment; on
   )
 }
 
-const FREQUENCIES = ['weekly', 'biweekly', 'monthly', 'one_time']
-const FREQ_LABELS: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly', one_time: 'One-time' }
+// One consolidated billing cadence → drives both payment_type and frequency.
+const BILLING_PLANS: { value: string; label: string; payment_type: PaymentType; frequency: PaymentFrequency }[] = [
+  { value: 'monthly',   label: 'Monthly Retainer',       payment_type: 'retainer_monthly',   frequency: 'monthly' },
+  { value: 'quarterly', label: 'Quarterly — 3-Month PIF', payment_type: 'retainer_quarterly', frequency: 'quarterly' },
+  { value: 'biweekly',  label: 'Bi-weekly Retainer',      payment_type: 'retainer_biweekly',  frequency: 'biweekly' },
+  { value: 'weekly',    label: 'Weekly Retainer',         payment_type: 'retainer_weekly',    frequency: 'weekly' },
+  { value: 'one_time',  label: 'One-Time',                payment_type: 'one_time',           frequency: 'one_time' },
+]
 
 function AddScheduleDialog({ open, onClose, clientId, clientName, onSaved }: {
   open: boolean; onClose: () => void; clientId: string; clientName?: string; onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    label: '', payment_type: 'retainer_biweekly' as PaymentType,
-    amount: '', frequency: 'biweekly' as PaymentFrequency,
-    start_date: '', end_date: '', notes: '',
+    billing: 'monthly',
+    amount: '', start_date: '', end_date: '', notes: '',
   })
 
   function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })) }
@@ -441,12 +447,21 @@ function AddScheduleDialog({ open, onClose, clientId, clientName, onSaved }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.amount || !form.start_date) return toast.error('Amount and start date required')
+    const plan = BILLING_PLANS.find((p) => p.value === form.billing) ?? BILLING_PLANS[0]
     setSaving(true)
     try {
       const res = await fetch('/api/payment-schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: Number(form.amount), client_id: clientId, end_date: form.end_date || undefined }),
+        body: JSON.stringify({
+          payment_type: plan.payment_type,
+          frequency: plan.frequency,
+          amount: Number(form.amount),
+          start_date: form.start_date,
+          end_date: form.end_date || undefined,
+          notes: form.notes,
+          client_id: clientId,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -463,25 +478,12 @@ function AddScheduleDialog({ open, onClose, clientId, clientName, onSaved }: {
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader><DialogTitle>Set Pay Schedule{clientName ? ` — ${clientName}` : ''}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-4 mt-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Type</label>
-              <Select value={form.payment_type} onValueChange={(v) => v && set('payment_type', v)}>
-                <SelectTrigger className="bg-secondary/50 h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>{PAYMENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className={labelClass}>Frequency</label>
-              <select value={form.frequency} onChange={(e) => set('frequency', e.target.value)}
-                className={fieldClass + ' cursor-pointer'}>
-                {FREQUENCIES.map(f => <option key={f} value={f}>{FREQ_LABELS[f]}</option>)}
-              </select>
-            </div>
-          </div>
           <div>
-            <label className={labelClass}>Label <span className="text-muted-foreground/40 font-normal normal-case tracking-normal">(optional)</span></label>
-            <input value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="e.g. Monthly Retainer" className={fieldClass} />
+            <label className={labelClass}>Billing</label>
+            <select value={form.billing} onChange={(e) => set('billing', e.target.value)}
+              className={fieldClass + ' cursor-pointer'}>
+              {BILLING_PLANS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

@@ -152,6 +152,7 @@ const STAGE_OPTIONS = [
 
 const FREQ_OPTIONS = [
   { value: 'monthly',   label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly (3-mo PIF)' },
   { value: 'bi_weekly', label: 'Bi-Weekly' },
   { value: 'weekly',    label: 'Weekly' },
   { value: 'one_time',  label: 'One-Time' },

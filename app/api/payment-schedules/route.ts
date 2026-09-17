@@ -13,6 +13,7 @@ function generateDueDates(frequency: string, startDate: Date, endDate?: Date): D
     if (frequency === 'weekly') current = addWeeks(current, 1)
     else if (frequency === 'biweekly') current = addWeeks(current, 2)
     else if (frequency === 'monthly') current = addMonths(current, 1)
+    else if (frequency === 'quarterly') current = addMonths(current, 3)
     else break // one_time: just the start date
   }
 

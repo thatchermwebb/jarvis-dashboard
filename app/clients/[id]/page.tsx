@@ -85,6 +85,7 @@ function contractTermLabel(start?: string, end?: string): string | null {
 // Human labels for the Next Payment card
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
   retainer_monthly: 'Retainer (Monthly)',
+  retainer_quarterly: 'Retainer (Quarterly)',
   retainer_biweekly: 'Retainer (Bi-weekly)',
   retainer_weekly: 'Retainer (Weekly)',
   deposit: 'Deposit',

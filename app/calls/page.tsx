@@ -40,6 +40,7 @@ type OwnerFilter = 'mine' | 'thatcher' | 'trepp' | 'all'
 // Human labels for the payment-due badge on call cards
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
   retainer_monthly: 'Retainer (Monthly)',
+  retainer_quarterly: 'Retainer (Quarterly)',
   retainer_biweekly: 'Retainer (Bi-weekly)',
   retainer_weekly: 'Retainer (Weekly)',
   deposit: 'Deposit',
