@@ -72,44 +72,71 @@ export function setBgColorForUser(userId: string, hex: string) {
 // Midnight = the constellation aesthetic: deep navy surfaces + luminous blue
 // borders; the ombre gradient + card glow live in globals.css (.skin-midnight).
 
-export type Skin = 'default' | 'midnight'
+export type Skin = 'default' | 'midnight' | 'neon'
 export const DEFAULT_SKIN: Skin = 'default'
 
-// Overrides applied inline (so they beat the per-user bg vars while active).
-const MIDNIGHT_VARS: Record<string, string> = {
-  '--background': 'oklch(0.09 0.024 264)',
-  '--card': 'oklch(0.155 0.030 264)',
-  '--card-foreground': 'oklch(0.97 0.008 264)',
-  '--popover': 'oklch(0.12 0.026 264)',
-  '--secondary': 'oklch(0.185 0.028 264)',
-  '--muted': 'oklch(0.17 0.026 264)',
-  '--muted-foreground': 'oklch(0.65 0.03 262)',
-  '--accent': 'oklch(0.20 0.032 264)',
-  '--accent-foreground': 'oklch(0.97 0.008 264)',
-  '--border': 'oklch(0.72 0.09 255 / 15%)',
-  '--input': 'oklch(0.72 0.09 255 / 15%)',
-  '--sidebar': 'oklch(0.07 0.022 264)',
-  '--sidebar-accent': 'oklch(0.16 0.026 264)',
-  '--sidebar-border': 'oklch(0.72 0.09 255 / 11%)',
+// Each skin overrides the palette inline (so it beats the per-user bg vars while
+// active). Effects tokens can't express — gradients, glow, glossy buttons — live
+// in globals.css under the matching `.skin-<name>` class.
+const SKIN_VARS: Record<Exclude<Skin, 'default'>, Record<string, string>> = {
+  midnight: {
+    '--background': 'oklch(0.09 0.024 264)',
+    '--card': 'oklch(0.155 0.030 264)',
+    '--card-foreground': 'oklch(0.97 0.008 264)',
+    '--popover': 'oklch(0.12 0.026 264)',
+    '--secondary': 'oklch(0.185 0.028 264)',
+    '--muted': 'oklch(0.17 0.026 264)',
+    '--muted-foreground': 'oklch(0.65 0.03 262)',
+    '--accent': 'oklch(0.20 0.032 264)',
+    '--accent-foreground': 'oklch(0.97 0.008 264)',
+    '--border': 'oklch(0.72 0.09 255 / 15%)',
+    '--input': 'oklch(0.72 0.09 255 / 15%)',
+    '--sidebar': 'oklch(0.07 0.022 264)',
+    '--sidebar-accent': 'oklch(0.16 0.026 264)',
+    '--sidebar-border': 'oklch(0.72 0.09 255 / 11%)',
+  },
+  // Neon — near-black surfaces, electric glow. The signature glossy gradient
+  // buttons + ambient body glow are in globals.css (.skin-neon).
+  neon: {
+    '--background': 'oklch(0.045 0.004 285)',
+    '--card': 'oklch(0.125 0.008 288)',
+    '--card-foreground': 'oklch(0.985 0 0)',
+    '--popover': 'oklch(0.10 0.008 288)',
+    '--secondary': 'oklch(0.165 0.010 290)',
+    '--muted': 'oklch(0.15 0.008 290)',
+    '--muted-foreground': 'oklch(0.64 0.012 292)',
+    '--accent': 'oklch(0.19 0.014 300)',
+    '--accent-foreground': 'oklch(0.985 0 0)',
+    '--border': 'oklch(0.80 0.03 305 / 10%)',
+    '--input': 'oklch(0.80 0.03 305 / 12%)',
+    '--sidebar': 'oklch(0.06 0.006 288)',
+    '--sidebar-accent': 'oklch(0.155 0.012 300)',
+    '--sidebar-border': 'oklch(0.80 0.03 305 / 8%)',
+  },
 }
 
+const SKIN_CLASSES = Object.keys(SKIN_VARS).map((s) => `skin-${s}`)
+
 /**
- * Apply or clear the Midnight skin. On clear, the caller's saved accent/bg are
- * re-applied so the user's custom colors come back (removing the inline midnight
- * vars alone would fall back to defaults, not their saved bg).
+ * Apply or clear a skin. On clear (or switching skins), the caller's saved
+ * accent/bg are re-applied so the user's custom colors come back (removing the
+ * inline skin vars alone would fall back to defaults, not their saved bg).
  */
 export function applySkin(skin: Skin, restoreBg?: string, restoreAccent?: string) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  if (skin === 'midnight') {
-    root.classList.add('skin-midnight')
-    for (const [k, v] of Object.entries(MIDNIGHT_VARS)) root.style.setProperty(k, v)
-  } else {
-    root.classList.remove('skin-midnight')
-    for (const k of Object.keys(MIDNIGHT_VARS)) root.style.removeProperty(k)
+  // Clear any previously applied skin first (both class + inline vars).
+  root.classList.remove(...SKIN_CLASSES)
+  for (const vars of Object.values(SKIN_VARS)) {
+    for (const k of Object.keys(vars)) root.style.removeProperty(k)
+  }
+  if (skin === 'default') {
     if (restoreAccent) applyColor(restoreAccent)
     if (restoreBg) applyBgColor(restoreBg)
+    return
   }
+  root.classList.add(`skin-${skin}`)
+  for (const [k, v] of Object.entries(SKIN_VARS[skin])) root.style.setProperty(k, v)
 }
 
 export function getSkinForUser(userId: string): Skin {

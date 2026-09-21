@@ -442,8 +442,9 @@ export default function SettingsPage() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           {([
-            { key: 'default', label: 'Classic', desc: 'The standard dark theme.', bg: 'linear-gradient(160deg, #131318, #0c0c10)' },
-            { key: 'midnight', label: 'Midnight', desc: 'Deep navy, glow & ombre.', bg: 'radial-gradient(120% 100% at 50% -20%, #26314d 0%, #0b0e17 60%)' },
+            { key: 'default', label: 'Classic', desc: 'The standard dark theme.', bg: 'linear-gradient(160deg, #131318, #0c0c10)', dots: ['#94a3b8', '#fbbf24', '#34d399'] },
+            { key: 'midnight', label: 'Midnight', desc: 'Deep navy, glow & ombre.', bg: 'radial-gradient(120% 100% at 50% -20%, #26314d 0%, #0b0e17 60%)', dots: ['#94a3b8', '#fbbf24', '#34d399'] },
+            { key: 'neon', label: 'Neon', desc: 'Near-black, electric glow.', bg: 'radial-gradient(120% 100% at 100% -10%, #3a0f2e 0%, #070709 55%)', dots: ['#f0abfc', '#a3e635', '#22d3ee'] },
           ] as const).map(opt => {
             const active = skin === opt.key
             return (
@@ -461,11 +462,11 @@ export default function SettingsPage() {
                   {active && <Check className="w-3.5 h-3.5 text-primary" />}
                 </div>
                 <div className="text-[11px] text-white/60 mt-0.5">{opt.desc}</div>
-                {/* mini star row for a hint of the aesthetic */}
+                {/* mini swatch row for a hint of the aesthetic */}
                 <div className="flex items-center gap-1.5 mt-3">
-                  <span className="w-2 h-2 rounded-full" style={{ background: '#94a3b8', boxShadow: '0 0 6px #94a3b8' }} />
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#fbbf24', boxShadow: '0 0 8px #fbbf24' }} />
-                  <span className="w-2 h-2 rounded-full" style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }} />
+                  <span className="w-2 h-2 rounded-full" style={{ background: opt.dots[0], boxShadow: `0 0 6px ${opt.dots[0]}` }} />
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: opt.dots[1], boxShadow: `0 0 8px ${opt.dots[1]}` }} />
+                  <span className="w-2 h-2 rounded-full" style={{ background: opt.dots[2], boxShadow: `0 0 6px ${opt.dots[2]}` }} />
                 </div>
               </button>
             )

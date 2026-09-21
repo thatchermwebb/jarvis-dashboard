@@ -91,9 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBgColorState(hex)
     setBgColorForUser(user.id, hex)
     applyBgColor(hex)
-    // Midnight overrides the base palette — re-assert it so the picker doesn't
-    // visually break the skin (the preference is still saved for when it's off).
-    if (skin === 'midnight') applySkin('midnight')
+    // An active skin overrides the base palette — re-assert it so the picker
+    // doesn't visually break the skin (the preference is still saved for later).
+    if (skin !== 'default') applySkin(skin)
   }
 
   function setSkin(next: Skin) {
