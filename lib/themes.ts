@@ -67,81 +67,122 @@ export function setBgColorForUser(userId: string, hex: string) {
   localStorage.setItem(`cza_bg_${userId}`, hex)
 }
 
-// ─── Skins ──────────────────────────────────────────────────────────────────
-// A "skin" is a full curated palette (deeper than the per-user bg/accent tweak).
-// Midnight = the constellation aesthetic: deep navy surfaces + luminous blue
-// borders; the ombre gradient + card glow live in globals.css (.skin-midnight).
+// ─── Skins (Slack-style bold themes) ──────────────────────────────────────────
+// A "skin" recolors the whole app: a bold gradient sidebar, a themed accent, and
+// an ambient glow — the Slack model, where the sidebar carries the theme's
+// identity while the content stays dark and readable. Each theme is data-driven:
+// its palette + effect vars are set inline (so they beat the per-user bg/accent),
+// and one generic `.app-skin` layer in globals.css consumes the effect vars.
 
-export type Skin = 'default' | 'midnight' | 'neon'
+export type Skin = string
 export const DEFAULT_SKIN: Skin = 'default'
 
-// Each skin overrides the palette inline (so it beats the per-user bg vars while
-// active). Effects tokens can't express — gradients, glow, glossy buttons — live
-// in globals.css under the matching `.skin-<name>` class.
-const SKIN_VARS: Record<Exclude<Skin, 'default'>, Record<string, string>> = {
-  midnight: {
-    '--background': 'oklch(0.09 0.024 264)',
-    '--card': 'oklch(0.155 0.030 264)',
-    '--card-foreground': 'oklch(0.97 0.008 264)',
-    '--popover': 'oklch(0.12 0.026 264)',
-    '--secondary': 'oklch(0.185 0.028 264)',
-    '--muted': 'oklch(0.17 0.026 264)',
-    '--muted-foreground': 'oklch(0.65 0.03 262)',
-    '--accent': 'oklch(0.20 0.032 264)',
-    '--accent-foreground': 'oklch(0.97 0.008 264)',
-    '--border': 'oklch(0.72 0.09 255 / 15%)',
-    '--input': 'oklch(0.72 0.09 255 / 15%)',
-    '--sidebar': 'oklch(0.07 0.022 264)',
-    '--sidebar-accent': 'oklch(0.16 0.026 264)',
-    '--sidebar-border': 'oklch(0.72 0.09 255 / 11%)',
-  },
-  // Neon — near-black surfaces, electric glow. The signature glossy gradient
-  // buttons + ambient body glow are in globals.css (.skin-neon).
-  neon: {
-    '--background': 'oklch(0.045 0.004 285)',
-    '--card': 'oklch(0.125 0.008 288)',
-    '--card-foreground': 'oklch(0.985 0 0)',
-    '--popover': 'oklch(0.10 0.008 288)',
-    '--secondary': 'oklch(0.165 0.010 290)',
-    '--muted': 'oklch(0.15 0.008 290)',
-    '--muted-foreground': 'oklch(0.64 0.012 292)',
-    '--accent': 'oklch(0.19 0.014 300)',
-    '--accent-foreground': 'oklch(0.985 0 0)',
-    '--border': 'oklch(0.80 0.03 305 / 10%)',
-    '--input': 'oklch(0.80 0.03 305 / 12%)',
-    '--sidebar': 'oklch(0.06 0.006 288)',
-    '--sidebar-accent': 'oklch(0.155 0.012 300)',
-    '--sidebar-border': 'oklch(0.80 0.03 305 / 8%)',
-  },
+interface ThemeDef {
+  key: string
+  name: string
+  group: 'Base' | 'Bold'
+  /** Accent (buttons, highlights). Omit to keep the user's own accent (Midnight). */
+  accent?: string
+  /** Sidebar gradient — top and bottom stops (bold). */
+  sideFrom: string
+  sideTo: string
 }
 
-const SKIN_CLASSES = Object.keys(SKIN_VARS).map((s) => `skin-${s}`)
+function rgba(hex: string, a: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+
+// A tinted dark palette derived from the theme's sidebar hue — content stays
+// dark & legible; the color lives in the sidebar, accent, and ambient glow.
+function buildVars(def: ThemeDef): Record<string, string> {
+  const { accent, sideFrom, sideTo } = def
+  const vars: Record<string, string> = {
+    '--card-foreground': 'oklch(0.98 0 0)',
+    '--accent-foreground': 'oklch(0.98 0 0)',
+    // Content surfaces: very dark, faintly tinted toward the sidebar color.
+    '--background': `color-mix(in oklab, ${sideTo} 22%, oklch(0.07 0 0))`,
+    '--card': `color-mix(in oklab, ${sideTo} 26%, oklch(0.13 0 0))`,
+    '--popover': `color-mix(in oklab, ${sideTo} 26%, oklch(0.11 0 0))`,
+    '--secondary': `color-mix(in oklab, ${sideTo} 30%, oklch(0.18 0 0))`,
+    '--muted': `color-mix(in oklab, ${sideTo} 28%, oklch(0.16 0 0))`,
+    '--muted-foreground': `color-mix(in oklab, ${sideFrom} 30%, oklch(0.68 0 0))`,
+    '--accent': `color-mix(in oklab, ${sideFrom} 40%, oklch(0.2 0 0))`,
+    '--border': rgba(sideFrom, 0.16),
+    '--input': rgba(sideFrom, 0.2),
+    // Sidebar: bold gradient (via --skin-sidebar) with a solid fallback.
+    '--sidebar': sideTo,
+    '--sidebar-accent': rgba(sideFrom, 0.55),
+    '--sidebar-border': rgba(sideFrom, 0.3),
+    '--skin-sidebar': `linear-gradient(168deg, ${sideFrom} 0%, ${sideTo} 100%)`,
+    '--skin-body':
+      `radial-gradient(120% 90% at 100% -10%, ${rgba(sideFrom, 0.30)} 0%, transparent 52%), ` +
+      `radial-gradient(110% 90% at 0% 110%, ${rgba(accent ?? sideFrom, 0.14)} 0%, transparent 55%)`,
+  }
+  if (accent) {
+    const fg = getContrastColor(accent)
+    vars['--primary'] = accent
+    vars['--primary-foreground'] = fg
+    vars['--ring'] = accent
+    vars['--sidebar-primary'] = accent
+    vars['--sidebar-primary-foreground'] = fg
+    vars['--chart-1'] = accent
+  }
+  return vars
+}
+
+// The theme catalog. Base = the two calm looks; Bold = the Slack-style palette.
+export const THEMES: ThemeDef[] = [
+  { key: 'default',  name: 'Classic',      group: 'Base', sideFrom: '#1a1a20', sideTo: '#0c0c10' },
+  { key: 'midnight', name: 'Midnight',     group: 'Base', sideFrom: '#243049', sideTo: '#0b0e17' },
+  { key: 'aubergine',name: 'Aubergine',    group: 'Bold', accent: '#d8b4fe', sideFrom: '#4a1152', sideTo: '#180a22' },
+  { key: 'raspberry',name: 'Raspberry',    group: 'Bold', accent: '#f9a8d4', sideFrom: '#5c0f38', sideTo: '#1f0715' },
+  { key: 'ember',    name: 'Ember',        group: 'Bold', accent: '#fda4af', sideFrom: '#6b1220', sideTo: '#210a0c' },
+  { key: 'clementine',name: 'Clementine',  group: 'Bold', accent: '#fdba74', sideFrom: '#7a3410', sideTo: '#241005' },
+  { key: 'sunrise',  name: 'Sunrise',      group: 'Bold', accent: '#fcd34d', sideFrom: '#7c2d12', sideTo: '#3b0d2e' },
+  { key: 'jade',     name: 'Jade',         group: 'Bold', accent: '#6ee7b7', sideFrom: '#0f4d3a', sideTo: '#06201c' },
+  { key: 'seaglass', name: 'Sea Glass',    group: 'Bold', accent: '#5eead4', sideFrom: '#134e4a', sideTo: '#1e1b3a' },
+  { key: 'lagoon',   name: 'Lagoon',       group: 'Bold', accent: '#7dd3fc', sideFrom: '#0f3a5e', sideTo: '#081522' },
+  { key: 'indigo',   name: 'Mood Indigo',  group: 'Bold', accent: '#a5b4fc', sideFrom: '#20207a', sideTo: '#0c0b2b' },
+]
+
+const THEME_MAP: Record<string, ThemeDef> = Object.fromEntries(THEMES.map((t) => [t.key, t]))
+
+// Swatch gradient for the settings picker — a bold circle of the theme's colors.
+export function themeSwatch(t: ThemeDef): string {
+  const top = t.accent ?? '#8aa0c6'
+  return `linear-gradient(145deg, ${top} 0%, ${t.sideFrom} 55%, ${t.sideTo} 100%)`
+}
+
+// Every var any theme can set — used to fully clear before applying a new one.
+const ALL_SKIN_VAR_KEYS = Array.from(
+  new Set(THEMES.filter((t) => t.key !== 'default').flatMap((t) => Object.keys(buildVars(t)))),
+)
 
 /**
- * Apply or clear a skin. On clear (or switching skins), the caller's saved
- * accent/bg are re-applied so the user's custom colors come back (removing the
- * inline skin vars alone would fall back to defaults, not their saved bg).
+ * Apply or clear a skin. Fully resets prior skin vars first, re-applies the
+ * user's saved accent/bg (so themes without their own accent — Midnight — keep
+ * the user's), then overlays the selected theme's palette + effect vars.
  */
 export function applySkin(skin: Skin, restoreBg?: string, restoreAccent?: string) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  // Clear any previously applied skin first (both class + inline vars).
-  root.classList.remove(...SKIN_CLASSES)
-  for (const vars of Object.values(SKIN_VARS)) {
-    for (const k of Object.keys(vars)) root.style.removeProperty(k)
-  }
-  if (skin === 'default') {
-    if (restoreAccent) applyColor(restoreAccent)
-    if (restoreBg) applyBgColor(restoreBg)
-    return
-  }
-  root.classList.add(`skin-${skin}`)
-  for (const [k, v] of Object.entries(SKIN_VARS[skin])) root.style.setProperty(k, v)
+  root.classList.remove('app-skin')
+  for (const k of ALL_SKIN_VAR_KEYS) root.style.removeProperty(k)
+  if (restoreAccent) applyColor(restoreAccent)
+  if (restoreBg) applyBgColor(restoreBg)
+
+  const theme = THEME_MAP[skin]
+  if (!theme || theme.key === 'default') return
+
+  root.classList.add('app-skin')
+  for (const [k, v] of Object.entries(buildVars(theme))) root.style.setProperty(k, v)
 }
 
 export function getSkinForUser(userId: string): Skin {
   if (typeof window === 'undefined') return DEFAULT_SKIN
-  return (localStorage.getItem(`cza_skin_${userId}`) as Skin) || DEFAULT_SKIN
+  const stored = localStorage.getItem(`cza_skin_${userId}`)
+  return stored && THEME_MAP[stored] ? stored : DEFAULT_SKIN
 }
 
 export function setSkinForUser(userId: string, skin: Skin) {

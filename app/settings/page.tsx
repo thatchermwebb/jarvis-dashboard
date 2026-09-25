@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from 'react'
 import { ChevronRight, Trash2, Bot, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { THEMES, themeSwatch } from '@/lib/themes'
 import { useAuth } from '@/contexts/AuthContext'
 import type { JarvisMemory } from '@/types'
 
@@ -435,43 +436,40 @@ export default function SettingsPage() {
       )}
 
       {/* App Skin */}
-      <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+      <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
         <div>
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">App Skin</h2>
-          <p className="text-xs text-muted-foreground">Switch the overall look of the app. Saved per-user.</p>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">App Theme</h2>
+          <p className="text-xs text-muted-foreground">Recolor the whole app — bold sidebar, matching accent & glow. Saved per-user.</p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {([
-            { key: 'default', label: 'Classic', desc: 'The standard dark theme.', bg: 'linear-gradient(160deg, #131318, #0c0c10)', dots: ['#94a3b8', '#fbbf24', '#34d399'] },
-            { key: 'midnight', label: 'Midnight', desc: 'Deep navy, glow & ombre.', bg: 'radial-gradient(120% 100% at 50% -20%, #26314d 0%, #0b0e17 60%)', dots: ['#94a3b8', '#fbbf24', '#34d399'] },
-            { key: 'neon', label: 'Neon', desc: 'Near-black, electric glow.', bg: 'radial-gradient(120% 100% at 100% -10%, #3a0f2e 0%, #070709 55%)', dots: ['#f0abfc', '#a3e635', '#22d3ee'] },
-          ] as const).map(opt => {
-            const active = skin === opt.key
-            return (
-              <button
-                key={opt.key}
-                onClick={() => setSkin(opt.key)}
-                className={cn(
-                  'relative rounded-xl border p-4 text-left transition-all overflow-hidden',
-                  active ? 'border-primary/60 ring-2 ring-primary/25' : 'border-border/60 hover:border-border'
-                )}
-                style={{ background: opt.bg }}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white">{opt.label}</span>
-                  {active && <Check className="w-3.5 h-3.5 text-primary" />}
-                </div>
-                <div className="text-[11px] text-white/60 mt-0.5">{opt.desc}</div>
-                {/* mini swatch row for a hint of the aesthetic */}
-                <div className="flex items-center gap-1.5 mt-3">
-                  <span className="w-2 h-2 rounded-full" style={{ background: opt.dots[0], boxShadow: `0 0 6px ${opt.dots[0]}` }} />
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: opt.dots[1], boxShadow: `0 0 8px ${opt.dots[1]}` }} />
-                  <span className="w-2 h-2 rounded-full" style={{ background: opt.dots[2], boxShadow: `0 0 6px ${opt.dots[2]}` }} />
-                </div>
-              </button>
-            )
-          })}
-        </div>
+        {(['Base', 'Bold'] as const).map((group) => (
+          <div key={group} className="space-y-2.5">
+            <div className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
+              {group === 'Base' ? 'Base' : 'Bold'}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {THEMES.filter((t) => t.group === group).map((t) => {
+                const active = skin === t.key
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setSkin(t.key)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all',
+                      active ? 'border-primary/70 ring-2 ring-primary/25 bg-secondary/40' : 'border-border/60 hover:border-border hover:bg-secondary/20'
+                    )}
+                  >
+                    <span
+                      className="w-9 h-9 rounded-full flex-shrink-0 border border-white/10"
+                      style={{ background: themeSwatch(t), boxShadow: '0 2px 8px -2px rgba(0,0,0,0.6)' }}
+                    />
+                    <span className="text-sm font-medium text-foreground truncate flex-1">{t.name}</span>
+                    {active && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Theme Colors */}

@@ -97,51 +97,38 @@
   }
 }
 
-/* ─── Midnight skin (constellation aesthetic) ─────────────────────────────── */
-/* Palette tokens are set inline by lib/themes.ts (applySkin); this layer adds the
-   parts tokens can't express: the ombre sky gradient and the faint card glow. */
-.skin-midnight body {
-  background-image:
-    radial-gradient(135% 95% at 50% -20%, oklch(0.30 0.07 265 / 0.55) 0%, transparent 55%),
-    radial-gradient(90% 70% at 100% -10%, oklch(0.28 0.09 290 / 0.30) 0%, transparent 55%),
-    radial-gradient(80% 70% at 0% 5%, oklch(0.26 0.07 250 / 0.22) 0%, transparent 55%);
-  background-attachment: fixed;
-}
-/* Cards float on the sky: hairline top highlight + soft deep shadow. */
-.skin-midnight .bg-card {
-  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 5%), 0 10px 34px -14px oklch(0 0 0 / 0.65);
-}
-.skin-midnight .bg-card\/80,
-.skin-midnight .bg-card\/95 {
-  backdrop-filter: blur(8px);
-}
+/* ─── App skins (Slack-style bold themes) ─────────────────────────────────── */
+/* Palette + gradient/glow tokens are set inline per theme by lib/themes.ts
+   (applySkin). This one generic layer consumes those tokens for the parts CSS
+   vars can't express: the bold sidebar gradient, the ambient body glow, the card
+   glow, and the signature glossy gradient primary buttons. */
 
-/* ─── Neon skin (electric / gradient aesthetic) ───────────────────────────── */
-/* Palette tokens are set inline by lib/themes.ts (applySkin); this layer adds the
-   parts tokens can't express: the ambient neon wash, card glow, and the signature
-   glossy gradient primary buttons. */
-.skin-neon body {
-  background-image:
-    radial-gradient(120% 90% at 100% -10%, oklch(0.55 0.24 350 / 0.16) 0%, transparent 50%),
-    radial-gradient(110% 90% at 0% 110%, oklch(0.80 0.22 135 / 0.10) 0%, transparent 50%),
-    radial-gradient(90% 80% at 50% 50%, oklch(0.60 0.18 250 / 0.07) 0%, transparent 60%);
+/* Bold gradient sidebar — the theme's identity, Slack-style. */
+.app-skin aside.bg-sidebar,
+.app-skin .bg-sidebar {
+  background-image: var(--skin-sidebar);
   background-attachment: fixed;
 }
-/* Cards lift off the black: hairline top highlight + deep shadow + faint neon edge. */
-.skin-neon .bg-card {
+/* Ambient wash behind the whole app. */
+.app-skin body {
+  background-image: var(--skin-body);
+  background-attachment: fixed;
+}
+/* Cards lift off the dark: hairline top highlight + faint edge + deep shadow. */
+.app-skin .bg-card {
   box-shadow:
     inset 0 1px 0 0 oklch(1 0 0 / 6%),
-    0 0 0 1px oklch(0.80 0.03 305 / 6%),
+    0 0 0 1px oklch(1 0 0 / 4%),
     0 14px 40px -18px oklch(0 0 0 / 0.8);
 }
-.skin-neon .bg-card\/80,
-.skin-neon .bg-card\/95 {
+.app-skin .bg-card\/80,
+.app-skin .bg-card\/95 {
   backdrop-filter: blur(8px);
 }
 /* Signature: glossy gradient primary buttons with an accent-tinted glow. Driven
-   by the user's accent (--primary) so it adapts, rendered as a neon gradient. */
-.skin-neon button.bg-primary,
-.skin-neon a.bg-primary {
+   by the active accent (--primary) so every theme renders its own. */
+.app-skin button.bg-primary,
+.app-skin a.bg-primary {
   background-image: linear-gradient(
     180deg,
     color-mix(in oklab, var(--primary) 78%, white) 0%,
@@ -154,8 +141,8 @@
   border: none;
   transition: box-shadow 0.18s ease, filter 0.18s ease;
 }
-.skin-neon button.bg-primary:hover,
-.skin-neon a.bg-primary:hover {
+.app-skin button.bg-primary:hover,
+.app-skin a.bg-primary:hover {
   filter: brightness(1.06);
   box-shadow:
     0 0 0 1px color-mix(in oklab, var(--primary) 70%, transparent),
