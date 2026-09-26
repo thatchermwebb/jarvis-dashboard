@@ -81,6 +81,7 @@ export default function PaymentsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [clientFilter, setClientFilter] = useState<string>('all')
+  const [affiliateFilter, setAffiliateFilter] = useState<string>('all')
   const [showVoided, setShowVoided] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Payment | null>(null)
@@ -188,6 +189,16 @@ export default function PaymentsPage() {
     return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]))
   }, [payments])
 
+  // Unique affiliates for filter dropdown
+  const affiliateOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    payments.forEach(p => {
+      const aff = (p.client as any)?.affiliate
+      if (aff?.id && aff?.name) seen.set(aff.id, aff.name)
+    })
+    return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  }, [payments])
+
   // Date-filtered payments (applied to all views) — voided payments hidden unless toggled on
   const dateBoundPayments = useMemo(() => {
     const visible = showVoided ? payments : payments.filter(p => p.status !== 'voided')
@@ -208,10 +219,17 @@ export default function PaymentsPage() {
     return visible.filter(p => (!from || p.due_date >= from) && (!to || p.due_date <= to))
   }, [payments, datePreset, dateFrom, dateTo, showVoided])
 
-  // Client-filtered (table view only)
+  // Affiliate-filtered — applied to every view, including the calendar.
+  const scopedPayments = useMemo(() =>
+    affiliateFilter === 'all'
+      ? dateBoundPayments
+      : dateBoundPayments.filter(p => (p.client as any)?.affiliate?.id === affiliateFilter),
+  [dateBoundPayments, affiliateFilter])
+
+  // Client-filtered on top (list/table views)
   const visiblePayments = useMemo(() =>
-    clientFilter === 'all' ? dateBoundPayments : dateBoundPayments.filter(p => p.client_id === clientFilter),
-  [dateBoundPayments, clientFilter])
+    clientFilter === 'all' ? scopedPayments : scopedPayments.filter(p => p.client_id === clientFilter),
+  [scopedPayments, clientFilter])
 
   const isMobile = useIsMobile()
 
@@ -259,6 +277,18 @@ export default function PaymentsPage() {
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 px-2 text-xs rounded-lg border border-border bg-card text-foreground" />
           </div>
         )}
+        {affiliateOptions.length > 1 && (
+          <select
+            value={affiliateFilter}
+            onChange={e => setAffiliateFilter(e.target.value)}
+            className="h-8 px-2 text-xs rounded-lg border border-border bg-card text-foreground cursor-pointer"
+          >
+            <option value="all">All Affiliates</option>
+            {affiliateOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        )}
         {view === 'table' && (
           <select
             value={clientFilter}
@@ -282,8 +312,8 @@ export default function PaymentsPage() {
         >
           {showVoided ? 'Hide Voided' : 'Show Voided'}
         </button>
-        {(datePreset !== 'all' || clientFilter !== 'all') && (
-          <button onClick={() => { setDatePreset('all'); setDateFrom(''); setDateTo(''); setClientFilter('all') }} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        {(datePreset !== 'all' || clientFilter !== 'all' || affiliateFilter !== 'all') && (
+          <button onClick={() => { setDatePreset('all'); setDateFrom(''); setDateTo(''); setClientFilter('all'); setAffiliateFilter('all') }} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-3 h-3" /> Clear
           </button>
         )}
@@ -337,7 +367,7 @@ export default function PaymentsPage() {
         />
       ) : (
         <CalendarView
-          payments={dateBoundPayments}
+          payments={scopedPayments}
           month={calMonth}
           onMonthChange={setCalMonth}
           onEdit={openEdit}
