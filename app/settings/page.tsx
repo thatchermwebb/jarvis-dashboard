@@ -5,6 +5,7 @@ import { ChevronRight, Trash2, Bot, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { THEMES, themeSwatch } from '@/lib/themes'
+import { isAdmin } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
 import type { JarvisMemory } from '@/types'
 
@@ -528,22 +529,28 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* JARVIS Memory */}
-      <JarvisMemorySection userName={user?.name?.split(' ')[0] ?? 'Diego'} />
+      {/* Admin-only tooling — limited roles (associate/setter) get personalization
+          above but not memory, bulk import, or integrations. */}
+      {isAdmin(user) && (
+        <>
+          {/* JARVIS Memory */}
+          <JarvisMemorySection userName={user?.name?.split(' ')[0] ?? 'Diego'} />
 
-      {/* Import Existing Clients */}
-      <ImportExistingClients />
+          {/* Import Existing Clients */}
+          <ImportExistingClients />
 
-      {/* Phase 2 */}
-      <div className="bg-card border border-border rounded-2xl p-6">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Phase 2 Integrations</h2>
-        <ul className="text-sm text-muted-foreground space-y-2">
-          <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> GoHighLevel — auto-sync contacts, pipelines, conversations</li>
-          <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> Meta Ads API — pull CPL, spend, leads daily</li>
-          <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> Slack Webhooks — post VA tasks to channels</li>
-          <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> Twilio — incoming call popup with instant client card</li>
-        </ul>
-      </div>
+          {/* Phase 2 */}
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Phase 2 Integrations</h2>
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> GoHighLevel — auto-sync contacts, pipelines, conversations</li>
+              <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> Meta Ads API — pull CPL, spend, leads daily</li>
+              <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> Slack Webhooks — post VA tasks to channels</li>
+              <li className="flex items-center gap-2"><span className="text-muted-foreground/40">—</span> Twilio — incoming call popup with instant client card</li>
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   )
 }

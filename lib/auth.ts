@@ -71,10 +71,10 @@ export function userColor(id?: string | null): string {
 // ─── Access control ──────────────────────────────────────────────────────────
 
 /** Pages an associate may open. Everything else redirects to /clients. */
-export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments', '/tasks', '/ad-production']
+export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments', '/tasks', '/ad-production', '/settings']
 
 /** Pages an appointment setter (money-blind) may open. */
-export const SETTER_ALLOWED_HREFS = ['/clients', '/calls']
+export const SETTER_ALLOWED_HREFS = ['/clients', '/calls', '/settings']
 
 /** API prefixes a setter may call. Money/revenue APIs are excluded entirely. */
 export const SETTER_ALLOWED_API = [
