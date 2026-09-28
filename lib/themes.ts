@@ -81,11 +81,15 @@ interface ThemeDef {
   key: string
   name: string
   group: 'Base' | 'Bold'
-  /** Accent (buttons, highlights). Omit to keep the user's own accent (Midnight). */
+  /** Accent (buttons, highlights). Omit to keep the user's own accent. */
   accent?: string
-  /** Sidebar gradient — top and bottom stops (bold). */
+  /** Sidebar gradient — top (richer) and bottom (deep) stops. */
   sideFrom: string
   sideTo: string
+  /** Bold themes get the vivid gradient sidebar + glossy buttons; Base stay calm. */
+  bold?: boolean
+  /** Explicit body background-image (e.g. Constellation's ombre sky). */
+  body?: string
 }
 
 function rgba(hex: string, a: number): string {
@@ -96,7 +100,7 @@ function rgba(hex: string, a: number): string {
 // A tinted dark palette derived from the theme's sidebar hue — content stays
 // dark & legible; the color lives in the sidebar, accent, and ambient glow.
 function buildVars(def: ThemeDef): Record<string, string> {
-  const { accent, sideFrom, sideTo } = def
+  const { accent, sideFrom, sideTo, bold, body } = def
   const vars: Record<string, string> = {
     '--card-foreground': 'oklch(0.98 0 0)',
     '--accent-foreground': 'oklch(0.98 0 0)',
@@ -108,16 +112,28 @@ function buildVars(def: ThemeDef): Record<string, string> {
     '--muted': `color-mix(in oklab, ${sideTo} 28%, oklch(0.16 0 0))`,
     '--muted-foreground': `color-mix(in oklab, ${sideFrom} 30%, oklch(0.68 0 0))`,
     '--accent': `color-mix(in oklab, ${sideFrom} 40%, oklch(0.2 0 0))`,
-    '--border': rgba(sideFrom, 0.16),
-    '--input': rgba(sideFrom, 0.2),
-    // Sidebar: bold gradient (via --skin-sidebar) with a solid fallback.
+    '--border': rgba(sideFrom, bold ? 0.16 : 0.12),
+    '--input': rgba(sideFrom, bold ? 0.2 : 0.14),
     '--sidebar': sideTo,
-    '--sidebar-accent': rgba(sideFrom, 0.55),
-    '--sidebar-border': rgba(sideFrom, 0.3),
-    '--skin-sidebar': `linear-gradient(168deg, ${sideFrom} 0%, ${sideTo} 100%)`,
-    '--skin-body':
-      `radial-gradient(120% 90% at 100% -10%, ${rgba(sideFrom, 0.30)} 0%, transparent 52%), ` +
-      `radial-gradient(110% 90% at 0% 110%, ${rgba(accent ?? sideFrom, 0.14)} 0%, transparent 55%)`,
+    '--sidebar-accent': rgba(sideFrom, 0.5),
+    '--sidebar-border': rgba(sideFrom, bold ? 0.3 : 0.18),
+  }
+  if (bold) {
+    // A prettier sidebar: a luminous accent-kissed top → rich mid → deep base,
+    // on a gentle diagonal. The accent blend makes the top glow instead of
+    // reading as a flat dark block.
+    const top = accent
+      ? `color-mix(in oklab, ${sideFrom} 72%, ${accent})`
+      : sideFrom
+    vars['--skin-sidebar'] =
+      `linear-gradient(158deg, ${top} 0%, ${sideFrom} 34%, ${sideTo} 100%)`
+    vars['--skin-body'] = body ??
+      `radial-gradient(105% 80% at 100% -8%, ${rgba(sideFrom, 0.34)} 0%, transparent 50%), ` +
+      `radial-gradient(95% 80% at -5% 108%, ${rgba(accent ?? sideFrom, 0.16)} 0%, transparent 52%)`
+  } else {
+    // Calm: no loud sidebar gradient; just a soft ambient wash (or a supplied one).
+    vars['--skin-body'] = body ??
+      `radial-gradient(130% 90% at 50% -20%, ${rgba(sideFrom, 0.28)} 0%, transparent 55%)`
   }
   if (accent) {
     const fg = getContrastColor(accent)
@@ -131,27 +147,40 @@ function buildVars(def: ThemeDef): Record<string, string> {
   return vars
 }
 
-// The theme catalog. Base = the two calm looks; Bold = the Slack-style palette.
+// The old Midnight "constellation" ombre sky — luminous navy/violet radial layers.
+const CONSTELLATION_SKY =
+  'radial-gradient(135% 95% at 50% -20%, oklch(0.30 0.07 265 / 0.55) 0%, transparent 55%), ' +
+  'radial-gradient(90% 70% at 100% -10%, oklch(0.28 0.09 290 / 0.30) 0%, transparent 55%), ' +
+  'radial-gradient(80% 70% at 0% 5%, oklch(0.26 0.07 250 / 0.22) 0%, transparent 55%)'
+
+// The theme catalog. Base = calm/classic looks; Bold = the vivid gradient palette.
 export const THEMES: ThemeDef[] = [
-  { key: 'default',  name: 'Classic',      group: 'Base', sideFrom: '#1a1a20', sideTo: '#0c0c10' },
-  { key: 'midnight', name: 'Midnight',     group: 'Base', sideFrom: '#243049', sideTo: '#0b0e17' },
-  { key: 'aubergine',name: 'Aubergine',    group: 'Bold', accent: '#d8b4fe', sideFrom: '#4a1152', sideTo: '#180a22' },
-  { key: 'raspberry',name: 'Raspberry',    group: 'Bold', accent: '#f9a8d4', sideFrom: '#5c0f38', sideTo: '#1f0715' },
-  { key: 'ember',    name: 'Ember',        group: 'Bold', accent: '#fda4af', sideFrom: '#6b1220', sideTo: '#210a0c' },
-  { key: 'clementine',name: 'Clementine',  group: 'Bold', accent: '#fdba74', sideFrom: '#7a3410', sideTo: '#241005' },
-  { key: 'sunrise',  name: 'Sunrise',      group: 'Bold', accent: '#fcd34d', sideFrom: '#7c2d12', sideTo: '#3b0d2e' },
-  { key: 'jade',     name: 'Jade',         group: 'Bold', accent: '#6ee7b7', sideFrom: '#0f4d3a', sideTo: '#06201c' },
-  { key: 'seaglass', name: 'Sea Glass',    group: 'Bold', accent: '#5eead4', sideFrom: '#134e4a', sideTo: '#1e1b3a' },
-  { key: 'lagoon',   name: 'Lagoon',       group: 'Bold', accent: '#7dd3fc', sideFrom: '#0f3a5e', sideTo: '#081522' },
-  { key: 'indigo',   name: 'Mood Indigo',  group: 'Bold', accent: '#a5b4fc', sideFrom: '#20207a', sideTo: '#0c0b2b' },
+  { key: 'default',       name: 'Classic',     group: 'Base', sideFrom: '#1a1a20', sideTo: '#0c0c10' },
+  { key: 'midnight',      name: 'Midnight',    group: 'Base', sideFrom: '#243049', sideTo: '#0b0e17' },
+  { key: 'constellation', name: 'Constellation', group: 'Base', sideFrom: '#2a3a5c', sideTo: '#0b0e17', body: CONSTELLATION_SKY },
+  { key: 'aubergine', name: 'Aubergine',   group: 'Bold', bold: true, accent: '#e0bbff', sideFrom: '#63146f', sideTo: '#180a24' },
+  { key: 'raspberry', name: 'Raspberry',   group: 'Bold', bold: true, accent: '#fbb6ce', sideFrom: '#7a1450', sideTo: '#1d0713' },
+  { key: 'ember',     name: 'Ember',       group: 'Bold', bold: true, accent: '#ffb1a7', sideFrom: '#8a1a22', sideTo: '#210809' },
+  { key: 'clementine',name: 'Clementine',  group: 'Bold', bold: true, accent: '#ffc487', sideFrom: '#9a4512', sideTo: '#231005' },
+  { key: 'sunrise',   name: 'Sunrise',     group: 'Bold', bold: true, accent: '#ffdd63', sideFrom: '#9a3516', sideTo: '#3a0d2c' },
+  { key: 'jade',      name: 'Jade',        group: 'Bold', bold: true, accent: '#7ff0c2', sideFrom: '#0f6349', sideTo: '#05201b' },
+  { key: 'seaglass',  name: 'Sea Glass',   group: 'Bold', bold: true, accent: '#6ff0dc', sideFrom: '#12615f', sideTo: '#1b1c3c' },
+  { key: 'lagoon',    name: 'Lagoon',      group: 'Bold', bold: true, accent: '#8bd9ff', sideFrom: '#0f5580', sideTo: '#07131f' },
+  { key: 'indigo',    name: 'Mood Indigo', group: 'Bold', bold: true, accent: '#b0bcff', sideFrom: '#2d2f9e', sideTo: '#0c0b2c' },
 ]
 
 const THEME_MAP: Record<string, ThemeDef> = Object.fromEntries(THEMES.map((t) => [t.key, t]))
 
-// Swatch gradient for the settings picker — a bold circle of the theme's colors.
+// Swatch for the settings picker — a glossy 3D orb: a light highlight top-left,
+// the theme's rich color, fading to its deep base. Reads far prettier than a
+// flat linear wedge.
 export function themeSwatch(t: ThemeDef): string {
-  const top = t.accent ?? '#8aa0c6'
-  return `linear-gradient(145deg, ${top} 0%, ${t.sideFrom} 55%, ${t.sideTo} 100%)`
+  const top = t.accent ?? '#9db0d4'
+  const highlight = `color-mix(in oklab, ${top} 55%, white)`
+  return (
+    `radial-gradient(circle at 32% 26%, ${highlight} 0%, ${top} 30%, ` +
+    `${t.sideFrom} 68%, ${t.sideTo} 100%)`
+  )
 }
 
 // Every var any theme can set — used to fully clear before applying a new one.
@@ -161,13 +190,14 @@ const ALL_SKIN_VAR_KEYS = Array.from(
 
 /**
  * Apply or clear a skin. Fully resets prior skin vars first, re-applies the
- * user's saved accent/bg (so themes without their own accent — Midnight — keep
- * the user's), then overlays the selected theme's palette + effect vars.
+ * user's saved accent/bg (so Base themes without their own accent keep the
+ * user's), then overlays the selected theme's palette + effect vars. Bold themes
+ * additionally get the `skin-bold` class (vivid sidebar gradient + glossy buttons).
  */
 export function applySkin(skin: Skin, restoreBg?: string, restoreAccent?: string) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  root.classList.remove('app-skin')
+  root.classList.remove('app-skin', 'skin-bold')
   for (const k of ALL_SKIN_VAR_KEYS) root.style.removeProperty(k)
   if (restoreAccent) applyColor(restoreAccent)
   if (restoreBg) applyBgColor(restoreBg)
@@ -176,6 +206,7 @@ export function applySkin(skin: Skin, restoreBg?: string, restoreAccent?: string
   if (!theme || theme.key === 'default') return
 
   root.classList.add('app-skin')
+  if (theme.bold) root.classList.add('skin-bold')
   for (const [k, v] of Object.entries(buildVars(theme))) root.style.setProperty(k, v)
 }
 

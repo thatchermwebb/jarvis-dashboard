@@ -445,7 +445,7 @@ export default function SettingsPage() {
         {(['Base', 'Bold'] as const).map((group) => (
           <div key={group} className="space-y-2.5">
             <div className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
-              {group === 'Base' ? 'Base' : 'Bold'}
+              {group === 'Base' ? 'Classic' : 'Bold'}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {THEMES.filter((t) => t.group === group).map((t) => {
