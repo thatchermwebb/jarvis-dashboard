@@ -20,6 +20,10 @@ interface Row {
   updated_by: string | null
 }
 
+// "Running ads" = paying clients running ads plus active free trials
+// (free_trial and legacy trial_ending_soon both show as "Free Trial (Active)").
+const RUNNING_STAGES = [...MEDIA_ACTIVE_STAGES, 'free_trial', 'trial_ending_soon']
+
 type Filter = 'all' | 'running' | 'blank' | MonthlyUpdateStatus
 
 const STATUS_STYLE: Record<'blank' | MonthlyUpdateStatus, string> = {
@@ -73,7 +77,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
 
   const q = search.trim().toLowerCase()
   const visible = rows.filter(r => {
-    if (filter === 'running' && !MEDIA_ACTIVE_STAGES.includes(r.stage)) return false
+    if (filter === 'running' && !RUNNING_STAGES.includes(r.stage)) return false
     if (filter === 'blank' && r.status) return false
     if ((filter === 'ads_produced' || filter === 'completed') && r.status !== filter) return false
     if (q && !`${r.name} ${r.business_name ?? ''} ${r.market_location ?? ''}`.toLowerCase().includes(q)) return false
