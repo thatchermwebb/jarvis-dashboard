@@ -382,6 +382,7 @@ export type AdRating = 'good' | 'decent' | 'bad'
 export type MediaAdStatus = 'in_production' | 'active' | 'paused' | 'retired'
 export type MediaDecision = 'leave' | 'spend_to_winner' | 'spend_to_winner_order_1' | 'order_2'
 export type WorkOrderStatus = 'todo' | 'in_production' | 'produced' | 'uploaded' | 'done'
+export type MonthlyUpdateStatus = 'ads_produced' | 'completed'
 
 export interface MediaAd {
   id: string

@@ -17,15 +17,28 @@ import {
   CheckSquare,
   Users2,
   Megaphone,
+  CalendarRange,
 } from 'lucide-react'
 
-const ALL_NAV_ITEMS = [
+type NavItem = {
+  href: string
+  label: string
+  icon: typeof LayoutDashboard
+  children?: { href: string; label: string; icon: typeof LayoutDashboard }[]
+}
+
+const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Fulfillment', icon: Package },
-  { href: '/media-buying', label: 'Media Buying', icon: Megaphone },
+  {
+    href: '/media-buying',
+    label: 'Media Buying',
+    icon: Megaphone,
+    children: [{ href: '/media-buying/monthly', label: 'Monthly Ad Update', icon: CalendarRange }],
+  },
   { href: '/team', label: 'Team', icon: Users2 },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
@@ -76,8 +89,9 @@ export function Sidebar() {
           Navigation
         </div>
         <div className="flex flex-col">
-          {navItems.map(({ href, label, icon: Icon }, i) => {
-            const active = pathname === href || (href !== '/' && pathname.startsWith(href))
+          {navItems.map(({ href, label, icon: Icon, children }, i) => {
+            const childActive = children?.some(c => pathname.startsWith(c.href)) ?? false
+            const active = !childActive && (pathname === href || (href !== '/' && pathname.startsWith(href)))
             return (
               <div key={href}>
                 {i > 0 && <div className="border-t border-sidebar-border/40 mx-1" />}
@@ -93,6 +107,22 @@ export function Sidebar() {
                   <Icon className={cn('w-[17px] h-[17px] flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground/60')} />
                   {label}
                 </Link>
+                {children?.map(({ href: cHref, label: cLabel, icon: CIcon }) => {
+                  const cActive = pathname.startsWith(cHref)
+                  return (
+                    <Link
+                      key={cHref}
+                      href={cHref}
+                      className={cn(
+                        'flex items-center gap-2.5 pl-8 pr-2 pb-2.5 -mt-1 rounded-md text-[13px] transition-all',
+                        cActive ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <CIcon className={cn('w-[14px] h-[14px] flex-shrink-0', cActive ? 'text-primary' : 'text-muted-foreground/60')} />
+                      {cLabel}
+                    </Link>
+                  )
+                })}
               </div>
             )
           })}

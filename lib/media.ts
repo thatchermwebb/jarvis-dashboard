@@ -1,4 +1,4 @@
-import type { AdRating, MediaDecision, WorkOrderStatus } from '@/types'
+import type { AdRating, MediaDecision, MonthlyUpdateStatus, WorkOrderStatus } from '@/types'
 
 // ─── Decision matrix (Media Buying Management SOP) ──────────────────────────────
 // Rate Ad 1 and Ad 2 each Good / Decent / Bad (by CPL vs other/past ads):
@@ -66,3 +66,21 @@ export function weekMonday(d: Date = new Date()): string {
 
 /** Stages whose clients are actively running ads and get reviewed weekly. */
 export const MEDIA_ACTIVE_STAGES = ['active_client', 'won_back', 'overdue', 'payment_issue', 'churn_risk']
+
+// ─── Monthly Ad Update ──────────────────────────────────────────────────────────
+
+export const MONTHLY_STATUS_LABEL: Record<MonthlyUpdateStatus, string> = {
+  ads_produced: 'Ads Produced',
+  completed: 'Completed',
+}
+
+/** 'YYYY-MM' → 'October 2026'. */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  if (!y || !m) return month
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+export function isMonthKey(s: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(s)
+}
