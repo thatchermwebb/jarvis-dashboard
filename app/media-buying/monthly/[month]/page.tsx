@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, use } from 'react'
 import Link from 'next/link'
-import { CalendarRange, ChevronLeft, ExternalLink, Loader2, Search } from 'lucide-react'
+import { CalendarRange, ChevronLeft, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, stageLabel } from '@/lib/utils'
 import { MEDIA_ACTIVE_STAGES, MONTHLY_STATUS_LABEL, monthLabel } from '@/lib/media'
-import type { ClientStage, MediaAd, MonthlyUpdateStatus } from '@/types'
+import { packageOption } from '@/lib/packages'
+import type { ClientStage, MonthlyUpdateStatus } from '@/types'
 
 interface Row {
   id: string
@@ -14,7 +15,7 @@ interface Row {
   business_name?: string | null
   market_location?: string | null
   stage: ClientStage
-  ads: MediaAd[]
+  advertised_package?: string | null
   status: MonthlyUpdateStatus | null
   updated_by: string | null
 }
@@ -100,7 +101,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
         <h1 className="text-2xl font-bold text-foreground">{monthLabel(month)}</h1>
       </div>
       <p className="text-sm text-muted-foreground mb-5">
-        Monthly Ad Update · every client and the creatives in their active slots.
+        Monthly Ad Update · every client and their advertised package.
       </p>
 
       {loading ? (
@@ -147,8 +148,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
                 <tr className="border-b border-border/50 text-left text-[11px] uppercase tracking-wider text-muted-foreground/70">
                   <th className="px-4 py-2.5 font-semibold">Client</th>
                   <th className="px-4 py-2.5 font-semibold">Stage</th>
-                  <th className="px-4 py-2.5 font-semibold">Ad 1 creative</th>
-                  <th className="px-4 py-2.5 font-semibold">Ad 2 creative</th>
+                  <th className="px-4 py-2.5 font-semibold">Advertised package</th>
                   <th className="px-4 py-2.5 font-semibold text-right">Status</th>
                 </tr>
               </thead>
@@ -164,8 +164,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
                       </div>
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-muted-foreground whitespace-nowrap">{stageLabel(r.stage)}</td>
-                    <td className="px-4 py-3 align-top"><CreativeCell ad={r.ads.find(a => a.slot === 1)} /></td>
-                    <td className="px-4 py-3 align-top"><CreativeCell ad={r.ads.find(a => a.slot === 2)} /></td>
+                    <td className="px-4 py-3 align-top"><PackageCell value={r.advertised_package} /></td>
                     <td className="px-4 py-3 align-top text-right">
                       <select
                         value={r.status ?? ''}
@@ -185,7 +184,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
                 ))}
                 {visible.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground/70">No clients match.</td>
+                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground/70">No clients match.</td>
                   </tr>
                 )}
               </tbody>
@@ -197,24 +196,15 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
   )
 }
 
-function CreativeCell({ ad }: { ad?: MediaAd }) {
-  if (!ad) return <span className="text-xs text-muted-foreground/50">—</span>
-  const detail = [ad.service_type, ad.price_point, ad.angle].filter(Boolean).join(' · ')
+function PackageCell({ value }: { value?: string | null }) {
+  if (!value) return <span className="text-xs text-muted-foreground/50">—</span>
+  // Stored values often carry a trailing space; match on the trimmed string.
+  const opt = packageOption(value.trim())
+  if (!opt) return <span className="text-sm text-foreground">{value}</span>
   return (
-    <div className="min-w-[140px]">
-      <div className="flex items-center gap-1.5">
-        <span className="font-mono text-xs font-semibold text-foreground">{ad.creative || ad.name || 'Untitled'}</span>
-        {ad.status !== 'active' && (
-          <span className="text-[10px] text-muted-foreground/70">({ad.status.replace('_', ' ')})</span>
-        )}
-        {ad.video_link && (
-          <a href={ad.video_link} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary">
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
-      </div>
-      {ad.creative && ad.name && <div className="text-xs text-muted-foreground">{ad.name}</div>}
-      {detail && <div className="text-[11px] text-muted-foreground/70">{detail}</div>}
-    </div>
+    <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md border whitespace-nowrap', opt.chip)}>
+      <span className={cn('w-1.5 h-1.5 rounded-full', opt.dot)} />
+      {opt.label}
+    </span>
   )
 }

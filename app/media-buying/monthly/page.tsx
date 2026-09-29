@@ -67,7 +67,7 @@ export default function MonthlyAdUpdatePage() {
         <h1 className="text-2xl font-bold text-foreground">Monthly Ad Update</h1>
       </div>
       <p className="text-sm text-muted-foreground mb-6">
-        One page per month: every client, the creatives they’re running, and where their refresh stands.
+        One page per month: every client, their advertised package, and where their refresh stands.
       </p>
 
       <div className="flex items-center gap-2 mb-6 flex-wrap">

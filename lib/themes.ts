@@ -119,17 +119,26 @@ function buildVars(def: ThemeDef): Record<string, string> {
     '--sidebar-border': rgba(sideFrom, bold ? 0.3 : 0.18),
   }
   if (bold) {
-    // A prettier sidebar: a luminous accent-kissed top → rich mid → deep base,
-    // on a gentle diagonal. The accent blend makes the top glow instead of
-    // reading as a flat dark block.
-    const top = accent
-      ? `color-mix(in oklab, ${sideFrom} 72%, ${accent})`
-      : sideFrom
+    // Bold = one committed hue, Slack-style. The sidebar is a saturated
+    // top → deep base gradient (no pastel blend, which washed it out), lit by a
+    // soft accent glow in the corner. Content surfaces pick up the same hue so
+    // the app reads as one palette instead of a colored bar next to black.
+    const glow = accent ?? sideFrom
     vars['--skin-sidebar'] =
-      `linear-gradient(158deg, ${top} 0%, ${sideFrom} 34%, ${sideTo} 100%)`
+      `radial-gradient(120% 45% at 0% 0%, ${rgba(glow, 0.14)} 0%, transparent 60%), ` +
+      `linear-gradient(180deg, ${sideFrom} 0%, color-mix(in oklab, ${sideFrom} 55%, ${sideTo}) 55%, ${sideTo} 100%)`
     vars['--skin-body'] = body ??
-      `radial-gradient(105% 80% at 100% -8%, ${rgba(sideFrom, 0.34)} 0%, transparent 50%), ` +
-      `radial-gradient(95% 80% at -5% 108%, ${rgba(accent ?? sideFrom, 0.16)} 0%, transparent 52%)`
+      `radial-gradient(90% 70% at 100% -10%, ${rgba(sideFrom, 0.45)} 0%, transparent 55%), ` +
+      `radial-gradient(80% 70% at 0% 110%, ${rgba(glow, 0.10)} 0%, transparent 55%)`
+    vars['--background'] = `color-mix(in oklab, ${sideTo} 70%, oklch(0.08 0 0))`
+    vars['--card'] = `color-mix(in oklab, ${sideFrom} 20%, oklch(0.15 0 0))`
+    vars['--popover'] = `color-mix(in oklab, ${sideFrom} 20%, oklch(0.13 0 0))`
+    vars['--secondary'] = `color-mix(in oklab, ${sideFrom} 28%, oklch(0.2 0 0))`
+    vars['--muted'] = `color-mix(in oklab, ${sideFrom} 24%, oklch(0.18 0 0))`
+    vars['--muted-foreground'] = `color-mix(in oklab, ${glow} 26%, oklch(0.74 0 0))`
+    vars['--border'] = rgba(glow, 0.13)
+    vars['--input'] = rgba(glow, 0.18)
+    vars['--sidebar-border'] = 'oklch(1 0 0 / 10%)'
   } else {
     // Calm: no loud sidebar gradient; just a soft ambient wash (or a supplied one).
     vars['--skin-body'] = body ??

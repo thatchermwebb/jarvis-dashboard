@@ -149,6 +149,49 @@
     0 8px 30px -6px color-mix(in oklab, var(--primary) 80%, transparent);
 }
 
+/* Bold sidebar: white-on-color type (Slack's contrast model) and a lit pill for
+   the active page. Hooks (sb-*) are inert class names on the Sidebar, so Base
+   skins are untouched. */
+.skin-bold aside.bg-sidebar {
+  border-right-color: transparent;
+  box-shadow: inset -1px 0 0 oklch(1 0 0 / 8%), 10px 0 32px -14px oklch(0 0 0 / 0.7);
+}
+.skin-bold aside .text-muted-foreground { color: oklch(1 0 0 / 0.6); }
+.skin-bold aside .sb-label { color: oklch(1 0 0 / 0.45); }
+.skin-bold aside .sb-divider { display: none; }
+.skin-bold aside .sb-link {
+  margin-block: 1px;
+  padding-inline: 0.625rem;
+  border-radius: 0.5rem;
+  color: oklch(1 0 0 / 0.8);
+}
+.skin-bold aside .sb-link svg { color: oklch(1 0 0 / 0.6); transition: color 0.15s; }
+.skin-bold aside .sb-link:hover { color: white; background: oklch(1 0 0 / 0.08); }
+.skin-bold aside .sb-link:hover svg { color: white; }
+.skin-bold aside .sb-link[data-active] {
+  color: white;
+  font-weight: 600;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--primary) 32%, transparent),
+    color-mix(in oklab, var(--primary) 12%, transparent)
+  );
+  box-shadow:
+    inset 3px 0 0 var(--primary),
+    inset 0 0 0 1px color-mix(in oklab, var(--primary) 22%, transparent);
+}
+.skin-bold aside .sb-link[data-active] svg { color: var(--primary); }
+.skin-bold aside .sb-subgroup { border-left-color: oklch(1 0 0 / 0.16); }
+.skin-bold aside .sb-sublink[data-active] { font-weight: 500; }
+.skin-bold aside .sb-toggle { color: oklch(1 0 0 / 0.6); }
+.skin-bold aside .sb-toggle:hover { color: white; background: oklch(1 0 0 / 0.1); }
+.skin-bold aside .sb-avatar {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+  box-shadow: 0 0 0 2px oklch(1 0 0 / 0.14), 0 4px 14px -4px color-mix(in oklab, var(--primary) 70%, transparent);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
