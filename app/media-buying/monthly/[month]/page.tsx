@@ -26,6 +26,22 @@ const RUNNING_STAGES = [...MEDIA_ACTIVE_STAGES, 'free_trial', 'trial_ending_soon
 
 type Filter = 'all' | 'running' | 'blank' | MonthlyUpdateStatus
 
+const FILTER_KEY = 'cza_monthly_filter'
+const FILTERS: Filter[] = ['all', 'running', 'blank', 'ads_produced', 'completed']
+
+// Remember the chosen filter so coming back (from a client profile, a reload,
+// or another month) lands on the same list — which also lets the shell's scroll
+// restoration put you back on the same row.
+function savedFilter(): Filter {
+  if (typeof window === 'undefined') return 'all'
+  try {
+    const v = localStorage.getItem(FILTER_KEY) as Filter | null
+    return v && FILTERS.includes(v) ? v : 'all'
+  } catch {
+    return 'all'
+  }
+}
+
 const STATUS_STYLE: Record<'blank' | MonthlyUpdateStatus, string> = {
   blank: 'text-muted-foreground bg-secondary/40 border-border/50',
   ads_produced: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
@@ -37,7 +53,11 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilterState] = useState<Filter>(savedFilter)
+  function setFilter(f: Filter) {
+    setFilterState(f)
+    try { localStorage.setItem(FILTER_KEY, f) } catch { /* private mode */ }
+  }
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
