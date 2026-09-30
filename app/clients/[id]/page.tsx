@@ -1143,7 +1143,7 @@ export default function ClientWarRoom() {
 
               {!hidePayments && (
                 <TabsContent value="payments" className="mt-3">
-                  <PaymentPanel clientId={client.id} clientName={client.name} />
+                  <PaymentPanel clientId={client.id} clientName={client.name} clientStage={client.stage} />
                 </TabsContent>
               )}
 

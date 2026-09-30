@@ -39,9 +39,10 @@ function typeLabel(t: string) {
 interface Props {
   clientId: string
   clientName?: string
+  clientStage?: string
 }
 
-export function PaymentPanel({ clientId, clientName }: Props) {
+export function PaymentPanel({ clientId, clientName, clientStage }: Props) {
   // No read-only role remains; associates manage payments for their own clients
   // (the API enforces the affiliate scope).
   const readOnly = false
@@ -129,6 +130,20 @@ export function PaymentPanel({ clientId, clientName }: Props) {
     else toast.error('Failed to resume plan')
   }
 
+  const isChurnedOrPaused = clientStage === 'churned' || clientStage === 'paused'
+
+  async function voidFutureInvoices() {
+    if (!confirm('Void all future unpaid invoices for this client? This clears their upcoming & projected billing. Paid invoices are untouched.')) return
+    const res = await fetch('/api/payments/void-future', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId }),
+    })
+    const data = await res.json().catch(() => null)
+    if (res.ok) { toast.success(`Voided ${data?.voided ?? 0} future invoice${data?.voided === 1 ? '' : 's'}`); load() }
+    else toast.error(data?.error || 'Failed to void invoices')
+  }
+
   const overdue = payments.filter((p) => p.status === 'overdue')
   const upcoming = payments.filter((p) => p.status === 'pending')
   const history = payments.filter((p) => ['paid', 'paid_late', 'waived'].includes(p.status))
@@ -145,6 +160,16 @@ export function PaymentPanel({ clientId, clientName }: Props) {
           {totalPaid > 0 && <span className="text-emerald-400">{formatCurrency(totalPaid)} collected</span>}
         </div>
         <div className={cn('flex gap-2', readOnly && 'hidden')}>
+          {isChurnedOrPaused && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+              onClick={voidFutureInvoices}
+            >
+              <XCircle className="w-3 h-3" /> Void Future Invoices
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setScheduleOpen(true)}>
             <Repeat className="w-3 h-3" /> Set Schedule
           </Button>
