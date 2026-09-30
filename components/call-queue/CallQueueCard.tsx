@@ -321,6 +321,18 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
           >
             {client.callback ? 'Call Back ✓' : 'Call Back'}
           </button>
+          <button
+            onClick={() => quickAction({ stalled_onboarding: !client.stalled_onboarding })}
+            disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.stalled_onboarding
+                ? 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            )}
+          >
+            {client.stalled_onboarding ? 'Stalled ✓' : 'Stalled'}
+          </button>
           {(isCloseReady(client) || client.close_call_booked) && (
             <button
               onClick={() => quickAction({ close_call_booked: !client.close_call_booked })}

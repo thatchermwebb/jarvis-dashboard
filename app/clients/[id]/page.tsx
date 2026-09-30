@@ -558,6 +558,13 @@ export default function ClientWarRoom() {
           >
             ↩️ Call Back{client.callback ? ' ✓' : ''}
           </button>
+          <button
+            onClick={() => quickUpdate({ stalled_onboarding: !client.stalled_onboarding })}
+            className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.stalled_onboarding ? 'bg-sky-500/20 border-sky-500/30 text-sky-300' : 'border-border text-muted-foreground hover:border-sky-500/30 hover:text-sky-300')}
+            disabled={updating}
+          >
+            ⏸️ Stalled Onboarding{client.stalled_onboarding ? ' ✓' : ''}
+          </button>
         </div>
 
         {/* Main two-column layout */}

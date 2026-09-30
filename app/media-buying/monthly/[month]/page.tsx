@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, useRef, use } from 'react'
 import Link from 'next/link'
-import { CalendarRange, ChevronLeft, Loader2, Search } from 'lucide-react'
+import { CalendarRange, Check, ChevronLeft, Loader2, Plus, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, stageLabel } from '@/lib/utils'
 import { MEDIA_ACTIVE_STAGES, MONTHLY_STATUS_LABEL, monthLabel } from '@/lib/media'
@@ -17,6 +17,7 @@ interface Row {
   stage: ClientStage
   advertised_package?: string | null
   status: MonthlyUpdateStatus | null
+  creatives: string[]
   updated_by: string | null
 }
 
@@ -51,6 +52,7 @@ const STATUS_STYLE: Record<'blank' | MonthlyUpdateStatus, string> = {
 export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{ month: string }> }) {
   const { month } = use(params)
   const [rows, setRows] = useState<Row[]>([])
+  const [library, setLibrary] = useState<{ code: string; name?: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilterState] = useState<Filter>(savedFilter)
@@ -67,6 +69,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setRows(data.clients ?? [])
+      setLibrary(data.creatives ?? [])
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -77,21 +80,21 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
 
   useEffect(() => { load() }, [load])
 
-  async function setStatus(clientId: string, status: MonthlyUpdateStatus | null) {
+  async function save(clientId: string, patch: Partial<Pick<Row, 'status' | 'creatives'>>) {
     const prev = rows
-    setRows(rs => rs.map(r => (r.id === clientId ? { ...r, status } : r)))
+    setRows(rs => rs.map(r => (r.id === clientId ? { ...r, ...patch } : r)))
     try {
       const res = await fetch(`/api/media/monthly/${month}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, status }),
+        body: JSON.stringify({ client_id: clientId, ...patch }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setRows(rs => rs.map(r => (r.id === clientId ? { ...r, updated_by: data.updated_by } : r)))
     } catch (e) {
       setRows(prev)
-      toast.error(e instanceof Error ? e.message : 'Failed to update status')
+      toast.error(e instanceof Error ? e.message : 'Failed to save')
     }
   }
 
@@ -125,7 +128,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
         <h1 className="text-2xl font-bold text-foreground">{monthLabel(month)}</h1>
       </div>
       <p className="text-sm text-muted-foreground mb-5">
-        Monthly Ad Update · every client and their advertised package.
+        Monthly Ad Update · every client, their advertised package, and this month’s creatives.
       </p>
 
       {loading ? (
@@ -173,6 +176,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
                   <th className="px-4 py-2.5 font-semibold">Client</th>
                   <th className="px-4 py-2.5 font-semibold">Stage</th>
                   <th className="px-4 py-2.5 font-semibold">Advertised package</th>
+                  <th className="px-4 py-2.5 font-semibold">Creatives</th>
                   <th className="px-4 py-2.5 font-semibold text-right">Status</th>
                 </tr>
               </thead>
@@ -189,10 +193,13 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-muted-foreground whitespace-nowrap">{stageLabel(r.stage)}</td>
                     <td className="px-4 py-3 align-top"><PackageCell value={r.advertised_package} /></td>
+                    <td className="px-4 py-3 align-top">
+                      <CreativesCell value={r.creatives} library={library} onChange={creatives => save(r.id, { creatives })} />
+                    </td>
                     <td className="px-4 py-3 align-top text-right">
                       <select
                         value={r.status ?? ''}
-                        onChange={e => setStatus(r.id, (e.target.value || null) as MonthlyUpdateStatus | null)}
+                        onChange={e => save(r.id, { status: (e.target.value || null) as MonthlyUpdateStatus | null })}
                         title={r.updated_by ? `Last updated by ${r.updated_by}` : undefined}
                         className={cn(
                           'text-xs font-medium rounded-md border px-2 py-1.5 outline-none cursor-pointer min-w-[130px]',
@@ -208,7 +215,7 @@ export default function MonthlyAdUpdateMonthPage({ params }: { params: Promise<{
                 ))}
                 {visible.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground/70">No clients match.</td>
+                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground/70">No clients match.</td>
                   </tr>
                 )}
               </tbody>
@@ -230,5 +237,122 @@ function PackageCell({ value }: { value?: string | null }) {
       <span className={cn('w-1.5 h-1.5 rounded-full', opt.dot)} />
       {opt.label}
     </span>
+  )
+}
+
+// Creative codes for this client this month: chips + a picker listing the
+// Creative Library, with a box for one-off codes that aren't in it. The picker
+// is position:fixed so the table's horizontal scroll container can't clip it.
+function CreativesCell({ value, library, onChange }: {
+  value: string[]
+  library: { code: string; name?: string | null }[]
+  onChange: (next: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [custom, setCustom] = useState('')
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: Event) => {
+      const t = e.target as Node
+      if (popRef.current?.contains(t) || btnRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('scroll', close, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('scroll', close, true)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  function toggleOpen() {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) {
+      const width = 224
+      const below = window.innerHeight - r.bottom > 300
+      setPos({
+        top: below ? r.bottom + 6 : Math.max(8, r.top - 306),
+        left: Math.min(r.left, window.innerWidth - width - 8),
+      })
+    }
+    setOpen(o => !o)
+  }
+
+  const has = (code: string) => value.some(v => v.toLowerCase() === code.toLowerCase())
+  function toggle(code: string) {
+    onChange(has(code) ? value.filter(v => v.toLowerCase() !== code.toLowerCase()) : [...value, code])
+  }
+  function addCustom() {
+    const code = custom.trim()
+    if (code && !has(code)) onChange([...value, code])
+    setCustom('')
+  }
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap min-w-[150px]">
+      {value.map(code => (
+        <span key={code} className="inline-flex items-center gap-1 font-mono text-xs font-semibold px-2 py-1 rounded-md border border-primary/30 bg-primary/10 text-primary">
+          {code}
+          <button onClick={() => toggle(code)} className="opacity-60 hover:opacity-100" aria-label={`Remove ${code}`}>
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <button
+        ref={btnRef}
+        onClick={toggleOpen}
+        className={cn(
+          'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-dashed transition-colors',
+          open ? 'border-primary/50 text-primary' : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border',
+        )}
+      >
+        <Plus className="w-3 h-3" />{value.length ? '' : 'Add'}
+      </button>
+
+      {open && pos && (
+        <div
+          ref={popRef}
+          style={{ top: pos.top, left: pos.left }}
+          className="fixed z-50 w-[224px] rounded-xl border border-border bg-popover shadow-xl p-1.5"
+        >
+          <div className="px-2 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Creative Library</div>
+          <div className="max-h-48 overflow-y-auto">
+            {library.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">No creatives in the library yet.</div>}
+            {library.map(c => (
+              <button
+                key={c.code}
+                onClick={() => toggle(c.code)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:bg-secondary/60"
+              >
+                <span className={cn('w-4 h-4 rounded border flex items-center justify-center flex-shrink-0', has(c.code) ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
+                  {has(c.code) && <Check className="w-3 h-3" />}
+                </span>
+                <span className="font-mono text-xs font-semibold text-foreground">{c.code}</span>
+                {c.name && <span className="text-xs text-muted-foreground truncate">{c.name}</span>}
+              </button>
+            ))}
+          </div>
+          <form
+            onSubmit={e => { e.preventDefault(); addCustom() }}
+            className="flex items-center gap-1 border-t border-border/50 mt-1 pt-1.5 px-1"
+          >
+            <input
+              value={custom}
+              onChange={e => setCustom(e.target.value)}
+              placeholder="Other code…"
+              className="flex-1 min-w-0 bg-secondary/40 border border-border/50 rounded-md px-2 py-1 text-xs font-mono outline-none focus:border-primary/50"
+            />
+            <button type="submit" disabled={!custom.trim()} className="text-xs px-2 py-1 rounded-md text-primary hover:bg-primary/10 disabled:opacity-40">Add</button>
+          </form>
+        </div>
+      )}
+    </div>
   )
 }

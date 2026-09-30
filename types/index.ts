@@ -167,6 +167,8 @@ export interface Client {
   payment_issue?: boolean
   /** Moves this call into the separate "Call Backs" bin on the Calls queue. */
   callback?: boolean
+  /** Moves this call into the separate "Stalled Onboarding" bin on the Calls queue. */
+  stalled_onboarding?: boolean
   urgency_level?: UrgencyLevel
 
   // AI situation summary (cached)

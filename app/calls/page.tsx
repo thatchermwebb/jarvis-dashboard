@@ -279,7 +279,9 @@ function CallsPageInner() {
 
   // View / tab state
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
-  const [callbackView, setCallbackView] = useState(false)
+  // Which list: the main queue, or one of the flagged bins pulled out of it.
+  const [bin, setBin] = useState<'queue' | 'callbacks' | 'stalled'>('queue')
+  const inBin = bin !== 'queue'
   const [showChurned, setShowChurned] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
@@ -374,11 +376,11 @@ function CallsPageInner() {
     const t = localToday()
     const tom = offsetStr(1)
     const in7 = offsetStr(7)
-    // Callbacks live in their own bin — never in the main queue. Dead stages are
+    // Callbacks & stalled onboardings live in their own bins — never in the main queue. Dead stages are
     // hidden unless they have a follow-up/are onboarding; churned & lost are further
     // gated behind the "Churned" toggle.
     const pool = allClients.filter(c => {
-      if (c.close_call_booked || c.callback) return false
+      if (c.close_call_booked || c.callback || c.stalled_onboarding) return false
       if (c.next_followup_date || c.stage === 'onboarding') return true
       if (c.stage === 'trial_concluded') return false
       if ((c.stage === 'churned' || c.stage === 'free_trial_lost') && !showChurned) return false
@@ -445,8 +447,8 @@ function CallsPageInner() {
 
   // The Call Backs bin: every callback-flagged client (owner-filtered + sorted the
   // same way), regardless of follow-up date — a flat "deferred" list.
-  const callbackClients = useMemo(() => {
-    let filtered = allClients.filter(c => c.callback && !c.close_call_booked)
+  const binClients = useCallback((flag: 'callback' | 'stalled_onboarding') => {
+    let filtered = allClients.filter(c => c[flag] && !c.close_call_booked)
     if (ownerFilter === 'mine') filtered = filtered.filter(c => !c.thatcher_needed && !c.trepp_needed && !c.va_needed)
     else if (ownerFilter === 'thatcher') filtered = filtered.filter(c => c.thatcher_needed)
     else if (ownerFilter === 'trepp') filtered = filtered.filter(c => c.trepp_needed || c.va_needed)
@@ -456,8 +458,10 @@ function CallsPageInner() {
       return (b.priority_score ?? 0) - (a.priority_score ?? 0)
     })
   }, [allClients, ownerFilter])
+  const callbackClients = useMemo(() => binClients('callback'), [binClients])
+  const stalledClients = useMemo(() => binClients('stalled_onboarding'), [binClients])
 
-  const visibleClients = callbackView ? callbackClients : tabClients
+  const visibleClients = bin === 'callbacks' ? callbackClients : bin === 'stalled' ? stalledClients : tabClients
 
   const tabCounts = useMemo(() => ({
     today: getTabClients('today').length,
@@ -616,25 +620,35 @@ function CallsPageInner() {
             {/* Queue vs Call Backs bin */}
             <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 mb-2 flex-shrink-0">
               <button
-                onClick={() => setCallbackView(false)}
+                onClick={() => setBin('queue')}
                 className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                  !callbackView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                  bin === 'queue' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
               >
                 Queue
               </button>
               <button
-                onClick={() => setCallbackView(true)}
+                onClick={() => setBin('callbacks')}
                 className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors inline-flex items-center gap-1.5',
-                  callbackView ? 'bg-background text-indigo-300 shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                  bin === 'callbacks' ? 'bg-background text-indigo-300 shadow-sm' : 'text-muted-foreground hover:text-foreground')}
               >
                 Call Backs
                 {callbackClients.length > 0 && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">{callbackClients.length}</span>
                 )}
               </button>
+              <button
+                onClick={() => setBin('stalled')}
+                className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors inline-flex items-center gap-1.5 whitespace-nowrap',
+                  bin === 'stalled' ? 'bg-background text-sky-300 shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+              >
+                Stalled Onboarding
+                {stalledClients.length > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">{stalledClients.length}</span>
+                )}
+              </button>
             </div>
 
-            {!callbackView && ([
+            {!inBin && ([
               { key: 'today', label: 'Today' },
               { key: 'tomorrow', label: 'Tomorrow' },
               { key: 'this_week', label: 'This Week' },
@@ -663,7 +677,7 @@ function CallsPageInner() {
 
           <div className="flex items-center gap-2 mb-2 flex-shrink-0">
             {/* Churned toggle — dead clients are hidden by default */}
-            {!callbackView && (
+            {!inBin && (
               <button
                 onClick={() => setShowChurned(v => !v)}
                 title="Show churned / lost clients"
@@ -728,7 +742,13 @@ function CallsPageInner() {
               <div key={i} className="h-36 bg-card border border-border rounded-xl animate-pulse" />
             ))
           ) : visibleClients.length === 0 ? (
-            callbackView ? (
+            bin === 'stalled' ? (
+              <div className="bg-card border border-border rounded-xl p-12 text-center space-y-2">
+                <div className="text-2xl">⏸️</div>
+                <div className="text-sm font-medium text-muted-foreground">No stalled onboardings</div>
+                <div className="text-xs text-muted-foreground/60">Tap &quot;Stalled Onboarding&quot; on a client record to move it here.</div>
+              </div>
+            ) : bin === 'callbacks' ? (
               <div className="bg-card border border-border rounded-xl p-12 text-center space-y-2">
                 <div className="text-2xl">↩️</div>
                 <div className="text-sm font-medium text-muted-foreground">No call backs</div>
