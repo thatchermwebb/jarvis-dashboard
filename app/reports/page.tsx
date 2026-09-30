@@ -260,10 +260,26 @@ export default function ReportsPage() {
     [clients, range, rangeStart, rangeEndStr]
   )
 
+  // Clients that were EVER active (paying) — i.e. converted past the trial. Used
+  // to exclude never-active trial dropouts from churn. A client counts if they
+  // have a signed_at (set on first conversion to active_client) OR at least one
+  // paid invoice (covers older records whose signed_at was never backfilled).
+  const everActiveIds = useMemo(() => {
+    const ids = new Set<string>()
+    payments.forEach(p => {
+      if ((p.status === 'paid' || p.status === 'paid_late') && p.client_id) ids.add(p.client_id)
+    })
+    return ids
+  }, [payments])
+
+  const wasEverActive = (c: Client) => !!c.signed_at || everActiveIds.has(c.id)
+
+  // Churn = clients lost/paused who were ONCE active. Trial dropouts who never
+  // converted (never active) are not churn.
   const churned = useMemo(() =>
-    clients.filter(c => (c.stage === 'churned' || c.stage === 'paused') && inRange(c.updated_at)),
+    clients.filter(c => (c.stage === 'churned' || c.stage === 'paused') && wasEverActive(c) && inRange(c.updated_at)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clients, range, rangeStart, rangeEndStr]
+    [clients, everActiveIds, range, rangeStart, rangeEndStr]
   )
 
   const trialClients = useMemo(() =>
@@ -565,9 +581,9 @@ export default function ReportsPage() {
         </div>
         <div
           className="bg-card border border-border rounded-xl px-4 py-3 text-center cursor-pointer hover:bg-secondary/30 transition-colors"
-          onClick={() => setDrillDown({ title: 'Total Churned', subtitle: 'All Time', type: 'churn', clients: clients.filter(c => c.stage === 'churned') })}
+          onClick={() => setDrillDown({ title: 'Total Churned', subtitle: 'All Time', type: 'churn', clients: clients.filter(c => c.stage === 'churned' && wasEverActive(c)) })}
         >
-          <div className="text-xl font-bold">{clients.filter(c => c.stage === 'churned').length}</div>
+          <div className="text-xl font-bold">{clients.filter(c => c.stage === 'churned' && wasEverActive(c)).length}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Total Churned</div>
         </div>
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
