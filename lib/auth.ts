@@ -26,6 +26,7 @@ export const USERS: AppUser[] = [
   { id: 'trepp',    name: 'Trepp Grandich', role: 'Co-Founder',     initials: 'TG', userType: 'admin' },
   { id: 'diego',    name: 'Diego Carranza', role: 'Vice President',  initials: 'DC', userType: 'admin' },
   { id: 'jacques',  name: 'Jacques Brock',  role: 'Onboarding Specialist', initials: 'JB', userType: 'admin', noPayments: true },
+  { id: 'ross',     name: 'Ross Holmes',    role: 'Onboarding Specialist', initials: 'RH', userType: 'admin', noPayments: true },
   {
     id: 'toney',
     name: 'Toney Baker',
@@ -58,6 +59,7 @@ export const USER_COLORS: Record<string, string> = {
   trepp:    '#a78bfa', // violet
   diego:    '#34d399', // emerald
   jacques:  '#22d3ee', // cyan
+  ross:     '#fb923c', // orange
   toney:    '#fbbf24', // amber
   malakai:  '#f472b6', // pink
   wilson:   '#818cf8', // indigo

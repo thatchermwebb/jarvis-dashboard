@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
     trepp:    process.env.PW_TREPP,
     diego:    process.env.PW_DIEGO,
     jacques:  process.env.PW_JACQUES,
+    ross:     process.env.PW_ROSS,
     wilson:   process.env.PW_WILSON,
     samuel:   process.env.PW_SAMUEL,
     malakai:  process.env.PW_MALAKAI,
