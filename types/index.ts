@@ -171,6 +171,18 @@ export interface Client {
   stalled_onboarding?: boolean
   urgency_level?: UrgencyLevel
 
+  // ── Luna: we pay this client's ad-spend and bill them a recurring subscription.
+  /** Marks the client as running in Luna — shows them on the Luna tracker. */
+  running_in_luna?: boolean
+  /** Luna ad account is live. */
+  luna_live?: boolean
+  /** The recurring subscription invoice has been sent. */
+  luna_subscription_sent?: boolean
+  /** Recurring amount we bill them for ad-spend. */
+  luna_payment_amount?: number
+  /** Billing cadence for the Luna subscription: 'day' | 'week' | 'month'. */
+  luna_payment_frequency?: string
+
   // AI situation summary (cached)
   ai_situation_summary?: string | null
   ai_summary_updated_at?: string | null

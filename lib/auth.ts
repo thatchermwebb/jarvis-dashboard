@@ -116,10 +116,10 @@ export function isAdmin(user: AppUser | undefined | null): boolean {
 }
 
 /** Pages hidden from noPayments users (payments ledger + revenue reporting). */
-export const NO_PAYMENTS_HREFS = ['/payments', '/reports']
+export const NO_PAYMENTS_HREFS = ['/payments', '/reports', '/luna']
 
 /** API prefixes blocked for noPayments users (payments + revenue analytics). */
-export const NO_PAYMENTS_API_PREFIXES = ['/api/payments', '/api/payment-schedules', '/api/reports']
+export const NO_PAYMENTS_API_PREFIXES = ['/api/payments', '/api/payment-schedules', '/api/reports', '/api/luna']
 
 /** Whether the Payments/revenue module is hidden for this user. */
 export function paymentsHidden(user: AppUser | undefined | null): boolean {

@@ -663,6 +663,23 @@ export default function ClientWarRoom() {
                     )}
                   </div>
                 </div>
+                {/* Running in Luna — we pay their ad-spend, they pay us a recurring sub. */}
+                <div className="mb-3">
+                  <button
+                    onClick={() => { if (!readOnly) quickUpdate({ running_in_luna: !client.running_in_luna }) }}
+                    disabled={readOnly || updating}
+                    className={cn(
+                      'inline-flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-full border transition-all',
+                      client.running_in_luna
+                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                        : 'bg-secondary/30 text-muted-foreground border-dashed border-border/60 hover:text-foreground',
+                      readOnly && 'cursor-default',
+                    )}
+                  >
+                    <span className={cn('w-2 h-2 rounded-full flex-shrink-0', client.running_in_luna ? 'bg-purple-400' : 'bg-muted-foreground/40')} />
+                    Running in Luna
+                  </button>
+                </div>
                 {client.affiliate && (
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-7 h-7 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
