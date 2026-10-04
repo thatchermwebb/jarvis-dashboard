@@ -182,8 +182,10 @@ export interface Client {
   luna_payment_amount?: number
   /** Billing cadence for the Luna subscription: 'day' | 'week' | 'month'. */
   luna_payment_frequency?: string
-  /** Luna account status: 'active' | 'overdue'. */
-  luna_status?: string
+  /** Date the client's Luna ad was paused (set when Luna → Paused). */
+  luna_paused_at?: string | null
+  /** Date the subscription payment failed. Overdue is derived from this. */
+  luna_failed_at?: string | null
 
   // AI situation summary (cached)
   ai_situation_summary?: string | null

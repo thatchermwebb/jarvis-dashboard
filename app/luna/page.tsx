@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Moon, Check } from 'lucide-react'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, localToday, parseLocalDate } from '@/lib/utils'
 
 interface LunaClient {
   id: string
@@ -15,7 +15,18 @@ interface LunaClient {
   luna_subscription_sent?: boolean
   luna_payment_amount?: number | null
   luna_payment_frequency?: string | null
-  luna_status?: string | null
+  luna_paused_at?: string | null
+  luna_failed_at?: string | null
+}
+
+// Compact date, e.g. "Oct 3".
+const shortDate = (d?: string | null) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
+
+// Whole days between a past date and today (>= 0).
+function daysSince(dateStr?: string | null): number {
+  if (!dateStr) return 0
+  const diff = parseLocalDate(localToday()).getTime() - parseLocalDate(dateStr).getTime()
+  return Math.max(0, Math.round(diff / 86_400_000))
 }
 
 const FREQS = ['day', 'week', 'month'] as const
@@ -33,6 +44,8 @@ export default function LunaPage() {
   const [editingPay, setEditingPay] = useState<string | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payFreq, setPayFreq] = useState<string>('week')
+  // Inline date editor for the paused / failed dates.
+  const [editDate, setEditDate] = useState<{ id: string; field: 'luna_paused_at' | 'luna_failed_at' } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -144,14 +157,29 @@ export default function LunaPage() {
                     </td>
                     <td className="py-3 px-2 text-muted-foreground">{c.business_name || '—'}</td>
 
-                    {/* Luna: Live / Pause */}
-                    <td className="py-3 px-2">
-                      <Toggle
-                        a={{ label: 'Live', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
-                        b={{ label: 'Pause', color: 'text-amber-400', dot: 'bg-amber-400' }}
-                        isA={c.luna_live !== false}
-                        onClick={() => patch(c.id, { luna_live: !(c.luna_live !== false) })}
-                      />
+                    {/* Luna: Live / Paused (+ date paused) */}
+                    <td className="py-3 px-2 align-top">
+                      <div className="space-y-0.5">
+                        <Toggle
+                          a={{ label: 'Live', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
+                          b={{ label: 'Paused', color: 'text-amber-400', dot: 'bg-amber-400' }}
+                          isA={c.luna_live !== false}
+                          onClick={() => {
+                            const nextLive = !(c.luna_live !== false)
+                            patch(c.id, { luna_live: nextLive, luna_paused_at: nextLive ? null : localToday() })
+                          }}
+                        />
+                        {c.luna_live === false && (
+                          <DateLine
+                            prefix="since"
+                            value={c.luna_paused_at}
+                            editing={editDate?.id === c.id && editDate.field === 'luna_paused_at'}
+                            onOpen={() => setEditDate({ id: c.id, field: 'luna_paused_at' })}
+                            onSave={(d) => { patch(c.id, { luna_paused_at: d || null }); setEditDate(null) }}
+                            onCancel={() => setEditDate(null)}
+                          />
+                        )}
+                      </div>
                     </td>
 
                     {/* Subscription: Sent / Not sent */}
@@ -204,14 +232,26 @@ export default function LunaPage() {
                       )}
                     </td>
 
-                    {/* Status: Active / Overdue */}
-                    <td className="py-3 px-2 pr-5 whitespace-nowrap">
-                      <Toggle
-                        a={{ label: 'Active', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
-                        b={{ label: 'Overdue', color: 'text-red-400', dot: 'bg-red-400' }}
-                        isA={(c.luna_status ?? 'active') !== 'overdue'}
-                        onClick={() => patch(c.id, { luna_status: (c.luna_status ?? 'active') === 'overdue' ? 'active' : 'overdue' })}
-                      />
+                    {/* Status: Active / Overdue (Overdue derived from the failed date) */}
+                    <td className="py-3 px-2 pr-5 whitespace-nowrap align-top">
+                      <div className="space-y-0.5">
+                        <Toggle
+                          a={{ label: 'Active', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
+                          b={{ label: c.luna_failed_at ? `Overdue · ${daysSince(c.luna_failed_at)}d` : 'Overdue', color: 'text-red-400', dot: 'bg-red-400' }}
+                          isA={!c.luna_failed_at}
+                          onClick={() => patch(c.id, { luna_failed_at: c.luna_failed_at ? null : localToday() })}
+                        />
+                        {c.luna_failed_at && (
+                          <DateLine
+                            prefix="failed"
+                            value={c.luna_failed_at}
+                            editing={editDate?.id === c.id && editDate.field === 'luna_failed_at'}
+                            onOpen={() => setEditDate({ id: c.id, field: 'luna_failed_at' })}
+                            onSave={(d) => { patch(c.id, { luna_failed_at: d || null }); setEditDate(null) }}
+                            onCancel={() => setEditDate(null)}
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -221,6 +261,37 @@ export default function LunaPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// Small muted, editable date line under a status pill (e.g. "since Oct 3").
+function DateLine({ prefix, value, editing, onOpen, onSave, onCancel }: {
+  prefix: string; value?: string | null; editing: boolean
+  onOpen: () => void; onSave: (d: string) => void; onCancel: () => void
+}) {
+  const [draft, setDraft] = useState(value || localToday())
+  useEffect(() => { if (editing) setDraft(value || localToday()) }, [editing, value])
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="date"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSave(draft); if (e.key === 'Escape') onCancel() }}
+          className="bg-secondary/60 border border-border/60 rounded-md px-1.5 py-0.5 text-[11px] text-foreground outline-none focus:border-purple-400/50"
+        />
+        <button onClick={() => onSave(draft)} className="p-0.5 rounded bg-purple-500/20 text-purple-300 hover:bg-purple-500/30">
+          <Check className="w-3 h-3" />
+        </button>
+      </div>
+    )
+  }
+  return (
+    <button onClick={onOpen} className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors" title="Click to edit date">
+      {prefix} {value ? shortDate(value) : '— set date'}
+    </button>
   )
 }
 
