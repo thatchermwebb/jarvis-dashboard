@@ -7,7 +7,7 @@ import {
   PlayCircle, Rocket, ClipboardList, Library, CalendarCheck, CalendarRange, Plus, Send, Clock, Clapperboard,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatCurrency } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { DECISION_LABEL, RATING_LABEL, WORK_ORDER_STATUS_LABEL } from '@/lib/media'
 import type {
@@ -25,6 +25,8 @@ interface BoardClient {
   advertised_package?: string
   ad_account_link?: string | null
   campaign_link?: string | null
+  budget?: number | null
+  spend?: number | null
   ads: MediaAd[]
   review: MediaReview | null
 }
@@ -160,10 +162,16 @@ function WeekView() {
     }
   }
 
+  // Local spend/budget edits update the board in place (no reload → card stays open).
+  const updateClientLocal = useCallback((id: string, patch: Partial<BoardClient>) => {
+    setClients(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
+  }, [])
+
   if (loading) return <Loading />
 
   const reviewed = clients.filter(c => c.review).length
   const total = clients.length
+  const totalSpend = clients.reduce((s, c) => s + (c.spend ?? 0), 0)
 
   return (
     <div>
@@ -172,6 +180,12 @@ function WeekView() {
           Week of <span className="text-foreground font-medium">{week ? formatDate(week) : '—'}</span>
         </div>
         <div className="flex items-center gap-4">
+          {totalSpend > 0 && (
+            <div className="text-sm">
+              <span className="font-semibold text-foreground">{formatCurrency(totalSpend)}</span>
+              <span className="text-muted-foreground"> ad spend</span>
+            </div>
+          )}
           <div className="text-sm">
             <span className={cn('font-semibold', reviewed === total && total > 0 ? 'text-emerald-400' : 'text-foreground')}>
               {reviewed}
@@ -195,17 +209,35 @@ function WeekView() {
 
       <div className="space-y-3">
         {clients.map(c => (
-          <ClientReviewCard key={c.id} client={c} week={week} creatives={creatives} onSaved={load} />
+          <ClientReviewCard key={c.id} client={c} week={week} creatives={creatives} onSaved={load} onSpendChange={updateClientLocal} />
         ))}
       </div>
     </div>
   )
 }
 
-function ClientReviewCard({ client, week, creatives, onSaved }: { client: BoardClient; week: string; creatives: CreativeOption[]; onSaved: () => void }) {
+function ClientReviewCard({ client, week, creatives, onSaved, onSpendChange }: { client: BoardClient; week: string; creatives: CreativeOption[]; onSaved: () => void; onSpendChange: (id: string, patch: Partial<BoardClient>) => void }) {
   const existing = client.review
   const slot1 = client.ads.find(a => a.slot === 1)
   const slot2 = client.ads.find(a => a.slot === 2)
+
+  const [spend, setSpend] = useState(client.spend != null ? String(client.spend) : '')
+  const [budget, setBudget] = useState(client.budget != null ? String(client.budget) : '')
+
+  // Save a spend/budget edit (on blur) without reloading the board.
+  async function saveSpend(field: 'spend' | 'budget', raw: string) {
+    const num = raw.trim() === '' ? null : Number(raw)
+    if (num != null && (isNaN(num) || num < 0)) return
+    if (num === (field === 'spend' ? client.spend : client.budget)) return
+    onSpendChange(client.id, { [field]: num })
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: num }),
+      })
+      if (!res.ok) throw new Error()
+    } catch { toast.error('Failed to save ad spend') }
+  }
 
   const [r1, setR1] = useState<AdRating | undefined>(existing?.ad1_rating)
   const [r2, setR2] = useState<AdRating | undefined>(existing?.ad2_rating)
@@ -269,6 +301,11 @@ function ClientReviewCard({ client, week, creatives, onSaved }: { client: BoardC
           )}
         </div>
 
+        {client.spend != null && (
+          <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-300">
+            💸 {formatCurrency(client.spend)}{client.budget != null ? ` / ${formatCurrency(client.budget)}` : ''}
+          </span>
+        )}
         {existing?.decision && (
           <span className={cn('hidden sm:inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border', DECISION_STYLE[existing.decision])}>
             {DECISION_LABEL[existing.decision]}
@@ -298,6 +335,30 @@ function ClientReviewCard({ client, week, creatives, onSaved }: { client: BoardC
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <AdSlotRater slot={1} ad={slot1} rating={r1} onRating={setR1} creative={cr1} onCreative={setCr1} creatives={creatives} />
             <AdSlotRater slot={2} ad={slot2} rating={r2} onRating={setR2} creative={cr2} onCreative={setCr2} creatives={creatives} />
+          </div>
+
+          {/* Ad spend tracking — saved on blur (independent of the review). */}
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Ad Spend ($)</label>
+              <input
+                type="number" inputMode="decimal" value={spend}
+                onChange={e => setSpend(e.target.value)}
+                onBlur={() => saveSpend('spend', spend)}
+                placeholder="0"
+                className="w-full bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-amber-500/40"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Budget ($)</label>
+              <input
+                type="number" inputMode="decimal" value={budget}
+                onChange={e => setBudget(e.target.value)}
+                onBlur={() => saveSpend('budget', budget)}
+                placeholder="0"
+                className="w-full bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40"
+              />
+            </div>
           </div>
 
           <textarea

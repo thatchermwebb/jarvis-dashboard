@@ -12,7 +12,7 @@ export async function GET() {
   const [clientsRes, adsRes, reviewsRes, creativesRes] = await Promise.all([
     supabase
       .from('clients')
-      .select('id, name, business_name, market_location, stage, advertised_package, ad_account_link, campaign_link')
+      .select('id, name, business_name, market_location, stage, advertised_package, ad_account_link, campaign_link, budget, spend')
       .in('stage', MEDIA_ACTIVE_STAGES)
       .order('name', { ascending: true }),
     supabase.from('media_ads').select('*').in('status', ['active', 'paused', 'in_production']),
