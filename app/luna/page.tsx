@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Moon, Check } from 'lucide-react'
+import { Moon, Check, ChevronDown } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 
 interface LunaClient {
@@ -18,16 +18,19 @@ interface LunaClient {
   luna_payment_frequency?: string | null
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  free_trial_pending: 'Free Trial — Pending',
-  free_trial: 'Free Trial — Active',
-  trial_concluded: 'Free Trial — Complete',
-  onboarding: 'Onboarding',
-  active_client: 'Active',
-  paused: 'Paused',
-  churned: 'Churned',
-  free_trial_lost: 'Free Trial — Lost',
-}
+const STAGES: { value: string; label: string; color: string; dot: string }[] = [
+  { value: 'onboarding',         label: 'Onboarding',            color: 'text-blue-400',    dot: 'bg-blue-400' },
+  { value: 'free_trial_pending', label: 'Free Trial — Pending',  color: 'text-yellow-400',  dot: 'bg-yellow-400' },
+  { value: 'free_trial',         label: 'Free Trial — Active',   color: 'text-cyan-400',    dot: 'bg-cyan-400' },
+  { value: 'trial_concluded',    label: 'Free Trial — Complete', color: 'text-violet-400',  dot: 'bg-violet-400' },
+  { value: 'active_client',      label: 'Active',                color: 'text-emerald-400', dot: 'bg-emerald-400' },
+  { value: 'overdue',            label: 'Overdue',               color: 'text-red-400',     dot: 'bg-red-400' },
+  { value: 'paused',             label: 'Paused',                color: 'text-amber-400',   dot: 'bg-amber-400' },
+  { value: 'churned',            label: 'Churned',               color: 'text-zinc-400',    dot: 'bg-zinc-400' },
+  { value: 'free_trial_lost',    label: 'Free Trial — Lost',     color: 'text-rose-400',    dot: 'bg-rose-400' },
+]
+const stageMeta = (stage?: string | null) =>
+  STAGES.find(s => s.value === stage) ?? { value: stage ?? '', label: stage || '—', color: 'text-muted-foreground', dot: 'bg-muted-foreground/40' }
 
 const FREQS = ['day', 'week', 'month'] as const
 
@@ -44,6 +47,8 @@ export default function LunaPage() {
   const [editingPay, setEditingPay] = useState<string | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payFreq, setPayFreq] = useState<string>('week')
+  // Status picker: fixed-positioned menu (the table card clips overflow).
+  const [statusMenu, setStatusMenu] = useState<{ id: string; x: number; y: number } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -215,8 +220,23 @@ export default function LunaPage() {
                       )}
                     </td>
 
-                    <td className="py-3 px-2 pr-5 text-muted-foreground whitespace-nowrap">
-                      {c.stage ? (STATUS_LABEL[c.stage] ?? c.stage) : '—'}
+                    <td className="py-3 px-2 pr-5 whitespace-nowrap">
+                      {(() => {
+                        const meta = stageMeta(c.stage)
+                        return (
+                          <button
+                            onClick={(e) => {
+                              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                              setStatusMenu(statusMenu?.id === c.id ? null : { id: c.id, x: Math.min(r.left, window.innerWidth - 210), y: r.bottom + 4 })
+                            }}
+                            className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                          >
+                            <span className={cn('w-2 h-2 rounded-full flex-shrink-0', meta.dot)} />
+                            <span className={cn('text-sm', meta.color)}>{meta.label}</span>
+                            <ChevronDown className="w-3 h-3 text-muted-foreground/50" />
+                          </button>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -224,6 +244,35 @@ export default function LunaPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Status picker menu — fixed so it escapes the table's overflow clipping. */}
+      {statusMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setStatusMenu(null)} />
+          <div
+            className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden min-w-[200px] p-1"
+            style={{ top: statusMenu.y, left: statusMenu.x }}
+          >
+            {STAGES.map(s => {
+              const current = clients.find(c => c.id === statusMenu.id)?.stage
+              return (
+                <button
+                  key={s.value}
+                  onClick={() => { patch(statusMenu.id, { stage: s.value }); setStatusMenu(null) }}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-xs rounded-lg transition-colors hover:bg-secondary/50',
+                    s.value === current && 'bg-secondary/40',
+                  )}
+                >
+                  <span className={cn('w-2 h-2 rounded-full flex-shrink-0', s.dot)} />
+                  <span className={cn('flex-1', s.color)}>{s.label}</span>
+                  {s.value === current && <Check className="w-3 h-3 opacity-60" />}
+                </button>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )
