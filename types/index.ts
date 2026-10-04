@@ -94,6 +94,8 @@ export interface Client {
   payment_status?: PaymentStatus
   deal_notes?: string
   advertised_package?: string
+  /** Creative the client is currently running, picked from the Creative Library. */
+  creative_package?: string | null
   growth_stage?: GrowthStage
   affiliate_id?: string
   affiliate?: Affiliate

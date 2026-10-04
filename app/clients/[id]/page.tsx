@@ -240,6 +240,16 @@ export default function ClientWarRoom() {
   const [pkgPickerOpen, setPkgPickerOpen] = useState(false)
   const [pkgCustom, setPkgCustom] = useState('')
   const pkgPickerRef = useRef<HTMLDivElement>(null)
+  // Creative Library codes for the "Creative" dropdown in the Ads tab.
+  const [creativeOptions, setCreativeOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    if (hideMoney) return
+    fetch('/api/media/creative-codes')
+      .then(r => (r.ok ? r.json() : []))
+      .then(rows => setCreativeOptions(Array.isArray(rows) ? rows.map((r: { code?: string }) => r.code).filter((c): c is string => !!c) : []))
+      .catch(() => {})
+  }, [hideMoney])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -1096,6 +1106,7 @@ export default function ClientWarRoom() {
               <TabsList className="bg-secondary/50 border border-border h-11 gap-1 px-1">
                 <TabsTrigger value="history" className="text-sm px-5 h-9">History</TabsTrigger>
                 {!hidePayments && <TabsTrigger value="payments" className="text-sm px-5 h-9">Payments</TabsTrigger>}
+                {!hideMoney && <TabsTrigger value="ads" className="text-sm px-5 h-9">Ad Spend</TabsTrigger>}
                 <TabsTrigger value="risk" className="text-sm px-5 h-9">Risk & Scores</TabsTrigger>
               </TabsList>
 
@@ -1170,6 +1181,55 @@ export default function ClientWarRoom() {
               {!hidePayments && (
                 <TabsContent value="payments" className="mt-3">
                   <PaymentPanel clientId={client.id} clientName={client.name} clientStage={client.stage} />
+                </TabsContent>
+              )}
+
+              {!hideMoney && (
+                <TabsContent value="ads" className="mt-3 space-y-3">
+                  <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Ad Spend & Creative</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1.5">Ad Spend ($)</label>
+                        <input
+                          key={`spend-${client.id}`}
+                          type="number"
+                          inputMode="decimal"
+                          defaultValue={client.spend ?? ''}
+                          disabled={readOnly || updating}
+                          onBlur={(e) => {
+                            const raw = e.target.value.trim()
+                            const num = raw === '' ? null : Number(raw)
+                            if (num != null && (isNaN(num) || num < 0)) return
+                            if (num !== (client.spend ?? null)) quickUpdate({ spend: num } as Partial<Client>)
+                          }}
+                          placeholder="e.g. 30"
+                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-amber-500/40 disabled:opacity-60"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1.5">Creative</label>
+                        <select
+                          value={client.creative_package ?? ''}
+                          disabled={readOnly || updating}
+                          onChange={(e) => quickUpdate({ creative_package: e.target.value || null } as Partial<Client>)}
+                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/50 text-sm text-foreground outline-none focus:border-primary/40 cursor-pointer disabled:opacity-60"
+                        >
+                          <option value="">— none —</option>
+                          {/* keep the current value selectable even if it's retired / not in the active library */}
+                          {client.creative_package && !creativeOptions.includes(client.creative_package) && (
+                            <option value={client.creative_package}>{client.creative_package}</option>
+                          )}
+                          {creativeOptions.map(code => (
+                            <option key={code} value={code}>{code}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/60">
+                      Saved to the client record — stays consistent on the Media Buying board, Luna, and client lists.
+                    </p>
+                  </div>
                 </TabsContent>
               )}
 
