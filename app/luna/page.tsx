@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Moon, Check } from 'lucide-react'
-import { cn, formatCurrency, formatDate, localToday, parseLocalDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, localToday, daysSince } from '@/lib/utils'
 
 interface LunaClient {
   id: string
@@ -21,13 +21,6 @@ interface LunaClient {
 
 // Compact date, e.g. "Oct 3".
 const shortDate = (d?: string | null) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
-
-// Whole days between a past date and today (>= 0).
-function daysSince(dateStr?: string | null): number {
-  if (!dateStr) return 0
-  const diff = parseLocalDate(localToday()).getTime() - parseLocalDate(dateStr).getTime()
-  return Math.max(0, Math.round(diff / 86_400_000))
-}
 
 const FREQS = ['day', 'week', 'month'] as const
 

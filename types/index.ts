@@ -169,6 +169,10 @@ export interface Client {
   callback?: boolean
   /** Moves this call into the separate "Stalled Onboarding" bin on the Calls queue. */
   stalled_onboarding?: boolean
+  /** Unreachable/ghosting marker — moves the call into the "Follow Ups" bin. */
+  follow_up?: boolean
+  /** Date the client entered Follow Ups (starts the days-tried tracker). */
+  follow_up_since?: string | null
   urgency_level?: UrgencyLevel
 
   // ── Luna: we pay this client's ad-spend and bill them a recurring subscription.

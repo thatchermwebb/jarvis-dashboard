@@ -24,6 +24,13 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d, 12, 0, 0)
 }
 
+/** Whole days from a past YYYY-MM-DD date to today (>= 0). */
+export function daysSince(dateStr?: string | null): number {
+  if (!dateStr) return 0
+  const diff = parseLocalDate(localToday()).getTime() - parseLocalDate(dateStr).getTime()
+  return Math.max(0, Math.round(diff / 86_400_000))
+}
+
 /** Days between two YYYY-MM-DD strings (pure UTC arithmetic, no timezone shift). */
 export function daysBetween(fromStr: string, toStr: string): number {
   const [fy, fm, fd] = fromStr.split('-').map(Number)

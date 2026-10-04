@@ -15,6 +15,7 @@ import {
   formatCurrency,
   localToday,
   daysUntil,
+  daysSince,
   formatTime,
 } from '@/lib/utils'
 import { richTextToPlain } from '@/components/ui/rich-text'
@@ -210,6 +211,18 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
             if (diff === 1) return <span className="text-[11px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Due tomorrow{timeSuffix}</span>
             return <span className="text-[11px] font-medium bg-secondary/60 text-muted-foreground border border-border/40 px-2 py-0.5 rounded-full">Due {d}{timeSuffix}</span>
           })()}
+          {/* Follow Ups day-tracker: days trying to reach an unreachable client (lost ~7-10). */}
+          {client.follow_up && (() => {
+            const day = (client.follow_up_since ? daysSince(client.follow_up_since) : 0) + 1
+            const tone = day >= 10 ? 'bg-red-500/15 text-red-400 border-red-500/25'
+              : day >= 7 ? 'bg-amber-500/15 text-amber-400 border-amber-500/25'
+              : 'bg-orange-500/15 text-orange-300 border-orange-500/25'
+            return (
+              <span className={cn('text-[11px] font-medium border px-2 py-0.5 rounded-full', tone)}>
+                🔁 Follow-up · Day {day} of 7–10{day >= 10 ? ' · consider lost' : ''}
+              </span>
+            )
+          })()}
           {daysLeft !== null && daysLeft !== undefined && (client.stage === 'free_trial' || client.stage === 'trial_ending_soon' || client.stage === 'free_trial_pending') && (
             <span className={cn(
               'font-medium',
@@ -332,6 +345,20 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
             )}
           >
             {client.stalled_onboarding ? 'Stalled ✓' : 'Stalled'}
+          </button>
+          <button
+            onClick={() => quickAction(client.follow_up
+              ? { follow_up: false, follow_up_since: null }
+              : { follow_up: true, follow_up_since: localToday() })}
+            disabled={updating}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm transition-colors border',
+              client.follow_up
+                ? 'border-orange-500/40 bg-orange-500/10 text-orange-300'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            )}
+          >
+            {client.follow_up ? 'Follow Ups ✓' : 'Follow Ups'}
           </button>
           {(isCloseReady(client) || client.close_call_booked) && (
             <button
