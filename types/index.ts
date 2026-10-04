@@ -190,6 +190,8 @@ export interface Client {
   luna_paused_at?: string | null
   /** Date the subscription payment failed. Overdue is derived from this. */
   luna_failed_at?: string | null
+  /** Which kind of pause when Luna is not live: 'client' | 'trial'. */
+  luna_pause_type?: string | null
 
   // AI situation summary (cached)
   ai_situation_summary?: string | null

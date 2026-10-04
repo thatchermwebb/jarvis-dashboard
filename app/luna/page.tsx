@@ -17,12 +17,24 @@ interface LunaClient {
   luna_payment_frequency?: string | null
   luna_paused_at?: string | null
   luna_failed_at?: string | null
+  luna_pause_type?: string | null
 }
 
 // Compact date, e.g. "Oct 3".
 const shortDate = (d?: string | null) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
 
 const FREQS = ['day', 'week', 'month'] as const
+
+// Luna ad state: Live, or paused as a Client vs a Trial.
+const LUNA_STATES: { key: string; label: string; color: string; dot: string; glow?: boolean; live: boolean; type: string | null }[] = [
+  { key: 'live',   label: 'Live',            color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true, live: true,  type: null },
+  { key: 'client', label: 'Paused (Client)', color: 'text-amber-400',   dot: 'bg-amber-400',               live: false, type: 'client' },
+  { key: 'trial',  label: 'Pause (Trial)',   color: 'text-yellow-300',  dot: 'bg-yellow-300',              live: false, type: 'trial' },
+]
+const lunaState = (c: LunaClient) =>
+  c.luna_live === false
+    ? (LUNA_STATES.find(s => !s.live && s.type === (c.luna_pause_type || 'client')) ?? LUNA_STATES[1])
+    : LUNA_STATES[0]
 
 function paymentLabel(c: LunaClient) {
   if (c.luna_payment_amount == null) return null
@@ -39,6 +51,19 @@ export default function LunaPage() {
   const [payFreq, setPayFreq] = useState<string>('week')
   // Inline date editor for the paused / failed dates.
   const [editDate, setEditDate] = useState<{ id: string; field: 'luna_paused_at' | 'luna_failed_at' } | null>(null)
+  // Fixed-positioned Luna-state picker (the table card clips overflow).
+  const [lunaMenu, setLunaMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+
+  function setLunaState(c: LunaClient, s: typeof LUNA_STATES[number]) {
+    patch(c.id, {
+      luna_live: s.live,
+      luna_pause_type: s.type,
+      // Stamp the paused date when entering a paused state (keep an existing one);
+      // clear it when going Live.
+      luna_paused_at: s.live ? null : (c.luna_paused_at || localToday()),
+    })
+    setLunaMenu(null)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -150,18 +175,24 @@ export default function LunaPage() {
                     </td>
                     <td className="py-3 px-2 text-muted-foreground">{c.business_name || '—'}</td>
 
-                    {/* Luna: Live / Paused (+ date paused) */}
+                    {/* Luna: Live / Paused (Client) / Pause (Trial) (+ date paused) */}
                     <td className="py-3 px-2 align-top">
                       <div className="space-y-0.5">
-                        <Toggle
-                          a={{ label: 'Live', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
-                          b={{ label: 'Paused', color: 'text-amber-400', dot: 'bg-amber-400' }}
-                          isA={c.luna_live !== false}
-                          onClick={() => {
-                            const nextLive = !(c.luna_live !== false)
-                            patch(c.id, { luna_live: nextLive, luna_paused_at: nextLive ? null : localToday() })
-                          }}
-                        />
+                        {(() => {
+                          const st = lunaState(c)
+                          return (
+                            <button
+                              onClick={(e) => {
+                                const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                setLunaMenu(lunaMenu?.id === c.id ? null : { id: c.id, x: Math.min(r.left, window.innerWidth - 210), y: r.bottom + 4 })
+                              }}
+                              className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                            >
+                              <span className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', st.dot, st.glow && 'shadow-[0_0_8px_rgba(52,211,153,0.6)]')} />
+                              <span className={cn('text-sm', st.color)}>{st.label}</span>
+                            </button>
+                          )
+                        })()}
                         {c.luna_live === false && (
                           <DateLine
                             prefix="since"
@@ -253,6 +284,31 @@ export default function LunaPage() {
           </div>
         </div>
       )}
+
+      {/* Luna-state picker — fixed so it escapes the table's overflow clipping. */}
+      {lunaMenu && (() => {
+        const c = clients.find(x => x.id === lunaMenu.id)
+        if (!c) return null
+        const currentKey = lunaState(c).key
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setLunaMenu(null)} />
+            <div className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden min-w-[200px] p-1" style={{ top: lunaMenu.y, left: lunaMenu.x }}>
+              {LUNA_STATES.map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setLunaState(c, s)}
+                  className={cn('w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-xs rounded-lg transition-colors hover:bg-secondary/50', s.key === currentKey && 'bg-secondary/40')}
+                >
+                  <span className={cn('w-2 h-2 rounded-full flex-shrink-0', s.dot)} />
+                  <span className={cn('flex-1', s.color)}>{s.label}</span>
+                  {s.key === currentKey && <Check className="w-3 h-3 opacity-60" />}
+                </button>
+              ))}
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
