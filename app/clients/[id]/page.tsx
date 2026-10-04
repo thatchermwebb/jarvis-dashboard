@@ -530,7 +530,7 @@ export default function ClientWarRoom() {
             className={cn('text-xs px-3 py-1.5 rounded-full border transition-all', client.follow_up ? 'bg-orange-500/20 border-orange-500/30 text-orange-300' : 'border-border text-muted-foreground hover:border-orange-500/30 hover:text-orange-300')}
             disabled={updating}
           >
-            🔁 Follow Ups{client.follow_up && client.follow_up_since ? ` · Day ${daysSince(client.follow_up_since) + 1}` : ''}
+            👻 Ghost{client.follow_up && client.follow_up_since ? ` · Day ${daysSince(client.follow_up_since) + 1}` : ''}
           </button>
           <button
             onClick={() => quickUpdate({ va_needed: !client.va_needed })}

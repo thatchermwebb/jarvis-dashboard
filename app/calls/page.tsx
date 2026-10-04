@@ -280,7 +280,7 @@ function CallsPageInner() {
   // View / tab state
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
   // Which list: the main queue, or one of the flagged bins pulled out of it.
-  const [bin, setBin] = useState<'queue' | 'callbacks' | 'stalled' | 'followups'>('queue')
+  const [bin, setBin] = useState<'queue' | 'callbacks' | 'stalled' | 'ghost'>('queue')
   const inBin = bin !== 'queue'
   const [showChurned, setShowChurned] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
@@ -460,11 +460,11 @@ function CallsPageInner() {
   }, [allClients, ownerFilter])
   const callbackClients = useMemo(() => binClients('callback'), [binClients])
   const stalledClients = useMemo(() => binClients('stalled_onboarding'), [binClients])
-  const followUpClients = useMemo(() => binClients('follow_up'), [binClients])
+  const ghostClients = useMemo(() => binClients('follow_up'), [binClients])
 
   const visibleClients = bin === 'callbacks' ? callbackClients
     : bin === 'stalled' ? stalledClients
-    : bin === 'followups' ? followUpClients
+    : bin === 'ghost' ? ghostClients
     : tabClients
 
   const tabCounts = useMemo(() => ({
@@ -651,13 +651,13 @@ function CallsPageInner() {
                 )}
               </button>
               <button
-                onClick={() => setBin('followups')}
+                onClick={() => setBin('ghost')}
                 className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors inline-flex items-center gap-1.5 whitespace-nowrap',
-                  bin === 'followups' ? 'bg-background text-orange-300 shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                  bin === 'ghost' ? 'bg-background text-orange-300 shadow-sm' : 'text-muted-foreground hover:text-foreground')}
               >
-                Follow Ups
-                {followUpClients.length > 0 && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300">{followUpClients.length}</span>
+                Ghost
+                {ghostClients.length > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300">{ghostClients.length}</span>
                 )}
               </button>
             </div>
@@ -768,11 +768,11 @@ function CallsPageInner() {
                 <div className="text-sm font-medium text-muted-foreground">No call backs</div>
                 <div className="text-xs text-muted-foreground/60">Tap &quot;Call Back&quot; on any call to move it here.</div>
               </div>
-            ) : bin === 'followups' ? (
+            ) : bin === 'ghost' ? (
               <div className="bg-card border border-border rounded-xl p-12 text-center space-y-2">
-                <div className="text-2xl">🔁</div>
-                <div className="text-sm font-medium text-muted-foreground">No follow ups</div>
-                <div className="text-xs text-muted-foreground/60">Tap &quot;Follow Ups&quot; on an unreachable client to track daily contact attempts here.</div>
+                <div className="text-2xl">👻</div>
+                <div className="text-sm font-medium text-muted-foreground">No ghosted clients</div>
+                <div className="text-xs text-muted-foreground/60">Tap &quot;Ghost&quot; on an unreachable client to track daily contact attempts here.</div>
               </div>
             ) : queueTab === 'today' ? (
               <div className="bg-card border border-border rounded-xl p-14 text-center space-y-3">

@@ -211,7 +211,7 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
             if (diff === 1) return <span className="text-[11px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Due tomorrow{timeSuffix}</span>
             return <span className="text-[11px] font-medium bg-secondary/60 text-muted-foreground border border-border/40 px-2 py-0.5 rounded-full">Due {d}{timeSuffix}</span>
           })()}
-          {/* Follow Ups day-tracker: days trying to reach an unreachable client (lost ~7-10). */}
+          {/* Ghost day-tracker: days trying to reach an unreachable client (lost ~7-10). */}
           {client.follow_up && (() => {
             const day = (client.follow_up_since ? daysSince(client.follow_up_since) : 0) + 1
             const tone = day >= 10 ? 'bg-red-500/15 text-red-400 border-red-500/25'
@@ -219,7 +219,7 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
               : 'bg-orange-500/15 text-orange-300 border-orange-500/25'
             return (
               <span className={cn('text-[11px] font-medium border px-2 py-0.5 rounded-full', tone)}>
-                🔁 Follow-up · Day {day} of 7–10{day >= 10 ? ' · consider lost' : ''}
+                👻 Ghosted · Day {day} of 7–10{day >= 10 ? ' · consider lost' : ''}
               </span>
             )
           })()}
@@ -358,7 +358,7 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
                 : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
             )}
           >
-            {client.follow_up ? 'Follow Ups ✓' : 'Follow Ups'}
+            {client.follow_up ? 'Ghost ✓' : 'Ghost'}
           </button>
           {(isCloseReady(client) || client.close_call_booked) && (
             <button
