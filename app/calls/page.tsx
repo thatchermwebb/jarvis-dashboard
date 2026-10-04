@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { CallQueueCard, type PaymentDueFlag, type PaymentDueInfo } from '@/components/call-queue/CallQueueCard'
@@ -11,7 +12,7 @@ import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
 import { AuthorBadge } from '@/components/ui/author-badge'
 import { RichText, richTextToPlain } from '@/components/ui/rich-text'
-import { cn, timeAgo, localToday, daysUntil } from '@/lib/utils'
+import { cn, timeAgo, localToday, daysUntil, formatCurrency, formatDate } from '@/lib/utils'
 import { calculatePriorityScore, priorityBin, binRank, type PaymentDueState } from '@/lib/scoring'
 import type { Client } from '@/types'
 
@@ -33,7 +34,7 @@ const CAL_MONTHS = ['January','February','March','April','May','June','July','Au
 const CAL_DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
 type QueueTab = 'today' | 'tomorrow' | 'this_week' | 'all'
-type ViewMode = 'queue' | 'calendar' | 'log'
+type ViewMode = 'queue' | 'board' | 'calendar' | 'log'
 type SortMode = 'priority' | 'due_date'
 type OwnerFilter = 'mine' | 'thatcher' | 'trepp' | 'all'
 
@@ -270,6 +271,77 @@ interface CommunicationLog {
   client?: { id: string; name: string; business_name?: string; stage?: string }
 }
 
+// ─── Board view (tier columns) ──────────────────────────────────────────────
+
+const BOARD_COLS = [
+  { key: 'upcoming',   title: 'Upcoming Payments', accent: 'text-amber-300',   bar: 'bg-amber-500/70' },
+  { key: 'churn',      title: 'Churn Risks',       accent: 'text-red-300',     bar: 'bg-red-500/70' },
+  { key: 'onboarding', title: 'Onboarding',        accent: 'text-blue-300',    bar: 'bg-blue-500/70' },
+  { key: 'trials',     title: 'Trials',            accent: 'text-cyan-300',    bar: 'bg-cyan-500/70' },
+  { key: 'active',     title: 'Active Clients',    accent: 'text-emerald-300', bar: 'bg-emerald-500/70' },
+  { key: 'pif',        title: 'Active on PIF',     accent: 'text-violet-300',  bar: 'bg-violet-500/70' },
+] as const
+
+const shortDate = (d?: string) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
+
+function boardMeta(col: string, c: Client, pay?: { dueDate: string; amount: number }): React.ReactNode {
+  if (col === 'upcoming' && pay) {
+    const overdue = pay.dueDate < localToday()
+    return <span className={overdue ? 'text-red-400' : 'text-amber-300'}>{formatCurrency(pay.amount)} · {overdue ? 'overdue' : 'due'} {shortDate(pay.dueDate)}</span>
+  }
+  if (col === 'churn') return <span className="text-red-400">Churn risk {c.churn_risk_score}</span>
+  if (col === 'trials') {
+    const d = c.trial_end ? daysUntil(c.trial_end) : null
+    if (d != null) return <span className={cn(d <= 0 ? 'text-red-400' : d <= 3 ? 'text-amber-400' : 'text-cyan-300')}>{d <= 0 ? 'Trial ended' : `Trial ends in ${d}d`}</span>
+  }
+  if (c.last_contact_date) return <span className="text-muted-foreground/60">Last contact {timeAgo(c.last_contact_date)}</span>
+  return null
+}
+
+function BoardColumn({ title, accent, bar, count, collapsed, onToggle, children }: {
+  title: string; accent: string; bar: string; count: number; collapsed: boolean; onToggle: () => void; children: React.ReactNode
+}) {
+  if (collapsed) {
+    return (
+      <button
+        onClick={onToggle}
+        className="flex-shrink-0 w-11 h-64 rounded-xl border border-border/50 bg-card/60 hover:bg-secondary/30 transition-colors flex flex-col items-center gap-2 pt-3"
+        title={`Expand ${title}`}
+      >
+        <span className={cn('w-1.5 h-1.5 rounded-full', bar)} />
+        <span className="text-[10px] font-semibold text-muted-foreground">{count}</span>
+        <span className={cn('text-xs font-medium [writing-mode:vertical-rl] rotate-180 mt-1', accent)}>{title}</span>
+      </button>
+    )
+  }
+  return (
+    <div className="flex-shrink-0 w-64 rounded-xl border border-border/50 bg-card/40">
+      <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 py-2.5 border-b border-border/40 hover:bg-secondary/20 transition-colors rounded-t-xl">
+        <span className={cn('w-1.5 h-4 rounded-full flex-shrink-0', bar)} />
+        <span className={cn('text-sm font-semibold flex-1 text-left', accent)}>{title}</span>
+        <span className="text-[11px] font-bold text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded">{count}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/60" />
+      </button>
+      <div className="p-2 space-y-2 max-h-[70vh] overflow-y-auto">
+        {count === 0 ? <div className="text-xs text-muted-foreground/40 text-center py-6">Empty</div> : children}
+      </div>
+    </div>
+  )
+}
+
+function BoardCard({ client, meta, onClick }: { client: Client; meta: React.ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="w-full text-left bg-card border border-border/50 rounded-lg px-3 py-2.5 hover:border-border hover:bg-secondary/20 transition-colors">
+      <div className="font-semibold text-sm text-foreground truncate">{client.name}</div>
+      {client.business_name && client.business_name !== client.name && (
+        <div className="text-xs text-muted-foreground truncate">{client.business_name}</div>
+      )}
+      {client.market_location && <div className="text-[11px] text-muted-foreground/50 truncate">{client.market_location}</div>}
+      {meta && <div className="text-[11px] mt-1.5">{meta}</div>}
+    </button>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function CallsPageInner() {
@@ -280,6 +352,7 @@ function CallsPageInner() {
   // View / tab state
   const [queueTab, setQueueTab] = useState<QueueTab>('today')
   // Which list: the main queue, or one of the flagged bins pulled out of it.
+  const { user } = useAuth()
   const [bin, setBin] = useState<'queue' | 'callbacks' | 'stalled' | 'ghost'>('queue')
   const inBin = bin !== 'queue'
   const [showChurned, setShowChurned] = useState(false)
@@ -306,6 +379,11 @@ function CallsPageInner() {
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
   const [paymentFlags, setPaymentFlags] = useState<Record<string, PaymentDueInfo>>({})
+  // Earliest unpaid payment due within 7 days (or overdue), per client — powers the
+  // "Upcoming payments" board column.
+  const [weekPay, setWeekPay] = useState<Record<string, { dueDate: string; amount: number }>>({})
+  // Collapsed board columns.
+  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set())
 
   const loadQueue = useCallback(async () => {
     setLoadingQueue(true)
@@ -321,11 +399,18 @@ function CallsPageInner() {
     const t = localToday()
     const tom = offsetStr(1)
     const in5 = offsetStr(5) // surface upcoming payments up to 5 days out
+    const in7 = offsetStr(7) // board "upcoming payments this week" window
+    const week: Record<string, { dueDate: string; amount: number }> = {}
     const flags: Record<string, PaymentDueInfo> = {}
     const rank: Record<PaymentDueFlag, number> = { overdue: 4, today: 3, tomorrow: 2, soon: 1 }
     for (const p of (Array.isArray(payments) ? payments : [])) {
       if (!p.client_id || !p.due_date) continue
       if (!['pending', 'overdue'].includes(p.status)) continue // unpaid only
+      // Board "this week" window: overdue or due within 7 days; keep the earliest.
+      if (p.status === 'overdue' || p.due_date <= in7) {
+        const w = week[p.client_id]
+        if (!w || p.due_date < w.dueDate) week[p.client_id] = { dueDate: p.due_date, amount: Number(p.amount) || 0 }
+      }
       let flag: PaymentDueFlag | null = null
       if (p.status === 'overdue' || p.due_date < t) flag = 'overdue'
       else if (p.due_date === t) flag = 'today'
@@ -343,6 +428,7 @@ function CallsPageInner() {
       }
     }
     setPaymentFlags(flags)
+    setWeekPay(week)
 
     // Recompute each client's priority with real billing urgency folded in, so
     // the bin sort surfaces payment-due clients first.
@@ -462,6 +548,32 @@ function CallsPageInner() {
   const stalledClients = useMemo(() => binClients('stalled_onboarding'), [binClients])
   const ghostClients = useMemo(() => binClients('follow_up'), [binClients])
 
+  // ── Board view: one client per column, most-important column wins (left→right).
+  const boardColumns = useMemo(() => {
+    let pool = allClients.filter(c => !c.close_call_booked)
+    if (ownerFilter === 'mine') pool = pool.filter(c => !c.thatcher_needed && !c.trepp_needed && !c.va_needed)
+    else if (ownerFilter === 'thatcher') pool = pool.filter(c => c.thatcher_needed)
+    else if (ownerFilter === 'trepp') pool = pool.filter(c => c.trepp_needed || c.va_needed)
+
+    const g: Record<string, Client[]> = { upcoming: [], churn: [], onboarding: [], trials: [], active: [], pif: [] }
+    const TRIAL = new Set(['free_trial', 'free_trial_pending'])
+    for (const c of pool) {
+      if (weekPay[c.id]) { g.upcoming.push(c); continue }
+      if ((c.churn_risk_score ?? 0) >= 60) { g.churn.push(c); continue }
+      if (c.stage === 'onboarding') { g.onboarding.push(c); continue }
+      if (TRIAL.has(c.stage ?? '')) { g.trials.push(c); continue }
+      if (c.stage === 'active_client') {
+        if (c.payment_frequency === 'quarterly') g.pif.push(c)
+        else g.active.push(c)
+      }
+      // other stages (paused, concluded, churned, lost) aren't part of the tier board
+    }
+    g.upcoming.sort((a, b) => weekPay[a.id].dueDate.localeCompare(weekPay[b.id].dueDate)) // soonest first
+    g.churn.sort((a, b) => (b.churn_risk_score ?? 0) - (a.churn_risk_score ?? 0))
+    for (const k of ['onboarding', 'trials', 'active', 'pif']) g[k].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+    return g
+  }, [allClients, ownerFilter, weekPay])
+
   const visibleClients = bin === 'callbacks' ? callbackClients
     : bin === 'stalled' ? stalledClients
     : bin === 'ghost' ? ghostClients
@@ -572,11 +684,15 @@ function CallsPageInner() {
       {/* Row 1: view switcher (left) + sort (right, queue only) */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5">
-          {([
+          {(([
             { key: 'queue', label: 'Queue', icon: LayoutList },
+            { key: 'board', label: 'Board', icon: Columns3 },
             { key: 'calendar', label: 'Calendar', icon: CalendarDays },
             { key: 'log', label: 'History', icon: History },
-          ] as { key: ViewMode; label: string; icon: typeof LayoutList }[]).map(({ key, label, icon: Icon }) => (
+          ] as { key: ViewMode; label: string; icon: typeof LayoutList }[])
+            // Diego doesn't use Calendar/History — hidden on his profile only.
+            .filter(t => !(user?.id === 'diego' && (t.key === 'calendar' || t.key === 'log')))
+          ).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setViewMode(key)}
@@ -817,6 +933,63 @@ function CallsPageInner() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── BOARD VIEW (tier columns) ─────────────────────────────────────── */}
+      {viewMode === 'board' && (
+        <div className="space-y-3">
+          {/* Owner filter */}
+          <div className="flex bg-secondary/40 border border-border/40 rounded-lg p-0.5 w-fit">
+            {([
+              { key: 'mine', label: 'Diego' },
+              { key: 'thatcher', label: 'Thatcher' },
+              { key: 'trepp', label: 'Trepp' },
+              { key: 'all', label: 'All' },
+            ] as { key: OwnerFilter; label: string }[]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setOwnerFilter(key)}
+                className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                  ownerFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {loadingQueue ? (
+            <div className="h-80 bg-card border border-border rounded-xl animate-pulse" />
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-4 items-start">
+              {BOARD_COLS.map(col => {
+                const items = boardColumns[col.key] ?? []
+                const collapsed = collapsedCols.has(col.key)
+                return (
+                  <BoardColumn
+                    key={col.key}
+                    title={col.title}
+                    accent={col.accent}
+                    bar={col.bar}
+                    count={items.length}
+                    collapsed={collapsed}
+                    onToggle={() => setCollapsedCols(prev => {
+                      const n = new Set(prev); if (n.has(col.key)) n.delete(col.key); else n.add(col.key); return n
+                    })}
+                  >
+                    {items.map(c => (
+                      <BoardCard
+                        key={c.id}
+                        client={c}
+                        meta={boardMeta(col.key, c, weekPay[c.id])}
+                        onClick={() => router.push(`/clients/${c.id}`)}
+                      />
+                    ))}
+                  </BoardColumn>
+                )
+              })}
             </div>
           )}
         </div>
