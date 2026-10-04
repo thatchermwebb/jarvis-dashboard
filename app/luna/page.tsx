@@ -3,34 +3,20 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Moon, Check, ChevronDown } from 'lucide-react'
+import { Moon, Check } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 
 interface LunaClient {
   id: string
   name: string
   business_name?: string | null
-  stage?: string | null
   running_in_luna?: boolean
   luna_live?: boolean
   luna_subscription_sent?: boolean
   luna_payment_amount?: number | null
   luna_payment_frequency?: string | null
+  luna_status?: string | null
 }
-
-const STAGES: { value: string; label: string; color: string; dot: string }[] = [
-  { value: 'onboarding',         label: 'Onboarding',            color: 'text-blue-400',    dot: 'bg-blue-400' },
-  { value: 'free_trial_pending', label: 'Free Trial — Pending',  color: 'text-yellow-400',  dot: 'bg-yellow-400' },
-  { value: 'free_trial',         label: 'Free Trial — Active',   color: 'text-cyan-400',    dot: 'bg-cyan-400' },
-  { value: 'trial_concluded',    label: 'Free Trial — Complete', color: 'text-violet-400',  dot: 'bg-violet-400' },
-  { value: 'active_client',      label: 'Active',                color: 'text-emerald-400', dot: 'bg-emerald-400' },
-  { value: 'overdue',            label: 'Overdue',               color: 'text-red-400',     dot: 'bg-red-400' },
-  { value: 'paused',             label: 'Paused',                color: 'text-amber-400',   dot: 'bg-amber-400' },
-  { value: 'churned',            label: 'Churned',               color: 'text-zinc-400',    dot: 'bg-zinc-400' },
-  { value: 'free_trial_lost',    label: 'Free Trial — Lost',     color: 'text-rose-400',    dot: 'bg-rose-400' },
-]
-const stageMeta = (stage?: string | null) =>
-  STAGES.find(s => s.value === stage) ?? { value: stage ?? '', label: stage || '—', color: 'text-muted-foreground', dot: 'bg-muted-foreground/40' }
 
 const FREQS = ['day', 'week', 'month'] as const
 
@@ -47,8 +33,6 @@ export default function LunaPage() {
   const [editingPay, setEditingPay] = useState<string | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payFreq, setPayFreq] = useState<string>('week')
-  // Status picker: fixed-positioned menu (the table card clips overflow).
-  const [statusMenu, setStatusMenu] = useState<{ id: string; x: number; y: number } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -160,22 +144,22 @@ export default function LunaPage() {
                     </td>
                     <td className="py-3 px-2 text-muted-foreground">{c.business_name || '—'}</td>
 
-                    {/* Luna live toggle */}
+                    {/* Luna: Live / Pause */}
                     <td className="py-3 px-2">
-                      <StatusDot
-                        on={!!c.luna_live}
-                        onLabel="Live"
-                        offLabel="Off"
-                        onClick={() => patch(c.id, { luna_live: !c.luna_live })}
+                      <Toggle
+                        a={{ label: 'Live', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
+                        b={{ label: 'Pause', color: 'text-amber-400', dot: 'bg-amber-400' }}
+                        isA={c.luna_live !== false}
+                        onClick={() => patch(c.id, { luna_live: !(c.luna_live !== false) })}
                       />
                     </td>
 
-                    {/* Subscription sent toggle */}
+                    {/* Subscription: Sent / Not sent */}
                     <td className="py-3 px-2">
-                      <StatusDot
-                        on={!!c.luna_subscription_sent}
-                        onLabel="Sent"
-                        offLabel="Not sent"
+                      <Toggle
+                        a={{ label: 'Sent', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
+                        b={{ label: 'Not sent', color: 'text-muted-foreground/60', dot: 'bg-muted-foreground/30' }}
+                        isA={!!c.luna_subscription_sent}
                         onClick={() => patch(c.id, { luna_subscription_sent: !c.luna_subscription_sent })}
                       />
                     </td>
@@ -220,23 +204,14 @@ export default function LunaPage() {
                       )}
                     </td>
 
+                    {/* Status: Active / Overdue */}
                     <td className="py-3 px-2 pr-5 whitespace-nowrap">
-                      {(() => {
-                        const meta = stageMeta(c.stage)
-                        return (
-                          <button
-                            onClick={(e) => {
-                              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                              setStatusMenu(statusMenu?.id === c.id ? null : { id: c.id, x: Math.min(r.left, window.innerWidth - 210), y: r.bottom + 4 })
-                            }}
-                            className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity"
-                          >
-                            <span className={cn('w-2 h-2 rounded-full flex-shrink-0', meta.dot)} />
-                            <span className={cn('text-sm', meta.color)}>{meta.label}</span>
-                            <ChevronDown className="w-3 h-3 text-muted-foreground/50" />
-                          </button>
-                        )
-                      })()}
+                      <Toggle
+                        a={{ label: 'Active', color: 'text-emerald-400', dot: 'bg-emerald-400', glow: true }}
+                        b={{ label: 'Overdue', color: 'text-red-400', dot: 'bg-red-400' }}
+                        isA={(c.luna_status ?? 'active') !== 'overdue'}
+                        onClick={() => patch(c.id, { luna_status: (c.luna_status ?? 'active') === 'overdue' ? 'active' : 'overdue' })}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -245,51 +220,23 @@ export default function LunaPage() {
           </div>
         </div>
       )}
-
-      {/* Status picker menu — fixed so it escapes the table's overflow clipping. */}
-      {statusMenu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setStatusMenu(null)} />
-          <div
-            className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden min-w-[200px] p-1"
-            style={{ top: statusMenu.y, left: statusMenu.x }}
-          >
-            {STAGES.map(s => {
-              const current = clients.find(c => c.id === statusMenu.id)?.stage
-              return (
-                <button
-                  key={s.value}
-                  onClick={() => { patch(statusMenu.id, { stage: s.value }); setStatusMenu(null) }}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-xs rounded-lg transition-colors hover:bg-secondary/50',
-                    s.value === current && 'bg-secondary/40',
-                  )}
-                >
-                  <span className={cn('w-2 h-2 rounded-full flex-shrink-0', s.dot)} />
-                  <span className={cn('flex-1', s.color)}>{s.label}</span>
-                  {s.value === current && <Check className="w-3 h-3 opacity-60" />}
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
     </div>
   )
 }
 
-function StatusDot({ on, onLabel, offLabel, onClick }: {
-  on: boolean; onLabel: string; offLabel: string; onClick: () => void
-}) {
+interface ToggleSide { label: string; color: string; dot: string; glow?: boolean }
+
+// A click-to-flip two-state status pill (e.g. Live/Pause, Active/Overdue).
+function Toggle({ a, b, isA, onClick }: { a: ToggleSide; b: ToggleSide; isA: boolean; onClick: () => void }) {
+  const side = isA ? a : b
   return (
-    <button onClick={onClick} className="inline-flex items-center gap-1.5 group" title="Click to toggle">
+    <button onClick={onClick} className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity" title="Click to toggle">
       <span className={cn(
         'w-2.5 h-2.5 rounded-full flex-shrink-0 transition-all',
-        on ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/50',
+        side.dot,
+        side.glow && 'shadow-[0_0_8px_rgba(52,211,153,0.6)]',
       )} />
-      <span className={cn('text-sm', on ? 'text-foreground' : 'text-muted-foreground/60')}>
-        {on ? onLabel : offLabel}
-      </span>
+      <span className={cn('text-sm', side.color)}>{side.label}</span>
     </button>
   )
 }

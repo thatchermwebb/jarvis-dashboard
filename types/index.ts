@@ -182,6 +182,8 @@ export interface Client {
   luna_payment_amount?: number
   /** Billing cadence for the Luna subscription: 'day' | 'week' | 'month'. */
   luna_payment_frequency?: string
+  /** Luna account status: 'active' | 'overdue'. */
+  luna_status?: string
 
   // AI situation summary (cached)
   ai_situation_summary?: string | null

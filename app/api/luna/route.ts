@@ -6,9 +6,11 @@ import { getAffiliateScope } from '@/lib/auth-server'
 // recurring subscription. Only flagged clients are returned.
 export async function GET() {
   const supabase = await createClient()
+  // select('*') so the page keeps working whether or not the newest luna_* columns
+  // have been migrated yet (admin-gated page, so the full record is acceptable).
   let query = supabase
     .from('clients')
-    .select('id, name, business_name, stage, running_in_luna, luna_live, luna_subscription_sent, luna_payment_amount, luna_payment_frequency')
+    .select('*')
     .eq('running_in_luna', true)
     .order('name', { ascending: true })
 
