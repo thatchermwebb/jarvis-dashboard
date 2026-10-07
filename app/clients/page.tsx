@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Search, AlertTriangle, Upload, LayoutGrid, List, Table2, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Search, AlertTriangle, Upload, Download, LayoutGrid, List, Table2, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { ClientForm } from '@/components/clients/ClientForm'
 import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { cn, sentimentEmoji, timeAgo, formatCurrency, localToday } from '@/lib/utils'
+import { cn, sentimentEmoji, timeAgo, formatCurrency, localToday, stageLabel } from '@/lib/utils'
 import { getTrialDaysLeft } from '@/lib/scoring'
 import type { Client, ClientStage, Affiliate } from '@/types'
 
@@ -503,6 +503,48 @@ const MOOD_ORDER: Record<string, number> = {
   close_ready: 0, happy: 1, neutral: 2, frustrated: 3, angry: 4, ghosting: 5,
 }
 
+// ─── CSV export ──────────────────────────────────────────────────────────────
+
+function csvCell(v: unknown): string {
+  if (v == null) return ''
+  const s = String(v)
+  // Quote when the value contains a comma, quote, or newline; escape inner quotes.
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function exportClientsCSV(clients: Client[]) {
+  const columns: { header: string; get: (c: Client) => unknown }[] = [
+    { header: 'Name', get: c => c.name },
+    { header: 'Business', get: c => c.business_name },
+    { header: 'Email', get: c => c.email },
+    { header: 'Phone', get: c => c.phone },
+    { header: 'Owner Name', get: c => c.owner_name },
+    { header: 'Location', get: c => c.market_location },
+    { header: 'Timezone', get: c => c.timezone },
+    { header: 'Stage', get: c => stageLabel(c.stage) },
+    { header: 'Affiliate', get: c => (c.affiliate as { name?: string } | undefined)?.name },
+    { header: 'Advertised Package', get: c => c.advertised_package },
+    // Money fields are already stripped server-side for revenue-blind users.
+    { header: 'Monthly Retainer', get: c => c.monthly_retainer },
+    { header: 'Payment Frequency', get: c => c.payment_frequency },
+    { header: 'Payment Status', get: c => c.payment_status },
+    { header: 'Signed', get: c => (c.signed_at ? c.signed_at.slice(0, 10) : '') },
+  ]
+  const rows = [
+    columns.map(col => csvCell(col.header)).join(','),
+    ...clients.map(c => columns.map(col => csvCell(col.get(c))).join(',')),
+  ]
+  const blob = new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `cza-contacts-${localToday()}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function ClientsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -725,6 +767,17 @@ function ClientsContent() {
               {!isMobile && (
                 <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setImportOpen(true)}>
                   <Upload className="w-3.5 h-3.5" /> Import CSV
+                </Button>
+              )}
+              {!isMobile && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-8 text-xs"
+                  disabled={clients.length === 0}
+                  onClick={() => exportClientsCSV(clients)}
+                >
+                  <Download className="w-3.5 h-3.5" /> Export CSV
                 </Button>
               )}
               <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setFormOpen(true)}>
