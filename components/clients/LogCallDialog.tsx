@@ -576,7 +576,17 @@ export function LogCallDialog({ open, onClose, client: preselectedClient, editLo
           <DialogTitle className="text-xl">{editLog ? 'Edit Entry' : 'Log Call / Contact'}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // Cmd/Ctrl+Enter saves the log from anywhere in the form (incl. the notes box).
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault()
+              if (!loading) handleSubmit(e)
+            }
+          }}
+          className="p-6"
+        >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* ── LEFT COLUMN ───────────────────────────────────────── */}

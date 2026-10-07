@@ -280,14 +280,19 @@ const BOARD_COLS = [
   { key: 'trials',     title: 'Trials',            accent: 'text-cyan-300',    bar: 'bg-cyan-500/70' },
   { key: 'active',     title: 'Active Clients',    accent: 'text-emerald-300', bar: 'bg-emerald-500/70' },
   { key: 'pif',        title: 'Active on PIF',     accent: 'text-violet-300',  bar: 'bg-violet-500/70' },
+  { key: 'overdue',    title: 'Overdue',           accent: 'text-red-400',     bar: 'bg-red-600/80' },
 ] as const
 
 const shortDate = (d?: string) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
 
 function boardMeta(col: string, c: Client, pay?: { dueDate: string; amount: number }): React.ReactNode {
   if (col === 'upcoming' && pay) {
-    const overdue = pay.dueDate < localToday()
-    return <span className={overdue ? 'text-red-400' : 'text-amber-300'}>{formatCurrency(pay.amount)} · {overdue ? 'overdue' : 'due'} {shortDate(pay.dueDate)}</span>
+    return <span className="text-amber-300">{formatCurrency(pay.amount)} · due {shortDate(pay.dueDate)}</span>
+  }
+  if (col === 'overdue' && pay) {
+    const d = daysUntil(pay.dueDate)
+    const late = d != null && d < 0 ? ` · ${-d}d late` : ''
+    return <span className="text-red-400">{formatCurrency(pay.amount)} · overdue {shortDate(pay.dueDate)}{late}</span>
   }
   if (col === 'churn') return <span className="text-red-400">Churn risk {c.churn_risk_score}</span>
   if (col === 'trials') {
@@ -379,9 +384,10 @@ function CallsPageInner() {
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [editingLog, setEditingLog] = useState<CommunicationLog | null>(null)
   const [paymentFlags, setPaymentFlags] = useState<Record<string, PaymentDueInfo>>({})
-  // Earliest unpaid payment due within 7 days (or overdue), per client — powers the
-  // "Upcoming payments" board column.
-  const [weekPay, setWeekPay] = useState<Record<string, { dueDate: string; amount: number }>>({})
+  // Board payment buckets: earliest unpaid payment due in the next 7 days (not yet
+  // overdue) vs the earliest overdue unpaid payment — two separate columns.
+  const [upcomingPay, setUpcomingPay] = useState<Record<string, { dueDate: string; amount: number }>>({})
+  const [overduePay, setOverduePay] = useState<Record<string, { dueDate: string; amount: number }>>({})
   // Collapsed board columns.
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set())
 
@@ -400,16 +406,20 @@ function CallsPageInner() {
     const tom = offsetStr(1)
     const in5 = offsetStr(5) // surface upcoming payments up to 5 days out
     const in7 = offsetStr(7) // board "upcoming payments this week" window
-    const week: Record<string, { dueDate: string; amount: number }> = {}
+    const upc: Record<string, { dueDate: string; amount: number }> = {}
+    const over: Record<string, { dueDate: string; amount: number }> = {}
     const flags: Record<string, PaymentDueInfo> = {}
     const rank: Record<PaymentDueFlag, number> = { overdue: 4, today: 3, tomorrow: 2, soon: 1 }
     for (const p of (Array.isArray(payments) ? payments : [])) {
       if (!p.client_id || !p.due_date) continue
       if (!['pending', 'overdue'].includes(p.status)) continue // unpaid only
-      // Board "this week" window: overdue or due within 7 days; keep the earliest.
-      if (p.status === 'overdue' || p.due_date <= in7) {
-        const w = week[p.client_id]
-        if (!w || p.due_date < w.dueDate) week[p.client_id] = { dueDate: p.due_date, amount: Number(p.amount) || 0 }
+      // Board payment buckets: overdue (past due / flagged) vs upcoming (due today..+7).
+      if (p.status === 'overdue' || p.due_date < t) {
+        const o = over[p.client_id]
+        if (!o || p.due_date < o.dueDate) over[p.client_id] = { dueDate: p.due_date, amount: Number(p.amount) || 0 }
+      } else if (p.due_date <= in7) {
+        const u = upc[p.client_id]
+        if (!u || p.due_date < u.dueDate) upc[p.client_id] = { dueDate: p.due_date, amount: Number(p.amount) || 0 }
       }
       let flag: PaymentDueFlag | null = null
       if (p.status === 'overdue' || p.due_date < t) flag = 'overdue'
@@ -428,7 +438,8 @@ function CallsPageInner() {
       }
     }
     setPaymentFlags(flags)
-    setWeekPay(week)
+    setUpcomingPay(upc)
+    setOverduePay(over)
 
     // Recompute each client's priority with real billing urgency folded in, so
     // the bin sort surfaces payment-due clients first.
@@ -555,10 +566,13 @@ function CallsPageInner() {
     else if (ownerFilter === 'thatcher') pool = pool.filter(c => c.thatcher_needed)
     else if (ownerFilter === 'trepp') pool = pool.filter(c => c.trepp_needed || c.va_needed)
 
-    const g: Record<string, Client[]> = { upcoming: [], churn: [], onboarding: [], trials: [], active: [], pif: [] }
+    const g: Record<string, Client[]> = { upcoming: [], churn: [], onboarding: [], trials: [], active: [], pif: [], overdue: [] }
     const TRIAL = new Set(['free_trial', 'free_trial_pending'])
     for (const c of pool) {
-      if (weekPay[c.id]) { g.upcoming.push(c); continue }
+      // Upcoming (due this week, not overdue) is the top priority; overdue is pulled
+      // into its own bucket (shown far right) rather than scattered into other columns.
+      if (upcomingPay[c.id] && !overduePay[c.id]) { g.upcoming.push(c); continue }
+      if (overduePay[c.id]) { g.overdue.push(c); continue }
       if ((c.churn_risk_score ?? 0) >= 60) { g.churn.push(c); continue }
       if (c.stage === 'onboarding') { g.onboarding.push(c); continue }
       if (TRIAL.has(c.stage ?? '')) { g.trials.push(c); continue }
@@ -568,11 +582,12 @@ function CallsPageInner() {
       }
       // other stages (paused, concluded, churned, lost) aren't part of the tier board
     }
-    g.upcoming.sort((a, b) => weekPay[a.id].dueDate.localeCompare(weekPay[b.id].dueDate)) // soonest first
+    g.upcoming.sort((a, b) => upcomingPay[a.id].dueDate.localeCompare(upcomingPay[b.id].dueDate)) // soonest first
+    g.overdue.sort((a, b) => overduePay[a.id].dueDate.localeCompare(overduePay[b.id].dueDate))     // oldest overdue first
     g.churn.sort((a, b) => (b.churn_risk_score ?? 0) - (a.churn_risk_score ?? 0))
     for (const k of ['onboarding', 'trials', 'active', 'pif']) g[k].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
     return g
-  }, [allClients, ownerFilter, weekPay])
+  }, [allClients, ownerFilter, upcomingPay, overduePay])
 
   const visibleClients = bin === 'callbacks' ? callbackClients
     : bin === 'stalled' ? stalledClients
@@ -983,7 +998,7 @@ function CallsPageInner() {
                       <BoardCard
                         key={c.id}
                         client={c}
-                        meta={boardMeta(col.key, c, weekPay[c.id])}
+                        meta={boardMeta(col.key, c, col.key === 'overdue' ? overduePay[c.id] : upcomingPay[c.id])}
                         onClick={() => router.push(`/clients/${c.id}`)}
                       />
                     ))}
