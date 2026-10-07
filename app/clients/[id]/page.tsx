@@ -299,7 +299,9 @@ export default function ClientWarRoom() {
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(field),
+        // tz_today lets the server stamp signed_at on the caller's local day when
+        // this change moves the client into active_client.
+        body: JSON.stringify({ ...field, tz_today: localToday() }),
       })
       if (!res.ok) throw new Error()
       const updated = await res.json()

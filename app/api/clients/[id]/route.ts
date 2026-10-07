@@ -51,6 +51,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     body.followup_reason = null
   }
 
+  // Signing / re-signing: stamp signed_at to today whenever a client transitions
+  // INTO active_client (from any other stage), so Deal Flow credits the day they
+  // were actually signed — not just the very first time. A plain edit of an
+  // already-active client (stage unchanged) never re-stamps. Use the caller's
+  // local date (tz_today) so the signing lands on the right day in their timezone
+  // rather than the server's UTC day.
+  const tzToday = typeof body.tz_today === 'string' ? body.tz_today : null
+  delete body.tz_today
+  if (body.stage === 'active_client' && body.signed_at === undefined) {
+    const { data: cur } = await supabase.from('clients').select('stage').eq('id', id).maybeSingle()
+    if (cur && cur.stage !== 'active_client') {
+      body.signed_at = tzToday ? `${tzToday}T12:00:00Z` : new Date().toISOString()
+    }
+  }
+
   const { data, error } = await supabase
     .from('clients')
     .update(body)

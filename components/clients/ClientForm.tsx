@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
+import { cn, localToday } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Client, ClientStage, Affiliate } from '@/types'
 
@@ -484,6 +484,9 @@ export function ClientForm({ open, onClose, client, defaultStage, onSaved }: Pro
     try {
       const url = client ? `/api/clients/${client.id}` : '/api/clients'
       const method = client ? 'PATCH' : 'POST'
+      // On edit, hint the server with the local date so a move into active_client
+      // stamps signed_at on the right day. (Not sent on create — no such column.)
+      if (client) (payload as Record<string, unknown>).tz_today = localToday()
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
