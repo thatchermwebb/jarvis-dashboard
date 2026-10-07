@@ -134,6 +134,8 @@ export interface Client {
   new_ads?: boolean
   campaign_link?: string
   ad_account_link?: string
+  /** Ad platform account ID (e.g. act_123…) — typed on the profile. */
+  ad_account_id?: string | null
   budget?: number
   spend?: number
   leads?: number

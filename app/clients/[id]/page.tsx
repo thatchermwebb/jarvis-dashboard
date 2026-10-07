@@ -224,6 +224,7 @@ export default function ClientWarRoom() {
   const [nextPayment, setNextPayment] = useState<Payment | null>(null)
   const [activeTab, setActiveTab] = useState('history')
   const [contractEditOpen, setContractEditOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false) // Growth & Contract collapsible
   const { user } = useAuth()
   // Associates are affiliate-scoped read-write now (edit clients, log calls,
   // manage payments) — no fully read-only role remains on this page.
@@ -608,7 +609,7 @@ export default function ClientWarRoom() {
 
               <Separator className="bg-border" />
 
-              <Section title="Deal">
+              <Section title="Advertising">
                 <div className="mb-3" ref={pkgPickerRef}>
                   <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Advertised Package</div>
                   <div className="relative">
@@ -684,6 +685,21 @@ export default function ClientWarRoom() {
                     )}
                   </div>
                 </div>
+                {/* Ad Account ID — small typeable field under the package. */}
+                <div className="mb-3">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Ad Account ID</div>
+                  <input
+                    key={`adacct-${client.id}`}
+                    defaultValue={client.ad_account_id ?? ''}
+                    disabled={readOnly || updating}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim() || null
+                      if (v !== (client.ad_account_id ?? null)) quickUpdate({ ad_account_id: v } as Partial<Client>)
+                    }}
+                    placeholder="e.g. act_1234567890"
+                    className="w-full h-9 px-3 rounded-lg bg-secondary/40 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 disabled:opacity-60"
+                  />
+                </div>
                 {/* Running in Luna — we pay their ad-spend, they pay us a recurring sub. */}
                 <div className="mb-3">
                   <button
@@ -701,6 +717,33 @@ export default function ClientWarRoom() {
                     Running in Luna
                   </button>
                 </div>
+                {(client.ad_status || client.campaign_link || client.ad_account_link || (!hideMoney && (client.budget != null || client.spend != null))) && (
+                  <>
+                    <div className="border-t border-border my-2" />
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Ad Info</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Ad Status" value={client.ad_status} />
+                      {!hideMoney && <Field label="Budget" value={client.budget ? formatCurrency(client.budget) : null} />}
+                      {!hideMoney && <Field label="Spend" value={client.spend ? formatCurrency(client.spend) : null} />}
+                      {!hideMoney && <Field label="CPL" value={client.cpl ? `$${client.cpl}` : null} />}
+                    </div>
+                    {client.campaign_link && (
+                      <a href={client.campaign_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1">
+                        <ExternalLink className="w-3 h-3" /> Campaign Link
+                      </a>
+                    )}
+                    {client.ad_account_link && (
+                      <a href={client.ad_account_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-0.5">
+                        <ExternalLink className="w-3 h-3" /> Ad Account
+                      </a>
+                    )}
+                  </>
+                )}
+              </Section>
+
+              <Separator className="bg-border" />
+
+              <Section title="Deal">
                 {client.affiliate && (
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-7 h-7 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
@@ -727,28 +770,6 @@ export default function ClientWarRoom() {
                   {!hideMoney && <Field label="Payment Status" value={client.payment_status} />}
                   <Field label="Assigned VA" value={client.assigned_va} />
                 </div>
-                {(client.ad_status || client.campaign_link || client.ad_account_link || (!hideMoney && (client.budget != null || client.spend != null))) && (
-                  <>
-                    <div className="border-t border-border my-2" />
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Ad Info</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Ad Status" value={client.ad_status} />
-                      {!hideMoney && <Field label="Budget" value={client.budget ? formatCurrency(client.budget) : null} />}
-                      {!hideMoney && <Field label="Spend" value={client.spend ? formatCurrency(client.spend) : null} />}
-                      {!hideMoney && <Field label="CPL" value={client.cpl ? `$${client.cpl}` : null} />}
-                    </div>
-                    {client.campaign_link && (
-                      <a href={client.campaign_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1">
-                        <ExternalLink className="w-3 h-3" /> Campaign Link
-                      </a>
-                    )}
-                    {client.ad_account_link && (
-                      <a href={client.ad_account_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-0.5">
-                        <ExternalLink className="w-3 h-3" /> Ad Account
-                      </a>
-                    )}
-                  </>
-                )}
                 {client.deal_notes && (
                   <>
                     <div className="border-t border-border my-2" />
@@ -760,106 +781,7 @@ export default function ClientWarRoom() {
                 )}
               </Section>
 
-              <Separator className="bg-border" />
-
-              <Section title="Growth Stage">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {GROWTH_STAGES.map(s => {
-                    const active = client.growth_stage === s.value
-                    return (
-                      <div key={s.value} className="relative group">
-                        <button
-                          disabled={updating || readOnly}
-                          onClick={() => quickUpdate({ growth_stage: active ? null : s.value } as Partial<Client>)}
-                          className={cn(
-                            'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
-                            active
-                              ? s.on
-                              : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
-                            readOnly && 'cursor-default',
-                          )}
-                        >
-                          <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
-                          {s.label}
-                        </button>
-                        {/* Styled hover tooltip (instant, replaces native title) */}
-                        <div
-                          role="tooltip"
-                          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 z-50 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150"
-                        >
-                          <div className="rounded-lg bg-popover border border-border shadow-xl px-3 py-2 text-[11px] leading-snug text-foreground/90">
-                            {s.desc}
-                          </div>
-                          <div className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 w-2 h-2 rotate-45 bg-popover border-r border-b border-border" />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Section>
-
-              <Separator className="bg-border" />
-
-              <Section title="Contract" action={!readOnly ? (
-                <button
-                  onClick={() => setContractEditOpen(true)}
-                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium flex items-center gap-1"
-                >
-                  <Edit className="w-3 h-3" /> Edit
-                </button>
-              ) : undefined}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {CONTRACT_STATUSES.map(s => {
-                    const active = client.contract_status === s.value
-                    return (
-                      <button
-                        key={s.value}
-                        disabled={updating || readOnly}
-                        onClick={() => quickUpdate({ contract_status: active ? null : s.value } as Partial<Client>)}
-                        className={cn(
-                          'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
-                          active
-                            ? s.on
-                            : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
-                          readOnly && 'cursor-default',
-                        )}
-                      >
-                        <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
-                        {s.label}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {(client.contract_start || client.contract_end) && (
-                  <div className="mt-3">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Term</div>
-                    <div className="text-sm text-foreground">
-                      {client.contract_start ? formatDate(client.contract_start) : '—'}
-                      {' → '}
-                      {client.contract_end ? formatDate(client.contract_end) : '—'}
-                      {(() => {
-                        const term = contractTermLabel(client.contract_start, client.contract_end)
-                        return term ? <span className="text-muted-foreground"> · {term}</span> : null
-                      })()}
-                    </div>
-                  </div>
-                )}
-
-                {(client.contract_payment_count != null || client.contract_total_value != null) && (
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <Field label="Payments" value={client.contract_payment_count != null ? `${client.contract_payment_count}` : null} />
-                    <Field label="Total Value" value={client.contract_total_value != null ? formatCurrency(client.contract_total_value) : null} />
-                  </div>
-                )}
-
-                {!client.contract_status && !client.contract_start && client.contract_total_value == null && (
-                  <p className="text-[11px] text-muted-foreground/60 mt-2">
-                    Set the term, payment count and value in {readOnly ? 'the client record' : 'Edit'}.
-                  </p>
-                )}
-              </Section>
-
+              {/* Trial */}
               {client.trial_start && ['free_trial','trial_ending_soon','onboarding'].includes(client.stage) && (
                 <>
                   <Separator className="bg-border" />
@@ -897,6 +819,120 @@ export default function ClientWarRoom() {
                   </Section>
                 </>
               )}
+
+              {/* Growth & Contract — de-emphasized, collapsed by default */}
+              <Separator className="bg-border" />
+              <div>
+                <button
+                  onClick={() => setMoreOpen(o => !o)}
+                  className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground/50 hover:text-muted-foreground uppercase tracking-widest transition-colors"
+                >
+                  <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', moreOpen && 'rotate-180')} />
+                  Growth &amp; Contract
+                </button>
+
+                {moreOpen && (
+                  <div className="mt-3 space-y-5">
+                    {/* Growth Stage */}
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">Growth Stage</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {GROWTH_STAGES.map(s => {
+                          const active = client.growth_stage === s.value
+                          return (
+                            <div key={s.value} className="relative group">
+                              <button
+                                disabled={updating || readOnly}
+                                onClick={() => quickUpdate({ growth_stage: active ? null : s.value } as Partial<Client>)}
+                                className={cn(
+                                  'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
+                                  active ? s.on : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
+                                  readOnly && 'cursor-default',
+                                )}
+                              >
+                                <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
+                                {s.label}
+                              </button>
+                              <div
+                                role="tooltip"
+                                className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 z-50 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150"
+                              >
+                                <div className="rounded-lg bg-popover border border-border shadow-xl px-3 py-2 text-[11px] leading-snug text-foreground/90">
+                                  {s.desc}
+                                </div>
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 w-2 h-2 rotate-45 bg-popover border-r border-b border-border" />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Contract */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Contract</div>
+                        {!readOnly && (
+                          <button
+                            onClick={() => setContractEditOpen(true)}
+                            className="text-[10px] text-primary hover:text-primary/80 transition-colors font-medium flex items-center gap-1"
+                          >
+                            <Edit className="w-3 h-3" /> Edit
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {CONTRACT_STATUSES.map(s => {
+                          const active = client.contract_status === s.value
+                          return (
+                            <button
+                              key={s.value}
+                              disabled={updating || readOnly}
+                              onClick={() => quickUpdate({ contract_status: active ? null : s.value } as Partial<Client>)}
+                              className={cn(
+                                'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all disabled:opacity-60',
+                                active ? s.on : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80',
+                                readOnly && 'cursor-default',
+                              )}
+                            >
+                              <span className={cn('w-1.5 h-1.5 rounded-full', active ? s.dot : 'bg-muted-foreground/40')} />
+                              {s.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {(client.contract_start || client.contract_end) && (
+                        <div className="mt-3">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Term</div>
+                          <div className="text-sm text-foreground">
+                            {client.contract_start ? formatDate(client.contract_start) : '—'}
+                            {' → '}
+                            {client.contract_end ? formatDate(client.contract_end) : '—'}
+                            {(() => {
+                              const term = contractTermLabel(client.contract_start, client.contract_end)
+                              return term ? <span className="text-muted-foreground"> · {term}</span> : null
+                            })()}
+                          </div>
+                        </div>
+                      )}
+
+                      {(client.contract_payment_count != null || client.contract_total_value != null) && (
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <Field label="Payments" value={client.contract_payment_count != null ? `${client.contract_payment_count}` : null} />
+                          <Field label="Total Value" value={client.contract_total_value != null ? formatCurrency(client.contract_total_value) : null} />
+                        </div>
+                      )}
+
+                      {!client.contract_status && !client.contract_start && client.contract_total_value == null && (
+                        <p className="text-[11px] text-muted-foreground/60 mt-2">
+                          Set the term, payment count and value in {readOnly ? 'the client record' : 'Edit'}.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Links */}
               <Separator className="bg-border" />
