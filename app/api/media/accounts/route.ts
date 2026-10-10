@@ -9,9 +9,11 @@ export async function GET() {
   const supabase = await createClient()
 
   const [clientsRes, logsRes] = await Promise.all([
+    // Full client records so the tracker can render the same rich card as the
+    // calls list (sentiment, last contact, flags, note preview, etc.).
     supabase
       .from('clients')
-      .select('id, name, business_name, market_location, stage, ad_account_link, campaign_link')
+      .select('*')
       .in('stage', MEDIA_ACTIVE_STAGES)
       .order('name', { ascending: true }),
     supabase
