@@ -5,8 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, ExternalLink, Plus, Loader2, Clock, User } from 'lucide-react'
 import { cn, formatDate, formatCurrency, daysUntil, timeAgo, localToday } from '@/lib/utils'
-import { AccountLogDialog } from '@/components/media/AccountLogDialog'
-import type { MediaAccount, MediaAccountLog, Client } from '@/types'
+import type { MediaAccountLog, Client } from '@/types'
 
 function followupChip(date?: string | null) {
   if (!date) return { label: 'No follow-up set', cls: 'bg-secondary/50 text-muted-foreground border-border/40' }
@@ -26,7 +25,6 @@ export default function MediaAccountPage() {
   const [client, setClient] = useState<Client | null>(null)
   const [logs, setLogs] = useState<MediaAccountLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [logOpen, setLogOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -44,10 +42,6 @@ export default function MediaAccountPage() {
 
   const latest = logs[0] ?? null
   const chip = followupChip(latest?.follow_up_date)
-  const account: MediaAccount | null = client ? {
-    id: client.id, name: client.name, business_name: client.business_name,
-    market_location: client.market_location, latest,
-  } : null
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -86,7 +80,7 @@ export default function MediaAccountPage() {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <span className={cn('text-[11px] font-medium px-2.5 py-1 rounded-full border whitespace-nowrap', chip.cls)}>{chip.label}</span>
-                <button onClick={() => setLogOpen(true)} className="inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                <button onClick={() => router.push(`/media-buying/${id}/log`)} className="inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
                   <Plus className="w-4 h-4" /> Log Review
                 </button>
               </div>
@@ -112,7 +106,6 @@ export default function MediaAccountPage() {
         </>
       )}
 
-      {logOpen && account && <AccountLogDialog account={account} onClose={() => setLogOpen(false)} onSaved={load} />}
     </div>
   )
 }

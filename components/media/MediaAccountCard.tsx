@@ -37,11 +37,12 @@ function Metric({ label, value }: { label: string; value: React.ReactNode }) {
 
 // A Media Buying account card — same visual language as the calls-list card,
 // but with ad-review data and a "Log Review" action (no call actions).
-export function MediaAccountCard({ account: a, onLog }: { account: MediaAccountRow; onLog: () => void }) {
+export function MediaAccountCard({ account: a }: { account: MediaAccountRow }) {
   const router = useRouter()
   const l = a.latest
   const chip = followupChip(a.next_followup)
   const open = () => router.push(`/media-buying/${a.id}`)
+  const onLog = () => router.push(`/media-buying/${a.id}/log`)
   const short = (d?: string | null) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
 
   return (

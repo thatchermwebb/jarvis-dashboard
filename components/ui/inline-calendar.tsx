@@ -46,14 +46,13 @@ export function InlineCalendar({ value, onChange, size = 'sm' }: Props) {
   }
 
   const isLg = size === 'lg'
-  const cellSize = isLg ? 'w-10 h-10' : 'w-7 h-7'
-  const cellText = isLg ? 'text-sm' : 'text-xs'
+  const cellText = isLg ? 'text-base' : 'text-xs'
   const pad      = isLg ? 'p-4' : 'p-3'
-  const headText = isLg ? 'text-sm font-semibold' : 'text-xs font-semibold'
-  const dayLabel = isLg ? 'text-[10px]' : 'text-[9px]'
+  const headText = isLg ? 'text-base font-semibold' : 'text-xs font-semibold'
+  const dayLabel = isLg ? 'text-[11px]' : 'text-[9px]'
 
   return (
-    <div className={cn('bg-secondary/30 border border-border/40 rounded-xl select-none', pad)}>
+    <div className={cn('w-full bg-secondary/30 border border-border/40 rounded-xl select-none', pad)}>
       {/* Month nav */}
       <div className="flex items-center justify-between mb-3">
         <button type="button" onClick={prevMonth}
@@ -74,10 +73,10 @@ export function InlineCalendar({ value, onChange, size = 'sm' }: Props) {
         ))}
       </div>
 
-      {/* Day grid */}
-      <div className="grid grid-cols-7 gap-y-0.5">
+      {/* Day grid — cells fill the available width (square), maximizing the space */}
+      <div className={cn('grid grid-cols-7', isLg ? 'gap-1.5' : 'gap-1')}>
         {cells.map((day, idx) => {
-          if (!day) return <div key={`e-${idx}`} />
+          if (!day) return <div key={`e-${idx}`} className="aspect-square" />
           const cellDate = new Date(viewYear, viewMonth, day); cellDate.setHours(0,0,0,0)
           const isToday    = cellDate.getTime() === today.getTime()
           const isSelected = selectedDate && cellDate.getTime() === selectedDate.getTime()
@@ -87,8 +86,8 @@ export function InlineCalendar({ value, onChange, size = 'sm' }: Props) {
               type="button"
               onClick={() => selectDay(day)}
               className={cn(
-                'mx-auto flex items-center justify-center rounded-full font-medium transition-all',
-                cellSize, cellText,
+                'w-full aspect-square flex items-center justify-center rounded-lg font-medium transition-all',
+                cellText,
                 isSelected ? 'bg-primary text-primary-foreground' :
                 isToday    ? 'border border-primary/50 text-primary' :
                 'text-foreground/80 hover:bg-white/10'

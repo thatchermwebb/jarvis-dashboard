@@ -4,9 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Megaphone, CalendarRange, ClipboardList, Search } from 'lucide-react'
 import { cn, localToday, offsetStr } from '@/lib/utils'
-import { AccountLogDialog } from '@/components/media/AccountLogDialog'
 import { MediaAccountCard, type MediaAccountRow } from '@/components/media/MediaAccountCard'
-import type { MediaAccount } from '@/types'
 
 type AccountRow = MediaAccountRow
 
@@ -28,7 +26,6 @@ export default function MediaBuyingPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<RangeTab>('today')
-  const [logFor, setLogFor] = useState<MediaAccount | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -118,17 +115,9 @@ export default function MediaBuyingPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {visible.map(a => (
-            <MediaAccountCard
-              key={a.id}
-              account={a}
-              onLog={() => setLogFor({ id: a.id, name: a.name, business_name: a.business_name, market_location: a.market_location, latest: a.latest })}
-            />
-          ))}
+          {visible.map(a => <MediaAccountCard key={a.id} account={a} />)}
         </div>
       )}
-
-      {logFor && <AccountLogDialog account={logFor} onClose={() => setLogFor(null)} onSaved={load} />}
     </div>
   )
 }
