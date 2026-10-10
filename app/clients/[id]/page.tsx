@@ -33,7 +33,7 @@ import { PACKAGE_OPTIONS, packageOption } from '@/lib/packages'
 import { RichText } from '@/components/ui/rich-text'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Client, CommunicationLog, Payment, GrowthStage, ContractStatus } from '@/types'
+import type { Client, CommunicationLog, Payment, GrowthStage, ContractStatus, MediaAccountLog } from '@/types'
 
 // Growth stage — where the client's owner is in their business journey.
 const GROWTH_STAGES: { value: GrowthStage; label: string; desc: string; on: string; dot: string }[] = [
@@ -243,6 +243,15 @@ export default function ClientWarRoom() {
   const pkgPickerRef = useRef<HTMLDivElement>(null)
   // Creative Library codes for the "Creative" dropdown in the Ads tab.
   const [creativeOptions, setCreativeOptions] = useState<string[]>([])
+  // Media account review logs (shown/linked on the profile, like call logs).
+  const [mediaLogs, setMediaLogs] = useState<MediaAccountLog[]>([])
+
+  useEffect(() => {
+    fetch(`/api/media/account-logs?client_id=${id}`)
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setMediaLogs(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [id])
 
   useEffect(() => {
     if (hideMoney) return
@@ -738,6 +747,34 @@ export default function ClientWarRoom() {
                       </a>
                     )}
                   </>
+                )}
+                {/* Ad Reviews — saved media-buying account reviews, linked like a call log. */}
+                <div className="border-t border-border my-2" />
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                    Ad Reviews{mediaLogs.length > 0 ? ` (${mediaLogs.length})` : ''}
+                  </div>
+                  <button onClick={() => router.push(`/media-buying/${client.id}`)} className="text-[10px] text-primary hover:text-primary/80 font-medium">
+                    View all →
+                  </button>
+                </div>
+                {mediaLogs.length === 0 ? (
+                  <div className="text-xs text-muted-foreground/50">No ad reviews yet.</div>
+                ) : (
+                  <button
+                    onClick={() => router.push(`/media-buying/${client.id}`)}
+                    className="w-full text-left bg-secondary/30 rounded-md px-3 py-2 hover:bg-secondary/50 transition-colors"
+                  >
+                    <div className="text-[11px] text-muted-foreground mb-0.5">
+                      {timeAgo(mediaLogs[0].created_at)}{mediaLogs[0].created_by ? ` · ${mediaLogs[0].created_by}` : ''}
+                    </div>
+                    <div className="text-xs text-foreground/90 flex items-center gap-2 flex-wrap">
+                      {mediaLogs[0].cpl != null && <span>CPL {formatCurrency(mediaLogs[0].cpl)}</span>}
+                      {mediaLogs[0].leads != null && <span>· {mediaLogs[0].leads} leads</span>}
+                      {mediaLogs[0].booked != null && <span>· {mediaLogs[0].booked} booked</span>}
+                    </div>
+                    {mediaLogs[0].verdict && <div className="text-xs text-foreground/70 mt-0.5 line-clamp-2">“{mediaLogs[0].verdict}”</div>}
+                  </button>
                 )}
               </Section>
 
