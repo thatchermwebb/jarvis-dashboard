@@ -65,11 +65,9 @@ interface Props {
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (id: string) => void
-  /** Optional strip rendered at the very top of the card (e.g. media-review context). */
-  topSlot?: React.ReactNode
 }
 
-export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selected, onToggleSelect, topSlot }: Props) {
+export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selected, onToggleSelect }: Props) {
   const router = useRouter()
   const [logOpen, setLogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -116,7 +114,6 @@ export function CallQueueCard({ client, onUpdated, paymentDue, selectable, selec
   return (
     <>
       <div className="bg-card rounded-2xl overflow-hidden border border-border/40">
-        {topSlot}
         {/* Main row */}
         <div className="flex items-start gap-6 px-6 py-5">
           {/* Optional multi-select checkbox */}

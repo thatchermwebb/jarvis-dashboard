@@ -2,36 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import {
-  Megaphone, CalendarRange, ClipboardList, Search, Plus, Clock, ExternalLink,
-} from 'lucide-react'
-import { cn, formatDate, formatCurrency, daysUntil, timeAgo, localToday, offsetStr } from '@/lib/utils'
+import { Megaphone, CalendarRange, ClipboardList, Search } from 'lucide-react'
+import { cn, localToday, offsetStr } from '@/lib/utils'
 import { AccountLogDialog } from '@/components/media/AccountLogDialog'
-import { CallQueueCard } from '@/components/call-queue/CallQueueCard'
-import type { MediaAccount, MediaAccountLog, Client } from '@/types'
+import { MediaAccountCard, type MediaAccountRow } from '@/components/media/MediaAccountCard'
+import type { MediaAccount } from '@/types'
 
-// An account row = a full client (so we can render the calls-list card) plus its
-// latest review + follow-up/last-checked derived on the server.
-type AccountRow = Client & {
-  latest?: MediaAccountLog | null
-  last_checked?: string | null
-  next_followup?: string | null
-  log_count?: number
-}
+type AccountRow = MediaAccountRow
 
 type RangeTab = 'today' | 'tomorrow' | 'this_week' | 'all'
-
-function followupChip(date?: string | null) {
-  if (!date) return { label: 'No follow-up', cls: 'bg-secondary/50 text-muted-foreground border-border/40' }
-  const d = daysUntil(date)
-  const t = localToday()
-  const short = formatDate(date).replace(/,?\s*\d{4}$/, '')
-  if (date < t) return { label: `Overdue · ${short}`, cls: 'bg-red-500/15 text-red-400 border-red-500/25' }
-  if (date === t) return { label: 'Due today', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/25' }
-  if (d === 1) return { label: 'Due tomorrow', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/25' }
-  return { label: `Due ${short}`, cls: 'bg-secondary/60 text-muted-foreground border-border/40' }
-}
 
 // Which range bucket an account falls into, by its next follow-up date.
 function inRange(a: AccountRow, tab: RangeTab): boolean {
@@ -45,7 +24,6 @@ function inRange(a: AccountRow, tab: RangeTab): boolean {
 }
 
 export default function MediaBuyingPage() {
-  const router = useRouter()
   const [accounts, setAccounts] = useState<AccountRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -140,32 +118,13 @@ export default function MediaBuyingPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {visible.map(a => {
-            const chip = followupChip(a.next_followup)
-            const l = a.latest
-            const openLog = () => setLogFor({ id: a.id, name: a.name, business_name: a.business_name, market_location: a.market_location, latest: l })
-            // Media-review strip pinned to the top of the (reused) calls-list card.
-            const strip = (
-              <div className="flex items-center gap-3 px-6 py-2.5 bg-secondary/25 border-b border-border/40 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Clock className="w-3.5 h-3.5" />
-                  {a.last_checked ? `Reviewed ${timeAgo(a.last_checked)}` : <span className="text-amber-400/90">Never reviewed</span>}
-                </span>
-                {l?.cpl != null && <span className="text-[11px] text-muted-foreground">· CPL {formatCurrency(l.cpl)}</span>}
-                {l?.leads != null && <span className="text-[11px] text-muted-foreground">· {l.leads} leads</span>}
-                {l?.booked != null && <span className="text-[11px] text-muted-foreground">· {l.booked} booked</span>}
-                {l?.verdict && <span className="text-[11px] text-foreground/60 truncate max-w-[200px]">· “{l.verdict}”</span>}
-                <span className={cn('ml-auto text-[11px] font-medium px-2 py-0.5 rounded-full border whitespace-nowrap', chip.cls)}>{chip.label}</span>
-                <button onClick={() => router.push(`/media-buying/${a.id}`)} className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground whitespace-nowrap">
-                  <ExternalLink className="w-3 h-3" /> Open
-                </button>
-                <button onClick={openLog} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap">
-                  <Plus className="w-3 h-3" /> Log Review
-                </button>
-              </div>
-            )
-            return <CallQueueCard key={a.id} client={a} onUpdated={load} paymentDue={null} topSlot={strip} />
-          })}
+          {visible.map(a => (
+            <MediaAccountCard
+              key={a.id}
+              account={a}
+              onLog={() => setLogFor({ id: a.id, name: a.name, business_name: a.business_name, market_location: a.market_location, latest: a.latest })}
+            />
+          ))}
         </div>
       )}
 
