@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Loader2, Check } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { InlineCalendar } from '@/components/ui/inline-calendar'
 import { useAuth } from '@/contexts/AuthContext'
 import { localToday, offsetStr } from '@/lib/utils'
 import type { MediaAccount } from '@/types'
@@ -70,14 +71,14 @@ export function AccountLogDialog({ account, onClose, onSaved }: {
           {/* Timeframe */}
           <div>
             <div className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest mb-2">Timeframe these results cover</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={label}>Start Date</label>
-                <input type="date" value={form.period_start} onChange={e => set('period_start', e.target.value)} className={field} />
+                <InlineCalendar value={form.period_start} onChange={v => set('period_start', v)} />
               </div>
               <div>
                 <label className={label}>End Date</label>
-                <input type="date" value={form.period_end} onChange={e => set('period_end', e.target.value)} className={field} />
+                <InlineCalendar value={form.period_end} onChange={v => set('period_end', v)} />
               </div>
             </div>
           </div>
@@ -117,10 +118,12 @@ export function AccountLogDialog({ account, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Follow-up */}
+          {/* Follow-up — big themed calendar */}
           <div className="border-t border-border/40 pt-4">
             <label className={label}>Follow-up date — next take a look</label>
-            <input type="date" value={form.follow_up_date} onChange={e => set('follow_up_date', e.target.value)} className={`${field} max-w-[220px]`} />
+            <div className="max-w-sm">
+              <InlineCalendar value={form.follow_up_date} onChange={v => set('follow_up_date', v)} size="lg" />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-1">

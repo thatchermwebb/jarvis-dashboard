@@ -127,7 +127,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export function LogCard({ log: l }: { log: MediaAccountLog }) {
+function LogCard({ log: l }: { log: MediaAccountLog }) {
   const short = (d?: string | null) => (d ? formatDate(d).replace(/,?\s*\d{4}$/, '') : '')
   return (
     <div className="bg-card border border-border rounded-xl p-4">
