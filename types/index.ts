@@ -432,6 +432,42 @@ export interface MediaAd {
   client?: Pick<Client, 'id' | 'name' | 'business_name'> | null
 }
 
+// Periodic structured account review on the main Media Buying page.
+export interface MediaAccountLog {
+  id: string
+  created_at: string
+  created_by?: string | null
+  client_id: string
+  period_start?: string | null
+  period_end?: string | null
+  creatives?: string | null
+  leads?: number | null
+  cpl?: number | null
+  numbers_submitted?: number | null
+  booked?: number | null
+  spend?: number | null
+  revenue?: number | null
+  situation?: string | null
+  verdict?: string | null
+  changes?: string | null
+  follow_up_date?: string | null
+}
+
+// An account row on the Media Buying tracker: a client + their latest review.
+export interface MediaAccount {
+  id: string
+  name: string
+  business_name?: string | null
+  market_location?: string | null
+  stage?: string | null
+  ad_account_link?: string | null
+  campaign_link?: string | null
+  latest?: MediaAccountLog | null
+  last_checked?: string | null   // latest log created_at
+  next_followup?: string | null  // latest log follow_up_date
+  log_count?: number
+}
+
 export interface MediaReview {
   id: string
   created_at: string

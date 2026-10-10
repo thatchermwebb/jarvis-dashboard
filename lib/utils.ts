@@ -24,6 +24,13 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d, 12, 0, 0)
 }
 
+/** Today ± N days as a local YYYY-MM-DD string. */
+export function offsetStr(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Whole days from a past YYYY-MM-DD date to today (>= 0). */
 export function daysSince(dateStr?: string | null): number {
   if (!dateStr) return 0

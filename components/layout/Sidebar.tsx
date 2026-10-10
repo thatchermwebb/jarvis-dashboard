@@ -19,6 +19,7 @@ import {
   Users2,
   Megaphone,
   CalendarRange,
+  ClipboardList,
   ChevronRight,
   Moon,
 } from 'lucide-react'
@@ -40,7 +41,10 @@ const ALL_NAV_ITEMS: NavItem[] = [
     href: '/media-buying',
     label: 'Media Buying',
     icon: Megaphone,
-    children: [{ href: '/media-buying/monthly', label: 'Monthly Ad Update', icon: CalendarRange }],
+    children: [
+      { href: '/media-buying/review', label: 'Ad Review', icon: ClipboardList },
+      { href: '/media-buying/monthly', label: 'Monthly Ad Update', icon: CalendarRange },
+    ],
   },
   { href: '/luna', label: 'Luna', icon: Moon },
   { href: '/team', label: 'Team', icon: Users2 },
