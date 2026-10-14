@@ -138,8 +138,13 @@ export default function PaymentsPage() {
   const overdueAmt = overdue.reduce((s, p) => s + p.amount, 0)
 
   const todayStr = localToday()
-  const dueToday = payments.filter(p => ['pending', 'overdue'].includes(p.status) && p.due_date === todayStr)
-  const dueTodayAmt = dueToday.reduce((s, p) => s + p.amount, 0)
+  // Everything scheduled on today's calendar (excl. voided/waived), and how much
+  // of it has actually been collected.
+  const todaysPayments = payments.filter(p => p.due_date === todayStr && !['voided', 'waived'].includes(p.status))
+  const onCalendarTodayAmt = todaysPayments.reduce((s, p) => s + p.amount, 0)
+  const collectedTodayAmt = todaysPayments
+    .filter(p => p.status === 'paid' || p.status === 'paid_late')
+    .reduce((s, p) => s + p.amount, 0)
 
   const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1)
   const collectedThisMonth = payments.filter(p => {
@@ -313,8 +318,11 @@ export default function PaymentsPage() {
           <div className="text-xs text-muted-foreground mt-0.5">Overdue ({overdue.length})</div>
         </div>
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
-          <div className="text-2xl font-bold text-amber-400">{formatCurrency(dueTodayAmt)}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Today</div>
+          <div className="text-2xl font-bold text-amber-400">
+            {formatCurrency(collectedTodayAmt)}
+            <span className="text-muted-foreground/50"> / {formatCurrency(onCalendarTodayAmt)}</span>
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">Collected Today</div>
         </div>
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
           <div className="text-2xl font-bold text-emerald-400">{formatCurrency(collectedAmt)}</div>
