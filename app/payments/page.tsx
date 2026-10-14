@@ -61,13 +61,6 @@ function paymentLabel(p: Payment) {
   return p.description || TYPE_LABELS[p.payment_type] || p.payment_type
 }
 
-function getNextWeekRange() {
-  const today = new Date(); today.setHours(0,0,0,0)
-  const dayOfWeek = today.getDay() // 0=Sun
-  const nextMonday = new Date(today); nextMonday.setDate(today.getDate() + (dayOfWeek === 0 ? 1 : 8 - dayOfWeek))
-  const nextSunday = new Date(nextMonday); nextSunday.setDate(nextMonday.getDate() + 6)
-  return { start: nextMonday, end: nextSunday }
-}
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -144,13 +137,9 @@ export default function PaymentsPage() {
   const overdue = payments.filter(p => p.status === 'overdue')
   const overdueAmt = overdue.reduce((s, p) => s + p.amount, 0)
 
-  const { start: nwStart, end: nwEnd } = getNextWeekRange()
-  const nextWeek = payments.filter(p => {
-    if (!['pending', 'overdue'].includes(p.status)) return false
-    const d = new Date(p.due_date + 'T00:00:00')
-    return d >= nwStart && d <= nwEnd
-  })
-  const nextWeekAmt = nextWeek.reduce((s, p) => s + p.amount, 0)
+  const todayStr = localToday()
+  const dueToday = payments.filter(p => ['pending', 'overdue'].includes(p.status) && p.due_date === todayStr)
+  const dueTodayAmt = dueToday.reduce((s, p) => s + p.amount, 0)
 
   const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1)
   const collectedThisMonth = payments.filter(p => {
@@ -176,8 +165,6 @@ export default function PaymentsPage() {
     return true
   })
   const projectedAmt = projected.reduce((s, p) => s + p.amount, 0)
-
-  const nwLabel = `${nwStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})}–${nwEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`
 
   // Unique clients for filter dropdown
   const clientOptions = useMemo(() => {
@@ -326,8 +313,8 @@ export default function PaymentsPage() {
           <div className="text-xs text-muted-foreground mt-0.5">Overdue ({overdue.length})</div>
         </div>
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
-          <div className="text-2xl font-bold text-amber-400">{formatCurrency(nextWeekAmt)}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Next Week ({nwLabel})</div>
+          <div className="text-2xl font-bold text-amber-400">{formatCurrency(dueTodayAmt)}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Today</div>
         </div>
         <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
           <div className="text-2xl font-bold text-emerald-400">{formatCurrency(collectedAmt)}</div>
