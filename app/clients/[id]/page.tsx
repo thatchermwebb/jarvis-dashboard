@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { ClientForm } from '@/components/clients/ClientForm'
+import { InlineCalendar } from '@/components/ui/inline-calendar'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { AdSetupDialog } from '@/components/ad-production/AdSetupDialog'
 import { ScheduleCallDialog } from '@/components/clients/ScheduleCallDialog'
@@ -225,6 +226,8 @@ export default function ClientWarRoom() {
   const [activeTab, setActiveTab] = useState('history')
   const [contractEditOpen, setContractEditOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false) // Growth & Contract collapsible
+  const [adSpendEdit, setAdSpendEdit] = useState(false)
+  const [adSpendDraft, setAdSpendDraft] = useState({ amount: '', freq: 'month', start: '', end: '' })
   const { user } = useAuth()
   // Associates are affiliate-scoped read-write now (edit clients, log calls,
   // manage payments) — no fully read-only role remains on this page.
@@ -375,6 +378,7 @@ export default function ClientWarRoom() {
   }
 
   const trialDaysLeft = client.trial_end ? daysUntil(client.trial_end) : null
+  const spendDaysLeft = client.luna_spend_end ? daysUntil(client.luna_spend_end) : null
 
   const LOG_TYPE_ICON = {
     call: <Phone className="w-3 h-3" />,
@@ -726,6 +730,93 @@ export default function ClientWarRoom() {
                     Running in Luna
                   </button>
                 </div>
+                {/* Ad Spend subscription period (start/end + days-left emblem), only for Luna clients. */}
+                {client.running_in_luna && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Ad Spend</div>
+                      {!readOnly && (
+                        <button
+                          onClick={() => {
+                            if (adSpendEdit) { setAdSpendEdit(false); return }
+                            setAdSpendDraft({
+                              amount: client.luna_payment_amount != null ? String(client.luna_payment_amount) : '',
+                              freq: client.luna_payment_frequency || 'month',
+                              start: client.luna_spend_start ?? '',
+                              end: client.luna_spend_end ?? '',
+                            })
+                            setAdSpendEdit(true)
+                          }}
+                          className="text-[10px] text-primary hover:text-primary/80 font-medium inline-flex items-center gap-1"
+                        >
+                          {adSpendEdit ? 'Cancel' : <><Edit className="w-3 h-3" /> Edit</>}
+                        </button>
+                      )}
+                    </div>
+
+                    {adSpendEdit ? (
+                      <div className="space-y-2.5 bg-secondary/20 border border-border/40 rounded-lg p-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Amount ($)</div>
+                            <input type="number" inputMode="decimal" value={adSpendDraft.amount} onChange={e => setAdSpendDraft(d => ({ ...d, amount: e.target.value }))} placeholder="0" className="w-full h-8 px-2 rounded-md bg-secondary/50 border border-border/50 text-sm text-foreground outline-none focus:border-primary/40" />
+                          </div>
+                          <div>
+                            <div className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Frequency</div>
+                            <select value={adSpendDraft.freq} onChange={e => setAdSpendDraft(d => ({ ...d, freq: e.target.value }))} className="w-full h-8 px-2 rounded-md bg-secondary/50 border border-border/50 text-sm text-foreground outline-none cursor-pointer">
+                              <option value="day">day</option><option value="week">week</option><option value="month">month</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Start Date</div>
+                          <InlineCalendar value={adSpendDraft.start} onChange={v => setAdSpendDraft(d => ({ ...d, start: v }))} />
+                        </div>
+                        <div>
+                          <div className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">End Date — subscription due</div>
+                          <InlineCalendar value={adSpendDraft.end} onChange={v => setAdSpendDraft(d => ({ ...d, end: v }))} />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-0.5">
+                          <button onClick={() => setAdSpendEdit(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1">Cancel</button>
+                          <button
+                            onClick={async () => {
+                              await quickUpdate({
+                                luna_payment_amount: adSpendDraft.amount.trim() === '' ? null : Number(adSpendDraft.amount),
+                                luna_payment_frequency: adSpendDraft.freq,
+                                luna_spend_start: adSpendDraft.start || null,
+                                luna_spend_end: adSpendDraft.end || null,
+                              } as Partial<Client>)
+                              setAdSpendEdit(false)
+                            }}
+                            disabled={updating}
+                            className="text-xs font-medium px-2.5 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                          >Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {client.luna_payment_amount != null && (
+                          <div className="text-sm text-foreground mb-1">{formatCurrency(client.luna_payment_amount)}<span className="text-muted-foreground">/{client.luna_payment_frequency || 'month'}</span></div>
+                        )}
+                        {(client.luna_spend_start || client.luna_spend_end) && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label="Start" value={client.luna_spend_start ? formatDate(client.luna_spend_start) : null} />
+                            <Field label="End" value={client.luna_spend_end ? formatDate(client.luna_spend_end) : null} />
+                          </div>
+                        )}
+                        {spendDaysLeft !== null && (
+                          <div className={cn('text-sm font-medium mt-1',
+                            spendDaysLeft <= 0 ? 'text-red-400' : spendDaysLeft <= 2 ? 'text-orange-400' : 'text-muted-foreground')}>
+                            {spendDaysLeft <= 0 ? '🚨 Subscription due' : spendDaysLeft <= 2 ? `⏰ Due ${spendDaysLeft === 1 ? 'tomorrow' : `in ${spendDaysLeft} days`}` : `${spendDaysLeft} days left`}
+                          </div>
+                        )}
+                        {!client.luna_spend_start && !client.luna_spend_end && client.luna_payment_amount == null && (
+                          <div className="text-xs text-muted-foreground/50">No ad-spend period set — click Edit.</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
                 {(client.ad_status || client.campaign_link || client.ad_account_link || (!hideMoney && (client.budget != null || client.spend != null))) && (
                   <>
                     <div className="border-t border-border my-2" />

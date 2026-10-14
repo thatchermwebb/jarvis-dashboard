@@ -196,6 +196,9 @@ export interface Client {
   luna_failed_at?: string | null
   /** Which kind of pause when Luna is not live: 'client' | 'trial'. */
   luna_pause_type?: string | null
+  /** Current ad-spend subscription period (end = when it's due to renew). */
+  luna_spend_start?: string | null
+  luna_spend_end?: string | null
 
   // AI situation summary (cached)
   ai_situation_summary?: string | null
