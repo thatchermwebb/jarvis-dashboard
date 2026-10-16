@@ -12,7 +12,7 @@ export interface VaConfig {
 }
 
 export const VA_CONFIG: Record<TeamVaId, VaConfig> = {
-  wilson: { id: 'wilson', name: 'Wilson', standardLabel: 'Ads Creation', kpiSeconds: 20 * 60, rate: 5.5 },
+  wilson: { id: 'wilson', name: 'Wilson', standardLabel: 'Ads Creation', kpiSeconds: 20 * 60, rate: 6.5 },
   samuel: { id: 'samuel', name: 'Samuel', standardLabel: 'Onboarding',   kpiSeconds: 40 * 60, rate: 9.35 },
 }
 
