@@ -69,7 +69,7 @@ export default function PaymentsPage() {
   const readOnly = useReadOnly()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'list' | 'table' | 'calendar'>('list')
+  const [view, setView] = useState<'list' | 'table' | 'calendar'>('calendar')
   const [datePreset, setDatePreset] = useState<'all' | 'this_month' | 'last_month' | 'custom'>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
