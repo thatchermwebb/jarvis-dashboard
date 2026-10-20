@@ -162,7 +162,8 @@ export default function PaymentsPage() {
     ? new Date(calMonth.year, calMonth.month + 1, 0)
     : null
   const projected = payments.filter(p => {
-    if (p.status === 'voided' || p.status === 'waived') return false
+    // Projection is paid + still-upcoming; overdue (past-due unpaid) is excluded.
+    if (p.status === 'voided' || p.status === 'waived' || p.status === 'overdue') return false
     if (projectedMonthStart && projectedMonthEnd && p.due_date) {
       const d = new Date(p.due_date + 'T00:00:00')
       return d >= projectedMonthStart && d <= projectedMonthEnd
