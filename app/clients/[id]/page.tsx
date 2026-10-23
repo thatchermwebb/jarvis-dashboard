@@ -123,6 +123,7 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
   { value: 'free_trial',         label: 'Free Trial (Active)',    color: 'text-violet-300 bg-violet-500/10 border-violet-500/20 hover:bg-violet-500/20',   dot: 'bg-violet-400'  },
   { value: 'free_trial_pending', label: 'Free Trial (Pending)',   color: 'text-amber-300 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20',       dot: 'bg-amber-400'   },
   { value: 'onboarding',         label: 'Onboarding',             color: 'text-blue-300 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20',           dot: 'bg-blue-400'    },
+  { value: 'onboarding_stage_2', label: 'Onboarding Stage 2',     color: 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20',   dot: 'bg-indigo-400'  },
   { value: 'overdue',            label: 'Overdue',                color: 'text-red-300 bg-red-500/10 border-red-500/20 hover:bg-red-500/20',               dot: 'bg-red-400'     },
   { value: 'paused',             label: 'Paused',                 color: 'text-slate-300 bg-slate-500/10 border-slate-500/20 hover:bg-slate-500/20',       dot: 'bg-slate-400'   },
   { value: 'churned',            label: 'Churned',                color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
@@ -130,7 +131,7 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
 ]
 
 // Stages where a trial-end date is meaningful.
-const TIMELINE_TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon', 'trial_concluded', 'onboarding'])
+const TIMELINE_TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon', 'trial_concluded', 'onboarding', 'onboarding_stage_2'])
 
 // "Where things stand" as a constellation: each key date is a glowing star on a
 // night-sky panel, wired together in chronological order. No "today" node —
@@ -483,7 +484,7 @@ export default function ClientWarRoom() {
                 <Star className="w-3 h-3" /> Close Brief
               </Button>
             )}
-            {client.stage === 'onboarding' && (
+            {(client.stage === 'onboarding' || client.stage === 'onboarding_stage_2') && (
               <Button
                 size="sm"
                 className="h-8 text-xs gap-1"
@@ -910,7 +911,7 @@ export default function ClientWarRoom() {
               </Section>
 
               {/* Trial */}
-              {client.trial_start && ['free_trial','trial_ending_soon','onboarding'].includes(client.stage) && (
+              {client.trial_start && ['free_trial','trial_ending_soon','onboarding','onboarding_stage_2'].includes(client.stage) && (
                 <>
                   <Separator className="bg-border" />
                   <Section title="Trial">

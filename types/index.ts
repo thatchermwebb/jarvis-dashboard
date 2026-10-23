@@ -1,5 +1,6 @@
 export type ClientStage =
   | 'onboarding'
+  | 'onboarding_stage_2'
   | 'free_trial'
   | 'free_trial_pending'
   | 'trial_ending_soon'

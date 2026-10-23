@@ -31,7 +31,7 @@ const SENTIMENT_LABELS: Record<string, string> = {
   concerned: '😟 Concerned', frustrated: '😤 Frustrated', angry: '😠 Angry',
   ghosting: '👻 Ghosting', close_ready: '🎯 Close-Ready',
 }
-const TRIAL_STAGES = new Set(['free_trial','free_trial_pending','trial_ending_soon','trial_concluded','onboarding'])
+const TRIAL_STAGES = new Set(['free_trial','free_trial_pending','trial_ending_soon','trial_concluded','onboarding','onboarding_stage_2'])
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,7 @@ function stageDotColor(stage: string): string {
   if (stage === 'paused') return 'bg-slate-400'
   if (stage === 'trial_concluded') return 'bg-teal-400'
   if (stage === 'onboarding') return 'bg-blue-400'
+  if (stage === 'onboarding_stage_2') return 'bg-indigo-400'
   return 'bg-muted-foreground/40'
 }
 

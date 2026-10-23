@@ -100,6 +100,7 @@ const STAGE_MAP: Record<string, string> = {
   'active': 'active_client', 'active client': 'active_client',
   'trial': 'free_trial', 'free trial': 'free_trial',
   'onboarding': 'onboarding',
+  'onboarding stage 2': 'onboarding_stage_2', 'onboarding 2': 'onboarding_stage_2', 'onboarding_stage_2': 'onboarding_stage_2',
   'churned': 'churned', 'churn': 'churned',
   'at risk': 'churn_risk', 'churn risk': 'churn_risk', 'at-risk': 'churn_risk',
   'payment issue': 'payment_issue',

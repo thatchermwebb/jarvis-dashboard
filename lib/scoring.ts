@@ -17,7 +17,7 @@ const CLIENT_STAGES = new Set(['active_client', 'won_back', 'overdue', 'payment_
 const TRIAL_STAGES = new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon'])
 
 export function priorityBin(c: Pick<Client, 'stage'>): PriorityBin {
-  if (c.stage === 'onboarding') return 'onboarding'
+  if (c.stage === 'onboarding' || c.stage === 'onboarding_stage_2') return 'onboarding'
   if (TRIAL_STAGES.has(c.stage)) return 'trial'
   if (CLIENT_STAGES.has(c.stage)) return 'client'
   return 'other' // churned, free_trial_lost, trial_concluded, etc.

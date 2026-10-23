@@ -145,6 +145,7 @@ function ColorSection({
 const STAGE_OPTIONS = [
   { value: 'active_client',      label: 'Active Client' },
   { value: 'onboarding',         label: 'Onboarding' },
+  { value: 'onboarding_stage_2', label: 'Onboarding Stage 2' },
   { value: 'free_trial',         label: 'Free Trial (Active)' },
   { value: 'free_trial_pending', label: 'Free Trial (Pending)' },
   { value: 'trial_concluded',    label: 'Free Trial (Complete)' },

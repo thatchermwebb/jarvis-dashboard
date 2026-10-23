@@ -90,6 +90,7 @@ export function formatCurrency(amount?: number): string {
 export function stageLabel(stage: ClientStage): string {
   const labels: Record<ClientStage, string> = {
     onboarding: 'Onboarding',
+    onboarding_stage_2: 'Onboarding Stage 2',
     free_trial: 'Free Trial (Active)',
     free_trial_pending: 'Free Trial (Pending)',
     trial_ending_soon: 'Free Trial (Active)',   // legacy — maps to same label
@@ -109,6 +110,7 @@ export function stageLabel(stage: ClientStage): string {
 export function stageColor(stage: ClientStage): string {
   const colors: Record<ClientStage, string> = {
     onboarding: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    onboarding_stage_2: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
     free_trial: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
     free_trial_pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     trial_ending_soon: 'bg-violet-500/20 text-violet-300 border-violet-500/30',  // legacy

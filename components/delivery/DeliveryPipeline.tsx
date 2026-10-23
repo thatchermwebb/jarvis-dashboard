@@ -76,7 +76,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
 
       const pipeline = allClients
         .filter(c =>
-          c.stage === 'onboarding' ||
+          c.stage === 'onboarding' || c.stage === 'onboarding_stage_2' ||
           (c.stage === 'free_trial' && c.updated_at >= cutoff)
         )
         .map(c => ({
@@ -88,7 +88,7 @@ export function DeliveryPipeline({ user }: { user: AppUser }) {
         // in Onboarding rather than flipping to Free Trial).
         .filter(c => {
           const done = c.adProductions.length > 0 && c.adProductions.every(a => a.status === 'done')
-          return !(done && c.stage === 'onboarding' && c.updated_at < cutoff)
+          return !(done && (c.stage === 'onboarding' || c.stage === 'onboarding_stage_2') && c.updated_at < cutoff)
         })
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 

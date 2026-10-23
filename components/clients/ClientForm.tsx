@@ -29,6 +29,7 @@ interface Props {
 
 const STAGES: { value: ClientStage; label: string; color: string; bg: string; dot: string }[] = [
   { value: 'onboarding',         label: 'Onboarding',            color: 'text-blue-400',    bg: 'bg-blue-500/15',    dot: 'bg-blue-400' },
+  { value: 'onboarding_stage_2', label: 'Onboarding Stage 2',    color: 'text-indigo-400',  bg: 'bg-indigo-500/15',  dot: 'bg-indigo-400' },
   { value: 'free_trial_pending', label: 'Free Trial (Pending)',  color: 'text-yellow-400',  bg: 'bg-yellow-500/15',  dot: 'bg-yellow-400' },
   { value: 'free_trial',         label: 'Free Trial (Active)',   color: 'text-cyan-400',    bg: 'bg-cyan-500/15',    dot: 'bg-cyan-400' },
   { value: 'trial_concluded',    label: 'Free Trial (Complete)', color: 'text-violet-400',  bg: 'bg-violet-500/15',  dot: 'bg-violet-400' },

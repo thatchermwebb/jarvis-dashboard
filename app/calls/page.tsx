@@ -478,7 +478,7 @@ function CallsPageInner() {
     // gated behind the "Churned" toggle.
     const pool = allClients.filter(c => {
       if (c.close_call_booked || c.callback || c.stalled_onboarding || c.follow_up) return false
-      if (c.next_followup_date || c.stage === 'onboarding') return true
+      if (c.next_followup_date || c.stage === 'onboarding' || c.stage === 'onboarding_stage_2') return true
       if (c.stage === 'trial_concluded') return false
       if ((c.stage === 'churned' || c.stage === 'free_trial_lost') && !showChurned) return false
       return true
@@ -574,7 +574,7 @@ function CallsPageInner() {
       if (upcomingPay[c.id] && !overduePay[c.id]) { g.upcoming.push(c); continue }
       if (overduePay[c.id]) { g.overdue.push(c); continue }
       if ((c.churn_risk_score ?? 0) >= 60) { g.churn.push(c); continue }
-      if (c.stage === 'onboarding') { g.onboarding.push(c); continue }
+      if (c.stage === 'onboarding' || c.stage === 'onboarding_stage_2') { g.onboarding.push(c); continue }
       if (TRIAL.has(c.stage ?? '')) { g.trials.push(c); continue }
       if (c.stage === 'active_client') {
         if (c.payment_frequency === 'quarterly') g.pif.push(c)

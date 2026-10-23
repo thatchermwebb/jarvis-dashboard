@@ -437,6 +437,7 @@ export default function ReportsPage() {
 
   const STAGE_LABELS: Record<string, string> = {
     onboarding: 'Onboarding',
+    onboarding_stage_2: 'Onboarding Stage 2',
     free_trial_pending: 'Free Trial (Pending)',
     free_trial: 'Free Trial (Active)',
     trial_concluded: 'Free Trial (Complete)',

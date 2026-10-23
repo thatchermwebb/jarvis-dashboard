@@ -229,7 +229,7 @@ export function clientAnalyticsRows(clients: Client[], payments: Payment[]): Cli
   const t = todayStr()
   const from = ledgerStart(payments)
   return clients
-    .filter(c => c.stage !== 'onboarding')
+    .filter(c => c.stage !== 'onboarding' && c.stage !== 'onboarding_stage_2')
     .map(c => {
       const upcoming = payments
         .filter(p => p.client_id === c.id && UPCOMING.has(p.status))
