@@ -161,14 +161,20 @@ export default function PaymentsPage() {
   const projectedMonthEnd = view === 'calendar'
     ? new Date(calMonth.year, calMonth.month + 1, 0)
     : null
+  const inProjectedPeriod = (dateStr?: string | null) => {
+    if (!dateStr) return false
+    if (!projectedMonthStart || !projectedMonthEnd) return true // table view = all time
+    const d = new Date(dateStr + 'T00:00:00')
+    return d >= projectedMonthStart && d <= projectedMonthEnd
+  }
+  // Projected = what the month will total = already collected this month
+  // (by paid date) + still-upcoming open payments (due today → period end).
+  // Overdue AND past-due-still-open payments are excluded — both "should have
+  // landed but didn't" — so Projected reads as Collected + Upcoming.
   const projected = payments.filter(p => {
-    // Projection is paid + still-upcoming; overdue (past-due unpaid) is excluded.
-    if (p.status === 'voided' || p.status === 'waived' || p.status === 'overdue') return false
-    if (projectedMonthStart && projectedMonthEnd && p.due_date) {
-      const d = new Date(p.due_date + 'T00:00:00')
-      return d >= projectedMonthStart && d <= projectedMonthEnd
-    }
-    return true
+    if (p.status === 'paid' || p.status === 'paid_late') return inProjectedPeriod(p.paid_date ?? p.due_date)
+    if (p.status === 'pending') return !!p.due_date && p.due_date >= todayStr && inProjectedPeriod(p.due_date)
+    return false // overdue / voided / waived excluded
   })
   const projectedAmt = projected.reduce((s, p) => s + p.amount, 0)
 
