@@ -13,6 +13,7 @@ export type ClientStage =
   | 'churned'
   | 'free_trial_lost'
   | 'won_back'
+  | 'do_not_contact'
 
 export type ClientSentiment =
   | 'happy'

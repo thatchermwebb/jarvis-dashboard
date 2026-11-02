@@ -151,6 +151,7 @@ const STAGE_OPTIONS = [
   { value: 'trial_concluded',    label: 'Free Trial (Complete)' },
   { value: 'paused',             label: 'Paused' },
   { value: 'churned',            label: 'Churned' },
+  { value: 'do_not_contact',     label: 'Do Not Contact' },
 ]
 
 const FREQ_OPTIONS = [

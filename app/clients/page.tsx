@@ -24,6 +24,7 @@ const LIST_GROUPS = [
   { label: 'Overdue',              stages: ['overdue', 'payment_issue', 'churn_risk'],color: 'text-red-400',     border: 'border-l-red-500',     dot: 'bg-red-500'     },
   { label: 'Paused',               stages: ['paused'],                                color: 'text-slate-400',   border: 'border-l-slate-500',   dot: 'bg-slate-500'   },
   { label: 'Churned / Lost',       stages: ['churned', 'free_trial_lost'],            color: 'text-muted-foreground', border: 'border-l-border', dot: 'bg-muted-foreground' },
+  { label: 'Do Not Contact',       stages: ['do_not_contact'],                        color: 'text-zinc-400',    border: 'border-l-zinc-600',    dot: 'bg-zinc-500'    },
 ]
 
 const KANBAN_COLUMNS: { stage: ClientStage; label: string; headerBg: string; dot: string }[] = [
@@ -37,6 +38,7 @@ const KANBAN_COLUMNS: { stage: ClientStage; label: string; headerBg: string; dot
   { stage: 'paused',             label: 'Paused',                headerBg: 'bg-slate-500/15 border-slate-500/30',     dot: 'bg-slate-400'        },
   { stage: 'churned',            label: 'Churned',               headerBg: 'bg-secondary/60 border-border',           dot: 'bg-muted-foreground' },
   { stage: 'free_trial_lost',    label: 'Free Trial (Lost)',     headerBg: 'bg-secondary/60 border-border',           dot: 'bg-muted-foreground' },
+  { stage: 'do_not_contact',     label: 'Do Not Contact',        headerBg: 'bg-zinc-700/20 border-zinc-600/30',       dot: 'bg-zinc-500'         },
 ]
 
 // URL ?filter= param → which stages to show
@@ -318,6 +320,7 @@ function stageBadge(stage: ClientStage): { label: string; cls: string } {
     paused:             { label: 'Paused',          cls: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
     churned:            { label: 'Churned',         cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
     free_trial_lost:    { label: 'Trial Lost',      cls: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+    do_not_contact:     { label: 'Do Not Contact',  cls: 'bg-zinc-700/20 text-zinc-400 border-zinc-600/30' },
   }
   return map[stage] ?? { label: stage.replace(/_/g, ' '), cls: 'bg-secondary text-muted-foreground border-border' }
 }

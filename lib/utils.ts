@@ -103,6 +103,7 @@ export function stageLabel(stage: ClientStage): string {
     churned: 'Churned',
     free_trial_lost: 'Free Trial (Lost)',
     won_back: 'Active',                         // legacy
+    do_not_contact: 'Do Not Contact',
   }
   return labels[stage] ?? stage
 }
@@ -123,6 +124,7 @@ export function stageColor(stage: ClientStage): string {
     churned: 'bg-slate-700/20 text-slate-400 border-slate-700/30',
     free_trial_lost: 'bg-slate-700/20 text-slate-400 border-slate-700/30',
     won_back: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',        // legacy
+    do_not_contact: 'bg-zinc-700/30 text-zinc-400 border-zinc-600/30',
   }
   return colors[stage] ?? 'bg-slate-500/20 text-slate-300 border-slate-500/30'
 }

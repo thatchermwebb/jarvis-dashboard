@@ -102,6 +102,7 @@ const STAGE_MAP: Record<string, string> = {
   'onboarding': 'onboarding',
   'onboarding stage 2': 'onboarding_stage_2', 'onboarding 2': 'onboarding_stage_2', 'onboarding_stage_2': 'onboarding_stage_2',
   'churned': 'churned', 'churn': 'churned',
+  'do not contact': 'do_not_contact', 'dnc': 'do_not_contact', 'do_not_contact': 'do_not_contact',
   'at risk': 'churn_risk', 'churn risk': 'churn_risk', 'at-risk': 'churn_risk',
   'payment issue': 'payment_issue',
   'paused': 'paused',

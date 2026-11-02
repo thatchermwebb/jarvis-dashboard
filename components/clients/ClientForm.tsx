@@ -38,6 +38,7 @@ const STAGES: { value: ClientStage; label: string; color: string; bg: string; do
   { value: 'paused',             label: 'Paused',                color: 'text-amber-400',   bg: 'bg-amber-500/15',   dot: 'bg-amber-400' },
   { value: 'churned',            label: 'Churned',               color: 'text-zinc-400',    bg: 'bg-zinc-500/15',    dot: 'bg-zinc-400' },
   { value: 'free_trial_lost',    label: 'Free Trial (Lost)',     color: 'text-rose-400',    bg: 'bg-rose-500/15',    dot: 'bg-rose-400' },
+  { value: 'do_not_contact',     label: 'Do Not Contact',        color: 'text-zinc-400',    bg: 'bg-zinc-700/20',    dot: 'bg-zinc-500' },
 ]
 
 const FREQUENCIES: { value: string; label: string }[] = [

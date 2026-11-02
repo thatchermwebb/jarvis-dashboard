@@ -446,6 +446,7 @@ export default function ReportsPage() {
     paused: 'Paused',
     churned: 'Churned',
     free_trial_lost: 'Free Trial (Lost)',
+    do_not_contact: 'Do Not Contact',
   }
 
   const stageGroups = useMemo(() =>

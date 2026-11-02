@@ -477,6 +477,7 @@ function CallsPageInner() {
     // hidden unless they have a follow-up/are onboarding; churned & lost are further
     // gated behind the "Churned" toggle.
     const pool = allClients.filter(c => {
+      if (c.stage === 'do_not_contact') return false // never surface — do not contact
       if (c.close_call_booked || c.callback || c.stalled_onboarding || c.follow_up) return false
       if (c.next_followup_date || c.stage === 'onboarding' || c.stage === 'onboarding_stage_2') return true
       if (c.stage === 'trial_concluded') return false
@@ -545,7 +546,7 @@ function CallsPageInner() {
   // The Call Backs bin: every callback-flagged client (owner-filtered + sorted the
   // same way), regardless of follow-up date — a flat "deferred" list.
   const binClients = useCallback((flag: 'callback' | 'stalled_onboarding' | 'follow_up') => {
-    let filtered = allClients.filter(c => c[flag] && !c.close_call_booked)
+    let filtered = allClients.filter(c => c[flag] && !c.close_call_booked && c.stage !== 'do_not_contact')
     if (ownerFilter === 'mine') filtered = filtered.filter(c => !c.thatcher_needed && !c.trepp_needed && !c.va_needed)
     else if (ownerFilter === 'thatcher') filtered = filtered.filter(c => c.thatcher_needed)
     else if (ownerFilter === 'trepp') filtered = filtered.filter(c => c.trepp_needed || c.va_needed)

@@ -128,6 +128,7 @@ const STAGE_OPTIONS: { value: import('@/types').ClientStage; label: string; colo
   { value: 'paused',             label: 'Paused',                 color: 'text-slate-300 bg-slate-500/10 border-slate-500/20 hover:bg-slate-500/20',       dot: 'bg-slate-400'   },
   { value: 'churned',            label: 'Churned',                color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
   { value: 'free_trial_lost',    label: 'Free Trial (Lost)',      color: 'text-slate-400 bg-slate-700/10 border-slate-700/20 hover:bg-slate-700/20',       dot: 'bg-slate-500'   },
+  { value: 'do_not_contact',     label: 'Do Not Contact',         color: 'text-zinc-400 bg-zinc-700/20 border-zinc-600/20 hover:bg-zinc-700/30',           dot: 'bg-zinc-500'    },
 ]
 
 // Stages where a trial-end date is meaningful.
@@ -380,6 +381,7 @@ export default function ClientWarRoom() {
 
   const trialDaysLeft = client.trial_end ? daysUntil(client.trial_end) : null
   const spendDaysLeft = client.luna_spend_end ? daysUntil(client.luna_spend_end) : null
+  const isDnc = client.stage === 'do_not_contact'
 
   const LOG_TYPE_ICON = {
     call: <Phone className="w-3 h-3" />,
@@ -392,7 +394,15 @@ export default function ClientWarRoom() {
 
   return (
     <>
-      <div className="max-w-6xl mx-auto space-y-5">
+      {isDnc && (
+        <div className="max-w-6xl mx-auto mb-3">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-600/40 bg-zinc-700/20 text-zinc-300 text-sm font-medium">
+            <span className="text-base">🚫</span>
+            Do Not Contact — this client is flagged. Hidden from call queues.
+          </div>
+        </div>
+      )}
+      <div className={cn('max-w-6xl mx-auto space-y-5 transition-all', isDnc && 'grayscale opacity-60')}>
         {/* Header */}
         <div className={cn('flex gap-4', isMobile ? 'flex-col' : 'items-start')}>
           <div className={cn('flex items-start gap-4', isMobile && 'w-full')}>
