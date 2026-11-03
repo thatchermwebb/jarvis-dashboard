@@ -96,6 +96,8 @@ export interface Client {
   payment_status?: PaymentStatus
   deal_notes?: string
   advertised_package?: string
+  /** Prospect Tier (1=bought-in, 2=unsure, 3=uncertain) — sales qualification. */
+  prospect_tier?: number | null
   /** Creative the client is currently running, picked from the Creative Library. */
   creative_package?: string | null
   growth_stage?: GrowthStage

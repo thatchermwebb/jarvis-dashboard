@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { ClientForm } from '@/components/clients/ClientForm'
+import { ProspectTier } from '@/components/clients/ProspectTier'
 import { InlineCalendar } from '@/components/ui/inline-calendar'
 import { LogCallDialog } from '@/components/clients/LogCallDialog'
 import { AdSetupDialog } from '@/components/ad-production/AdSetupDialog'
@@ -883,6 +884,13 @@ export default function ClientWarRoom() {
               <Separator className="bg-border" />
 
               <Section title="Deal">
+                <div className="mb-3">
+                  <ProspectTier
+                    tier={client.prospect_tier}
+                    prospect={['onboarding','onboarding_stage_2','free_trial','free_trial_pending','trial_ending_soon','trial_concluded'].includes(client.stage)}
+                    onChange={(t) => quickUpdate({ prospect_tier: t } as Partial<Client>)}
+                  />
+                </div>
                 {client.affiliate && (
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-7 h-7 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
