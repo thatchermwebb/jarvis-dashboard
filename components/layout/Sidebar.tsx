@@ -60,6 +60,18 @@ const VA_ALLOWED_HREFS = ['/clients', '/ad-production', '/media-buying', '/tasks
 export function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  // Red dot on Affiliates while any commission is due or overdue and unpaid.
+  const [commissionDue, setCommissionDue] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    const canSee = user && user.userType !== 'va' && user.userType !== 'setter' && !user.noPayments
+    if (!canSee) { setCommissionDue(0); return }
+    fetch('/api/affiliate-commissions/alerts')
+      .then(r => (r.ok ? r.json() : { count: 0 }))
+      .then(d => { if (!cancelled) setCommissionDue(d.count ?? 0) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [user, pathname])
   // Parent hrefs whose sub-pages are expanded. A group opens itself when you
   // land on one of its sub-pages; otherwise the chevron toggles it.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -134,6 +146,9 @@ export function Sidebar() {
                   >
                     <Icon className={cn('w-[17px] h-[17px] flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground/60')} />
                     {label}
+                    {href === '/affiliates' && commissionDue > 0 && (
+                      <span className="ml-auto mr-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)] flex-shrink-0" title={`${commissionDue} commission${commissionDue === 1 ? '' : 's'} due`} />
+                    )}
                   </Link>
                   {children && (
                     <button

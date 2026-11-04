@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, ChevronRight, Calendar, List, CheckCircle, Circle,
+  ChevronLeft, ChevronRight, ChevronDown, Calendar, List, CheckCircle, Circle,
   Trophy, Sparkles, TrendingUp, Users, Pencil, Check, X, Wallet, Handshake,
 } from 'lucide-react'
 import { cn, formatCurrency, localToday } from '@/lib/utils'
@@ -23,6 +23,25 @@ const STATUS_META: Record<CommissionStatus, { label: string; badge: string; dot:
 
 function monthKey(dateStr: string) { return dateStr.slice(0, 7) }
 
+function plusDays(dateStr: string, n: number) {
+  const d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function monthLabel(ym: string) {
+  const [y, m] = ym.split('-')
+  return `${MONTH_NAMES[Number(m) - 1]} ${y}`
+}
+
+// Upcoming (Open) commissions filter. Open lines are already due today-or-later.
+function matchUpcoming(due: string, range: string, today: string): boolean {
+  if (range === 'all') return true
+  if (range === '30d') return due <= plusDays(today, 30)
+  if (range === 'month') return monthKey(due) === monthKey(today)
+  if (range.startsWith('m:')) return monthKey(due) === range.slice(2)
+  return true
+}
+
 export default function AffiliatesPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -37,6 +56,7 @@ export default function AffiliatesPage() {
   const [month, setMonth] = useState({ year: now.getFullYear(), month: now.getMonth() })
   const [editingRate, setEditingRate] = useState(false)
   const [rateDraft, setRateDraft] = useState('')
+  const [upcoming, setUpcoming] = useState<string>('month') // 'month' | '30d' | 'all' | 'm:YYYY-MM'
 
   const load = useCallback(async (affiliateId?: string) => {
     const qs = affiliateId ? `?affiliate_id=${affiliateId}` : ''
@@ -71,6 +91,12 @@ export default function AffiliatesPage() {
   }, [lines, thisMonth])
 
   const pctCollected = stats.totalAll > 0 ? Math.round((stats.paidAll / stats.totalAll) * 100) : 0
+
+  // Distinct months that have upcoming (open) commissions, for the date filter.
+  const monthOptions = useMemo(() => {
+    const set = new Set(lines.filter(l => l.status === 'open').map(l => monthKey(l.due_date)))
+    return [...set].sort()
+  }, [lines])
 
   // ── Mark paid / unpaid ────────────────────────────────────────────────────────
   async function togglePaid(l: CommissionLine) {
@@ -207,7 +233,8 @@ export default function AffiliatesPage() {
           </div>
 
           {view === 'list'
-            ? <CommissionList lines={lines} onToggle={togglePaid} onClient={id => router.push(`/clients/${id}`)} />
+            ? <CommissionList lines={lines} onToggle={togglePaid} onClient={id => router.push(`/clients/${id}`)}
+                upcoming={upcoming} onUpcomingChange={setUpcoming} monthOptions={monthOptions} today={localToday()} />
             : <CommissionCalendar lines={lines} month={month} onMonthChange={setMonth} onToggle={togglePaid} isMobile={isMobile} />}
         </div>
 
@@ -281,18 +308,28 @@ function BreakdownRow({ color, label, value }: { color: string; label: string; v
   )
 }
 
-function CommissionList({ lines, onToggle, onClient }: {
+function CommissionList({ lines, onToggle, onClient, upcoming, onUpcomingChange, monthOptions, today }: {
   lines: CommissionLine[]
   onToggle: (l: CommissionLine) => void
   onClient: (id: string) => void
+  upcoming: string
+  onUpcomingChange: (v: string) => void
+  monthOptions: string[]
+  today: string
 }) {
   const groups: { status: CommissionStatus; items: CommissionLine[] }[] = (['overdue', 'open', 'paid'] as CommissionStatus[])
-    .map(status => ({
-      status,
-      items: lines.filter(l => l.status === status).sort((a, b) =>
-        status === 'paid' ? b.due_date.localeCompare(a.due_date) : a.due_date.localeCompare(b.due_date)),
-    }))
-    .filter(g => g.items.length > 0)
+    .map(status => {
+      let items = lines.filter(l => l.status === status)
+      if (status === 'open') items = items.filter(l => matchUpcoming(l.due_date, upcoming, today))
+      return {
+        status,
+        items: items.sort((a, b) =>
+          status === 'paid' ? b.due_date.localeCompare(a.due_date) : a.due_date.localeCompare(b.due_date)),
+      }
+    })
+    // Always render the Open group (so its filter stays reachable even when the
+    // chosen range is empty); hide other groups when empty.
+    .filter(g => g.status === 'open' || g.items.length > 0)
 
   if (lines.length === 0) {
     return <div className="bg-card border border-border rounded-2xl p-10 text-center text-sm text-muted-foreground">No commissions yet for this affiliate.</div>
@@ -309,8 +346,14 @@ function CommissionList({ lines, onToggle, onClient }: {
               <span className={cn('w-2 h-2 rounded-full', meta.dot)} />
               <span className="text-sm font-semibold">{meta.label}</span>
               <span className="text-xs text-muted-foreground">({items.length})</span>
+              {status === 'open' && <UpcomingFilter value={upcoming} onChange={onUpcomingChange} monthOptions={monthOptions} />}
               <span className="ml-auto text-sm font-bold tabular-nums text-muted-foreground">{formatCurrency(total)}</span>
             </div>
+            {items.length === 0 ? (
+              <div className="bg-card border border-border rounded-2xl p-6 text-center text-sm text-muted-foreground">
+                No upcoming commissions in this range.
+              </div>
+            ) : (
             <div className="bg-card border border-border rounded-2xl divide-y divide-border/50 overflow-hidden">
               {items.map(l => (
                 <div key={l.payment_id} className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/20 transition-colors">
@@ -338,9 +381,75 @@ function CommissionList({ lines, onToggle, onClient }: {
                 </div>
               ))}
             </div>
+            )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function UpcomingFilter({ value, onChange, monthOptions }: {
+  value: string
+  onChange: (v: string) => void
+  monthOptions: string[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const label = value === 'month' ? 'This month'
+    : value === '30d' ? 'Next 30 days'
+    : value === 'all' ? 'All upcoming'
+    : value.startsWith('m:') ? monthLabel(value.slice(2))
+    : 'This month'
+
+  const presets: { v: string; label: string }[] = [
+    { v: 'month', label: 'This month' },
+    { v: '30d', label: 'Next 30 days' },
+    { v: 'all', label: 'All upcoming' },
+  ]
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-[11px] font-medium text-amber-300/90 hover:text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-full px-2 py-0.5 transition-colors"
+      >
+        <Calendar className="w-3 h-3" /> {label}
+        <ChevronDown className={cn('w-3 h-3 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-2xl overflow-hidden w-44 p-1 max-h-72 overflow-y-auto">
+          {presets.map(p => (
+            <button
+              key={p.v}
+              onClick={() => { onChange(p.v); setOpen(false) }}
+              className={cn('w-full text-left px-2.5 py-1.5 rounded-lg text-sm transition-colors', value === p.v ? 'bg-secondary/60 text-foreground' : 'text-muted-foreground hover:bg-secondary/40 hover:text-foreground')}
+            >
+              {p.label}
+            </button>
+          ))}
+          {monthOptions.length > 0 && <div className="border-t border-border/60 my-1" />}
+          {monthOptions.map(ym => {
+            const v = `m:${ym}`
+            return (
+              <button
+                key={ym}
+                onClick={() => { onChange(v); setOpen(false) }}
+                className={cn('w-full text-left px-2.5 py-1.5 rounded-lg text-sm transition-colors', value === v ? 'bg-secondary/60 text-foreground' : 'text-muted-foreground hover:bg-secondary/40 hover:text-foreground')}
+              >
+                {monthLabel(ym)}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

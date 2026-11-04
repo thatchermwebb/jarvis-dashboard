@@ -6,6 +6,7 @@ import { TopBar } from './TopBar'
 import { MobileShell } from './MobileShell'
 import { JARVISWidget } from '@/components/assistant/JARVISWidget'
 import { JarvisProvider } from '@/components/assistant/JarvisProvider'
+import { CommissionNotifier } from '@/components/affiliates/CommissionNotifier'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { useAuth } from '@/contexts/AuthContext'
@@ -27,15 +28,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isMobile) {
     return assistantEnabled ? (
       <JarvisProvider>
+        <CommissionNotifier />
         <MobileShell>{children}</MobileShell>
       </JarvisProvider>
     ) : (
-      <MobileShell>{children}</MobileShell>
+      <>
+        <CommissionNotifier />
+        <MobileShell>{children}</MobileShell>
+      </>
     )
   }
 
   const shell = (
     <div className="flex h-screen overflow-hidden">
+      <CommissionNotifier />
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <TopBar />

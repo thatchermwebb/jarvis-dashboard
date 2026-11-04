@@ -12,6 +12,11 @@ function todayStr() {
 // Payments that never generate a commission.
 const NON_COMMISSIONABLE = new Set(['voided', 'waived'])
 
+// Commission tracking launched November 2026 — payments due before this are
+// pre-launch history and don't accrue commissions. The program starts here and
+// accumulates forward.
+const COMMISSION_START = '2026-11-01'
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(req.url)
@@ -49,6 +54,7 @@ export async function GET(req: NextRequest) {
     .from('payments')
     .select('id, client_id, payment_type, amount, due_date, paid_date, status, client:clients!inner(affiliate_id)')
     .eq('client.affiliate_id', affiliateId)
+    .gte('due_date', COMMISSION_START)
     .order('due_date', { ascending: true })
   const payments = (paymentsData ?? []) as unknown as {
     id: string; client_id: string; payment_type: string; amount: number
