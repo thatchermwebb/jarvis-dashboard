@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Calendar, List, CheckCircle, Circle,
-  Trophy, Sparkles, TrendingUp, Users, Pencil, Check, X, Wallet, Handshake,
+  Trophy, TrendingUp, Users, Pencil, Check, X, Wallet, Handshake,
 } from 'lucide-react'
 import { cn, formatCurrency, localToday } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -75,22 +75,26 @@ export default function AffiliatesPage() {
   const thisMonth = localToday().slice(0, 7)
 
   // ── Aggregates ──────────────────────────────────────────────────────────────
+  // Everything the affiliate sees is scoped to THIS MONTH: commission due,
+  // collected, still open, and overdue — all on payments due in the current month.
   const stats = useMemo(() => {
-    let collectedThisMonth = 0, totalAll = 0, paidAll = 0, openAll = 0, overdueAll = 0
-    let projectedThisMonth = 0
+    let collectedThisMonth = 0
+    let monthTotal = 0, monthPaid = 0, monthOpen = 0, monthOverdue = 0
     for (const l of lines) {
-      totalAll += l.commission
-      if (l.status === 'paid') {
-        paidAll += l.commission
-        if (l.commission_paid_date && monthKey(l.commission_paid_date) === thisMonth) collectedThisMonth += l.commission
-      } else if (l.status === 'open') openAll += l.commission
-      else overdueAll += l.commission
-      if (monthKey(l.due_date) === thisMonth) projectedThisMonth += l.payment_amount
+      if (l.status === 'paid' && l.commission_paid_date && monthKey(l.commission_paid_date) === thisMonth) {
+        collectedThisMonth += l.commission
+      }
+      if (monthKey(l.due_date) === thisMonth) {
+        monthTotal += l.commission
+        if (l.status === 'paid') monthPaid += l.commission
+        else if (l.status === 'open') monthOpen += l.commission
+        else monthOverdue += l.commission
+      }
     }
-    return { collectedThisMonth, totalAll, paidAll, openAll, overdueAll, projectedThisMonth }
+    return { collectedThisMonth, monthTotal, monthPaid, monthOpen, monthOverdue }
   }, [lines, thisMonth])
 
-  const pctCollected = stats.totalAll > 0 ? Math.round((stats.paidAll / stats.totalAll) * 100) : 0
+  const pctCollected = stats.monthTotal > 0 ? Math.round((stats.monthPaid / stats.monthTotal) * 100) : 0
 
   // Distinct months that have upcoming (open) commissions, for the date filter.
   const monthOptions = useMemo(() => {
@@ -188,7 +192,7 @@ export default function AffiliatesPage() {
           {/* Summary tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Tile label="Total MRR" value={formatCurrency(data.mrr)} icon={<TrendingUp className="w-4 h-4" />} />
-            <Tile label="Projected (mo)" value={formatCurrency(stats.projectedThisMonth)} icon={<Wallet className="w-4 h-4" />} hint="Payments due this month" />
+            <Tile label="Commission (mo)" value={formatCurrency(stats.monthTotal)} icon={<Wallet className="w-4 h-4" />} hint="Commission due this month" />
             <Tile label="Clients" value={String(data.client_count)} icon={<Users className="w-4 h-4" />} />
             <div className="bg-card border border-border rounded-xl p-3.5 flex flex-col justify-between">
               <div className="flex items-center justify-between text-muted-foreground">
@@ -247,19 +251,18 @@ export default function AffiliatesPage() {
               <div className="flex items-center gap-1.5 text-emerald-300/80 text-[11px] font-semibold uppercase tracking-widest mb-2">
                 <Trophy className="w-3.5 h-3.5" /> Collected this month
               </div>
-              <div className="text-4xl font-black tabular-nums text-emerald-300 flex items-baseline gap-1">
+              <div className="text-4xl font-black tabular-nums text-emerald-300">
                 {formatCurrency(stats.collectedThisMonth)}
-                {stats.collectedThisMonth > 0 && <Sparkles className="w-5 h-5 text-emerald-400" />}
               </div>
               <div className="text-xs text-muted-foreground mt-1">{MONTH_NAMES[now.getMonth()]} payouts banked</div>
             </div>
           </div>
 
-          {/* Total incl. upcoming + progress */}
+          {/* Due this month + progress */}
           <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Total incl. upcoming</div>
-            <div className="text-3xl font-bold tabular-nums">{formatCurrency(stats.totalAll)}</div>
-            <div className="text-xs text-muted-foreground mb-3">lifetime commissions + what&rsquo;s still coming</div>
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Due this month</div>
+            <div className="text-3xl font-bold tabular-nums">{formatCurrency(stats.monthTotal)}</div>
+            <div className="text-xs text-muted-foreground mb-3">{MONTH_NAMES[now.getMonth()]} commissions — collected + still open</div>
 
             {/* Progress bar */}
             <div className="h-2.5 rounded-full bg-secondary/60 overflow-hidden">
@@ -267,15 +270,15 @@ export default function AffiliatesPage() {
             </div>
             <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
               <span>{pctCollected}% collected</span>
-              <span className="tabular-nums">{formatCurrency(stats.paidAll)} / {formatCurrency(stats.totalAll)}</span>
+              <span className="tabular-nums">{formatCurrency(stats.monthPaid)} / {formatCurrency(stats.monthTotal)}</span>
             </div>
           </div>
 
-          {/* Breakdown */}
+          {/* Breakdown — this month */}
           <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
-            <BreakdownRow color="bg-emerald-400" label="Paid out" value={formatCurrency(stats.paidAll)} />
-            <BreakdownRow color="bg-amber-400" label="Open (upcoming)" value={formatCurrency(stats.openAll)} />
-            <BreakdownRow color="bg-red-400" label="Overdue" value={formatCurrency(stats.overdueAll)} />
+            <BreakdownRow color="bg-emerald-400" label="Paid out" value={formatCurrency(stats.monthPaid)} />
+            <BreakdownRow color="bg-amber-400" label="Open" value={formatCurrency(stats.monthOpen)} />
+            <BreakdownRow color="bg-red-400" label="Overdue" value={formatCurrency(stats.monthOverdue)} />
           </div>
         </aside>
       </div>
