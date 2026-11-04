@@ -17,8 +17,9 @@ export function CommissionNotifier() {
   const { user } = useAuth()
 
   useEffect(() => {
-    if (!user) return
-    if (user.userType === 'va' || user.userType === 'setter' || user.noPayments) return
+    // The on-open notification is Thatcher's only. (The sidebar red dot still
+    // shows for every admin / scoped affiliate.)
+    if (user?.id !== 'thatcher') return
     if (pathname === '/affiliates') return
     try {
       if (sessionStorage.getItem('cza_comm_notified') === '1') return
