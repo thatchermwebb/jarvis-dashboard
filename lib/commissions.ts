@@ -17,4 +17,5 @@ export const NON_COMMISSIONABLE = new Set(['voided', 'waived'])
  */
 export const COMMISSION_EXCLUDED_AFFILIATES = new Set<string>([
   '16957272-8af4-48d1-aebb-ac84612a1526', // Jaques Brock — affiliate, no commission
+  'b2374d8d-b9bb-4ce4-9e80-4b3b134bce5c', // John Huda — affiliate, not currently earning commission
 ])
