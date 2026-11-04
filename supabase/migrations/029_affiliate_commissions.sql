@@ -8,6 +8,9 @@
 alter table affiliates
   add column if not exists commission_rate numeric not null default 10;  -- percent, e.g. 10 = 10%
 
+-- Known per-affiliate rates (editable later in the Affiliate Portal).
+update affiliates set commission_rate = 30 where id = 'd9f2779d-1269-4cd9-90bd-bdc968e923ed';  -- Malakai
+
 create table if not exists affiliate_commission_payouts (
   id          uuid primary key default gen_random_uuid(),
   payment_id  uuid not null references payments(id) on delete cascade,

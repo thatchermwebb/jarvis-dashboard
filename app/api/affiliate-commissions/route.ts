@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser, getAffiliateScope, callerIsAdmin } from '@/lib/auth-server'
-import { currentMrr } from '@/lib/analytics'
+import { currentMrr, isMrrActive } from '@/lib/analytics'
 import type { CommissionLine, CommissionStatus } from '@/types'
 
 function todayStr() {
@@ -90,7 +90,10 @@ export async function GET(req: NextRequest) {
     affiliates: admin ? affiliates : [],
     lines,
     mrr: currentMrr(clients as Parameters<typeof currentMrr>[0]),
-    client_count: clients.length,
+    // Active paying clients — the population behind MRR, not every tagged record
+    // (churned clients, dead trials and old leads keep the affiliate_id but
+    // aren't "their clients" for commission purposes).
+    client_count: (clients as Parameters<typeof isMrrActive>[0][]).filter(isMrrActive).length,
   })
 }
 
