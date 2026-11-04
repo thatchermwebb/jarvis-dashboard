@@ -2,20 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser, getAffiliateScope, callerIsAdmin } from '@/lib/auth-server'
 import { currentMrr, isMrrActive } from '@/lib/analytics'
+import { COMMISSION_START, NON_COMMISSIONABLE, COMMISSION_EXCLUDED_AFFILIATES } from '@/lib/commissions'
 import type { CommissionLine, CommissionStatus } from '@/types'
 
 function todayStr() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-
-// Payments that never generate a commission.
-const NON_COMMISSIONABLE = new Set(['voided', 'waived'])
-
-// Commission tracking launched November 2026 — payments due before this are
-// pre-launch history and don't accrue commissions. The program starts here and
-// accumulates forward.
-const COMMISSION_START = '2026-11-01'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -24,14 +17,17 @@ export async function GET(req: NextRequest) {
   const admin = await callerIsAdmin()
 
   const { data: affiliatesData } = await supabase.from('affiliates').select('*').order('name')
-  const affiliates = affiliatesData ?? []
+  // Affiliates that don't earn commission are hidden from the portal entirely.
+  const affiliates = (affiliatesData ?? []).filter(a => !COMMISSION_EXCLUDED_AFFILIATES.has(a.id))
 
   // Which affiliate are we looking at? Associates are locked to their own.
   let affiliateId = searchParams.get('affiliate_id') || ''
   if (scope) affiliateId = scope
   if (!affiliateId && affiliates.length) affiliateId = affiliates[0].id
 
-  const affiliate = affiliates.find(a => a.id === affiliateId) || null
+  const affiliate = COMMISSION_EXCLUDED_AFFILIATES.has(affiliateId)
+    ? null
+    : affiliates.find(a => a.id === affiliateId) || null
   if (!affiliate) {
     return NextResponse.json({ affiliate: null, affiliates: admin ? affiliates : [], lines: [], mrr: 0, client_count: 0 })
   }

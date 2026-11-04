@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAffiliateScope } from '@/lib/auth-server'
-
-// Keep in sync with ../route.ts
-const NON_COMMISSIONABLE = new Set(['voided', 'waived'])
-const COMMISSION_START = '2026-11-01'
+import { COMMISSION_START, NON_COMMISSIONABLE, COMMISSION_EXCLUDED_AFFILIATES } from '@/lib/commissions'
 
 function todayStr() {
   const d = new Date()
@@ -21,6 +18,9 @@ export async function GET() {
   const scope = await getAffiliateScope()
   const today = todayStr()
 
+  // An affiliate scoped to a non-commission affiliate has nothing owed.
+  if (scope && COMMISSION_EXCLUDED_AFFILIATES.has(scope)) return NextResponse.json({ count: 0 })
+
   let q = supabase
     .from('payments')
     .select('id, status, client:clients!inner(affiliate_id)')
@@ -32,7 +32,11 @@ export async function GET() {
   const { data, error } = await q
   if (error) return NextResponse.json({ count: 0 })
 
-  const commissionable = (data ?? []).filter(p => !NON_COMMISSIONABLE.has(p.status as string))
+  const commissionable = (data ?? []).filter(p => {
+    if (NON_COMMISSIONABLE.has(p.status as string)) return false
+    const affId = (p.client as unknown as { affiliate_id?: string } | null)?.affiliate_id
+    return !affId || !COMMISSION_EXCLUDED_AFFILIATES.has(affId)
+  })
   const ids = commissionable.map(p => p.id)
   const { data: paidRows } = ids.length
     ? await supabase.from('affiliate_commission_payouts').select('payment_id').in('payment_id', ids)
