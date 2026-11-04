@@ -71,7 +71,7 @@ export function userColor(id?: string | null): string {
 // ─── Access control ──────────────────────────────────────────────────────────
 
 /** Pages an associate may open. Everything else redirects to /clients. */
-export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments', '/tasks', '/ad-production', '/settings']
+export const ASSOCIATE_ALLOWED_HREFS = ['/clients', '/payments', '/affiliates', '/tasks', '/ad-production', '/settings']
 
 /** Pages an appointment setter (money-blind) may open. */
 export const SETTER_ALLOWED_HREFS = ['/clients', '/calls', '/settings']
@@ -96,6 +96,7 @@ export const ASSOCIATE_ALLOWED_API = [
   '/api/ad-productions',
   '/api/slack', // send Slack notifications from fulfillment/ad flows
   '/api/affiliates',
+  '/api/affiliate-commissions',
   '/api/auth',
 ]
 
@@ -114,10 +115,10 @@ export function isAdmin(user: AppUser | undefined | null): boolean {
 }
 
 /** Pages hidden from noPayments users (payments ledger + revenue reporting). */
-export const NO_PAYMENTS_HREFS = ['/payments', '/reports', '/luna']
+export const NO_PAYMENTS_HREFS = ['/payments', '/reports', '/luna', '/affiliates']
 
 /** API prefixes blocked for noPayments users (payments + revenue analytics). */
-export const NO_PAYMENTS_API_PREFIXES = ['/api/payments', '/api/payment-schedules', '/api/reports', '/api/luna']
+export const NO_PAYMENTS_API_PREFIXES = ['/api/payments', '/api/payment-schedules', '/api/reports', '/api/luna', '/api/affiliate-commissions']
 
 /** Whether the Payments/revenue module is hidden for this user. */
 export function paymentsHidden(user: AppUser | undefined | null): boolean {

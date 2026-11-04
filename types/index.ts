@@ -63,7 +63,40 @@ export interface Affiliate {
   id: string
   name: string
   initials: string
+  /** Percent of each client payment paid to this affiliate as commission (e.g. 10 = 10%). */
+  commission_rate?: number
   created_at: string
+}
+
+/** Status of a single affiliate commission (derived from its underlying payment). */
+export type CommissionStatus = 'paid' | 'open' | 'overdue'
+
+/** One commission line = one client payment × the affiliate's rate. */
+export interface CommissionLine {
+  payment_id: string
+  client_id: string
+  client_name: string
+  payment_type: string
+  payment_amount: number
+  commission: number
+  due_date: string
+  /** When the client paid the underlying payment, if collected. */
+  payment_paid_date?: string | null
+  payment_status: string
+  status: CommissionStatus
+  /** When the commission was paid out to the affiliate, if it has been. */
+  commission_paid_date?: string | null
+  marked_by?: string | null
+}
+
+export interface AffiliateCommissionData {
+  affiliate: (Affiliate & { commission_rate: number }) | null
+  /** Populated for admins only — the roster to toggle between. */
+  affiliates: Affiliate[]
+  lines: CommissionLine[]
+  /** Current MRR across this affiliate's active clients. */
+  mrr: number
+  client_count: number
 }
 
 // Where the client's owner is in their business journey.

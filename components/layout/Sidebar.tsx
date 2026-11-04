@@ -22,6 +22,7 @@ import {
   ClipboardList,
   ChevronRight,
   Moon,
+  Handshake,
 } from 'lucide-react'
 
 type NavItem = {
@@ -49,6 +50,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/luna', label: 'Luna', icon: Moon },
   { href: '/team', label: 'Team', icon: Users2 },
   { href: '/payments', label: 'Payments', icon: CreditCard },
+  { href: '/affiliates', label: 'Affiliates', icon: Handshake },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
