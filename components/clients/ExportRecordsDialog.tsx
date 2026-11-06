@@ -15,16 +15,36 @@ export function ExportRecordsDialog({ open, onClose, clients }: {
   clients: Client[]
 }) {
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortBy, setSortBy] = useState<'recent' | 'added' | 'name'>('recent')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
 
+  // Statuses actually present in the book, by their display label (several raw
+  // stages collapse to one label, e.g. overdue/payment_issue → "Overdue").
+  const statusOptions = useMemo(() => {
+    const set = new Set(clients.map(c => stageLabel(c.stage)))
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [clients])
+
+  const recency = (c: Client) => c.updated_at ?? c.created_at ?? ''
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return clients
-    return clients.filter(c =>
-      [c.name, c.business_name, c.owner_name, c.market_location, c.email]
-        .some(v => v && v.toLowerCase().includes(q)))
-  }, [clients, query])
+    let rows = clients.filter(c => {
+      if (statusFilter !== 'all' && stageLabel(c.stage) !== statusFilter) return false
+      if (!q) return true
+      return [c.name, c.business_name, c.owner_name, c.market_location, c.email]
+        .some(v => v && v.toLowerCase().includes(q))
+    })
+    rows = [...rows].sort((a, b) =>
+      sortBy === 'name'
+        ? (a.business_name || a.name || '').localeCompare(b.business_name || b.name || '')
+        : sortBy === 'added'
+          ? (b.created_at ?? '').localeCompare(a.created_at ?? '')
+          : recency(b).localeCompare(recency(a)))
+    return rows
+  }, [clients, query, statusFilter, sortBy])
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(c => selected.has(c.id))
 
@@ -96,26 +116,52 @@ export function ExportRecordsDialog({ open, onClose, clients }: {
           </p>
         </DialogHeader>
 
-        {/* Search + select-all */}
-        <div className="px-5 py-3 flex items-center gap-2 border-b border-border/60">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search clients…"
-              className="pl-8 h-8 text-sm bg-secondary/50"
-            />
+        {/* Search + status + sort */}
+        <div className="px-5 pt-3 pb-2 space-y-2 border-b border-border/60">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search clients…"
+                className="pl-8 h-8 text-sm bg-secondary/50"
+              />
+            </div>
+            <Button variant="outline" size="sm" className="h-8 text-xs whitespace-nowrap" onClick={toggleAllFiltered}>
+              {allFilteredSelected ? 'Clear all' : 'Select all'}
+            </Button>
           </div>
-          <Button variant="outline" size="sm" className="h-8 text-xs whitespace-nowrap" onClick={toggleAllFiltered}>
-            {allFilteredSelected ? 'Clear all' : 'Select all'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              title="Filter by status"
+              className={cn(
+                'h-8 flex-1 rounded-lg border border-border bg-secondary/50 px-2.5 text-xs text-foreground outline-none focus:border-primary/50 transition-colors',
+                statusFilter !== 'all' && 'border-primary/40 text-primary',
+              )}
+            >
+              <option value="all">All statuses</option>
+              {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as 'recent' | 'added' | 'name')}
+              title="Sort order"
+              className="h-8 flex-1 rounded-lg border border-border bg-secondary/50 px-2.5 text-xs text-foreground outline-none focus:border-primary/50 transition-colors"
+            >
+              <option value="recent">Recently updated</option>
+              <option value="added">Recently added</option>
+              <option value="name">Name (A–Z)</option>
+            </select>
+          </div>
         </div>
 
         {/* List */}
         <div className="max-h-[46vh] overflow-y-auto px-2 py-2">
           {filtered.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">No clients match “{query}”.</div>
+            <div className="py-10 text-center text-sm text-muted-foreground">No clients match these filters.</div>
           ) : (
             filtered.map(c => {
               const on = selected.has(c.id)
@@ -157,6 +203,7 @@ export function ExportRecordsDialog({ open, onClose, clients }: {
           <span className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5" />
             {selected.size} selected
+            <span className="text-muted-foreground/50">· {filtered.length} shown</span>
           </span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onClose} disabled={busy}>Cancel</Button>
