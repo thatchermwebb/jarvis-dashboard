@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Search, AlertTriangle, Upload, Download, LayoutGrid, List, Table2, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Search, AlertTriangle, Upload, Download, FileText, LayoutGrid, List, Table2, ChevronLeft, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClientForm } from '@/components/clients/ClientForm'
 import { ImportClientsDialog } from '@/components/clients/ImportClientsDialog'
+import { ExportRecordsDialog } from '@/components/clients/ExportRecordsDialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn, sentimentEmoji, timeAgo, formatCurrency, localToday, stageLabel } from '@/lib/utils'
@@ -563,6 +564,7 @@ function ClientsContent() {
   const [formOpen, setFormOpen] = useState(false)
   const [formDefaultStage, setFormDefaultStage] = useState<ClientStage | undefined>()
   const [importOpen, setImportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -785,6 +787,16 @@ function ClientsContent() {
                   <Download className="w-3.5 h-3.5" /> Export CSV
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-8 text-xs"
+                disabled={clients.length === 0}
+                onClick={() => setExportOpen(true)}
+                title="Export full client records (Word doc) for AI analysis"
+              >
+                <FileText className="w-3.5 h-3.5" /> Export Records
+              </Button>
               <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setFormOpen(true)}>
                 <Plus className="w-3.5 h-3.5" /> Add Client
               </Button>
@@ -937,6 +949,7 @@ function ClientsContent() {
 
       <ClientForm open={formOpen} onClose={() => { setFormOpen(false); setFormDefaultStage(undefined) }} defaultStage={formDefaultStage} onSaved={load} />
       <ImportClientsDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={load} />
+      <ExportRecordsDialog open={exportOpen} onClose={() => setExportOpen(false)} clients={clients} />
     </div>
   )
 }
