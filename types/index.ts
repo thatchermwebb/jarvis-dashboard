@@ -110,6 +110,9 @@ export interface Client {
   created_at: string
   updated_at: string
   signed_at?: string
+  /** When the client actually entered churned/paused. Stamped once on that
+   *  transition (see clients PATCH); Reports buckets churn by this, not updated_at. */
+  churned_at?: string | null
   created_by?: string
 
   // Core

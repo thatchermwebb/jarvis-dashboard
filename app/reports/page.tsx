@@ -24,6 +24,7 @@ interface Client {
   updated_at: string
   created_at: string
   signed_at?: string
+  churned_at?: string | null
 }
 
 interface Payment {
@@ -274,10 +275,17 @@ export default function ReportsPage() {
 
   const wasEverActive = (c: Client) => !!c.signed_at || everActiveIds.has(c.id)
 
+  // When a client actually churned. churned_at is stamped once, the moment they
+  // transition into churned/paused — unlike updated_at, which moves on every
+  // edit (a bulk touch once made dozens of long-churned clients look like they
+  // all churned the same day). Fall back to updated_at only for old records
+  // predating the churned_at backfill.
+  const churnAnchor = (c: Client) => (c.churned_at ?? c.updated_at).slice(0, 10)
+
   // Churn = clients lost/paused who were ONCE active. Trial dropouts who never
   // converted (never active) are not churn.
   const churned = useMemo(() =>
-    clients.filter(c => (c.stage === 'churned' || c.stage === 'paused') && wasEverActive(c) && inRange(c.updated_at)),
+    clients.filter(c => (c.stage === 'churned' || c.stage === 'paused') && wasEverActive(c) && inRange(churnAnchor(c))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [clients, everActiveIds, range, rangeStart, rangeEndStr]
   )
@@ -383,12 +391,12 @@ export default function ReportsPage() {
   const churnData = useMemo(() => {
     const byDay: Record<string, Client[]> = {}
     for (const c of churned) {
-      const day = c.updated_at.slice(0, 10)
+      const day = churnAnchor(c)
       if (!byDay[day]) byDay[day] = []
       byDay[day].push(c)
     }
     const start = rangeStart ?? (churned.length > 0
-      ? new Date(Math.min(...churned.map(c => new Date(c.updated_at).getTime())))
+      ? new Date(Math.min(...churned.map(c => parseLocalDate(churnAnchor(c)).getTime())))
       : null)
     if (!start) return []
     return getDaysInRange(start, rangeEnd ?? new Date()).map(date => ({
