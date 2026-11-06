@@ -27,7 +27,11 @@ export function ExportRecordsDialog({ open, onClose, clients }: {
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [clients])
 
-  const recency = (c: Client) => c.updated_at ?? c.created_at ?? ''
+  // Truthful "last real activity" date — deliberately NOT updated_at, which moves
+  // on any row edit (a bulk touch made long-churned clients look recent). For a
+  // churned/paused client this is churned_at (the day their invoices were voided);
+  // otherwise their last contact, else when they signed / were added.
+  const recency = (c: Client) => c.churned_at || c.last_contact_date || c.signed_at || c.created_at || ''
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -151,7 +155,7 @@ export function ExportRecordsDialog({ open, onClose, clients }: {
               title="Sort order"
               className="h-8 flex-1 rounded-lg border border-border bg-secondary/50 px-2.5 text-xs text-foreground outline-none focus:border-primary/50 transition-colors"
             >
-              <option value="recent">Recently updated</option>
+              <option value="recent">Recent activity</option>
               <option value="added">Recently added</option>
               <option value="name">Name (A–Z)</option>
             </select>
