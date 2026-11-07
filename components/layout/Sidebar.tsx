@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Moon,
   Handshake,
+  Map as MapIcon,
 } from 'lucide-react'
 
 type NavItem = {
@@ -36,6 +37,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
+  { href: '/map', label: 'Map', icon: MapIcon },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Fulfillment', icon: Package },
   {

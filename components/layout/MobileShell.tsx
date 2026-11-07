@@ -24,12 +24,14 @@ import {
   Menu,
   X,
   Search,
+  Map as MapIcon,
 } from 'lucide-react'
 
 const ALL_NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/clients', label: 'All Clients', icon: Users },
+  { href: '/map', label: 'Map', icon: MapIcon },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/ad-production', label: 'Fulfillment', icon: Package },
   { href: '/media-buying', label: 'Media Buying', icon: Megaphone },
