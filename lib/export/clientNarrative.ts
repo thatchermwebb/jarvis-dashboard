@@ -77,6 +77,9 @@ export function clean(v: unknown): string {
   if (!t) return ''
   if (/[<&]/.test(t)) {
     t = t
+      // Preserve inline-image references so an image-bearing note isn't silently
+      // emptied in the export (the URL is recoverable by whoever reads it).
+      .replace(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi, ' [image: $1] ')
       .replace(/<\s*(br|hr)\s*\/?\s*>/gi, ' ')
       .replace(/<\/(div|p|li|tr|h[1-6]|blockquote)\s*>/gi, ' ')
       .replace(/<[^>]*>/g, '')

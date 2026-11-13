@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { Search, X, ChevronDown, GripVertical, Plus, Bold, Italic, Underline } from 'lucide-react'
+import { Search, X, ChevronDown, GripVertical, Plus, Bold, Italic, Underline, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { richTextToPlain } from '@/components/ui/rich-text'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -197,8 +197,10 @@ function RichTextField({ value, onChange, placeholder, className }: {
   className?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [mention, setMention] = useState<{ query: string; rect: { top: number; left: number } } | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
+  const [uploading, setUploading] = useState(0)
 
   // Sync external value → DOM only when it differs and the user isn't typing
   // (keeps the caret stable on input; lets JARVIS-driven updates show through).
@@ -213,6 +215,59 @@ function RichTextField({ value, onChange, placeholder, className }: {
     ref.current?.focus()
     document.execCommand(cmd)
     onChange(ref.current?.innerHTML ?? '')
+  }
+
+  // ── Inline images: paste / drop / pick → upload → insert <img> at caret ──────
+  async function uploadOne(file: File): Promise<string | null> {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/uploads', { method: 'POST', body: fd })
+    if (!res.ok) {
+      const msg = await res.json().catch(() => ({}))
+      toast.error(msg.error || 'Image upload failed')
+      return null
+    }
+    const { url } = await res.json()
+    return typeof url === 'string' ? url : null
+  }
+
+  async function addFiles(files: File[]) {
+    const imgs = files.filter(f => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    const el = ref.current
+    el?.focus()
+    // If the caret isn't inside the editor yet, drop images at the end.
+    const sel = window.getSelection()
+    if (el && (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode))) {
+      const r = document.createRange()
+      r.selectNodeContents(el); r.collapse(false)
+      sel?.removeAllRanges(); sel?.addRange(r)
+    }
+    for (const f of imgs) {
+      setUploading(u => u + 1)
+      try {
+        const url = await uploadOne(f)
+        if (url && ref.current) {
+          ref.current.focus()
+          document.execCommand('insertHTML', false, `<img src="${url}" alt="attachment"><br>`)
+          onChange(ref.current.innerHTML)
+        }
+      } finally {
+        setUploading(u => u - 1)
+      }
+    }
+  }
+
+  function onPaste(e: React.ClipboardEvent) {
+    const files = e.clipboardData?.files ? Array.from(e.clipboardData.files) : []
+    const imgs = files.filter(f => f.type.startsWith('image/'))
+    if (imgs.length) { e.preventDefault(); void addFiles(imgs) }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : []
+    const imgs = files.filter(f => f.type.startsWith('image/'))
+    if (imgs.length) { e.preventDefault(); void addFiles(imgs) }
   }
 
   // Detect a "@query" being typed right before the caret.
@@ -299,7 +354,29 @@ function RichTextField({ value, onChange, placeholder, className }: {
             <Icon className="w-3.5 h-3.5" />
           </button>
         ))}
-        <span className="ml-1 text-[10px] text-muted-foreground/50 select-none">Type @ to mention</span>
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={e => { e.preventDefault(); fileInputRef.current?.click() }}
+          title="Add image"
+          className="w-7 h-7 flex items-center justify-center rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={e => { const fs = e.target.files ? Array.from(e.target.files) : []; e.target.value = ''; void addFiles(fs) }}
+        />
+        <span className="ml-1 text-[10px] text-muted-foreground/50 select-none">Type @ to mention · paste or drop images</span>
+        {uploading > 0 && (
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-primary">
+            <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+          </span>
+        )}
       </div>
       <div className="relative">
         {isEmpty && (
@@ -314,8 +391,11 @@ function RichTextField({ value, onChange, placeholder, className }: {
           onClick={syncMention}
           onBlur={() => setTimeout(() => setMention(null), 150)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          onDrop={onDrop}
+          onDragOver={e => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault() }}
           className={cn(
-            'bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm leading-relaxed overflow-y-auto focus:outline-none focus:border-primary/50 [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic',
+            'bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm leading-relaxed overflow-y-auto focus:outline-none focus:border-primary/50 [&_b]:font-semibold [&_strong]:font-semibold [&_u]:underline [&_i]:italic [&_img]:max-w-[240px] [&_img]:max-h-[220px] [&_img]:rounded-lg [&_img]:my-1.5 [&_img]:border [&_img]:border-border/40',
             className,
           )}
         />
