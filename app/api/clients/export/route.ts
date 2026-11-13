@@ -8,21 +8,35 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Fetch every row of a child table for a set of client ids, paginating past the
-// PostgREST 1000-row cap so large exports never silently drop records.
+// Cap on how many client ids go into a single `in(...)` filter. Keeps the
+// request URL well under PostgREST/proxy length limits so an "export all"
+// (hundreds of clients) doesn't fail on an oversized query string.
+const ID_CHUNK = 120
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+// Fetch every row of a child table for a set of client ids, chunking the id
+// list (URL length) and paginating past the PostgREST 1000-row cap, so large
+// exports never silently drop records.
 async function fetchAll(
   supabase: SupabaseClient, table: string, clientIds: string[], order?: string,
 ): Promise<Record<string, unknown>[]> {
   if (clientIds.length === 0) return []
   const out: Record<string, unknown>[] = []
-  const step = 1000
-  for (let from = 0; ; from += step) {
-    let q = supabase.from(table).select('*').in('client_id', clientIds).range(from, from + step - 1)
-    if (order) q = q.order(order, { ascending: true })
-    const { data, error } = await q
-    if (error) break // table may not exist in every environment — skip gracefully
-    out.push(...(data ?? []))
-    if (!data || data.length < step) break
+  for (const idChunk of chunk(clientIds, ID_CHUNK)) {
+    const step = 1000
+    for (let from = 0; ; from += step) {
+      let q = supabase.from(table).select('*').in('client_id', idChunk).range(from, from + step - 1)
+      if (order) q = q.order(order, { ascending: true })
+      const { data, error } = await q
+      if (error) break // table may not exist in every environment — skip gracefully
+      out.push(...(data ?? []))
+      if (!data || data.length < step) break
+    }
   }
   return out
 }
@@ -39,19 +53,21 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(clientIds) || clientIds.length === 0) {
     return NextResponse.json({ error: 'Select at least one client to export' }, { status: 400 })
   }
-  if (clientIds.length > 100) {
-    return NextResponse.json({ error: 'Export up to 100 clients at a time' }, { status: 400 })
-  }
+  // No upper limit — "export all" is supported. Large selections just take
+  // longer to build; the queries below chunk/paginate so nothing is dropped.
 
   const supabase = await createClient()
   const scope = await getAffiliateScope()
 
-  // Clients (associates limited to their own book).
-  let cq = supabase.from('clients').select('*').in('id', clientIds)
-  if (scope) cq = cq.eq('affiliate_id', scope)
-  const { data: clientsData, error: cErr } = await cq
-  if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
-  const clients = (clientsData ?? []) as ExportClient[]
+  // Clients (associates limited to their own book), chunked past URL limits.
+  const clients: ExportClient[] = []
+  for (const idChunk of chunk(clientIds, ID_CHUNK)) {
+    let cq = supabase.from('clients').select('*').in('id', idChunk)
+    if (scope) cq = cq.eq('affiliate_id', scope)
+    const { data, error: cErr } = await cq
+    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+    clients.push(...((data ?? []) as ExportClient[]))
+  }
   if (clients.length === 0) return NextResponse.json({ error: 'No matching clients' }, { status: 404 })
 
   const ids = clients.map(c => c.id)
