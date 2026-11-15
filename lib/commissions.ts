@@ -12,6 +12,14 @@ export const COMMISSION_START = '2026-11-01'
 export const NON_COMMISSIONABLE = new Set(['voided', 'waived'])
 
 /**
+ * Payment statuses that mean the client has actually paid the invoice. A
+ * commission is only *owed* — and only worth notifying about — once the money
+ * is collected; an unpaid/overdue invoice doesn't put you on the hook to the
+ * affiliate yet. Drives the due-commission alert (red dot + on-open toast).
+ */
+export const CLIENT_PAID_STATUSES = new Set(['paid', 'paid_late'])
+
+/**
  * Affiliates that are tracked as affiliates but do NOT earn commission — hidden
  * from the Affiliate Portal entirely (switcher, totals, due alerts, red dot).
  */
