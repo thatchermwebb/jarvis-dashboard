@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3 } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3, Filter } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,28 @@ type QueueTab = 'today' | 'tomorrow' | 'this_week' | 'all'
 type ViewMode = 'queue' | 'board' | 'calendar' | 'log'
 type SortMode = 'priority' | 'due_date'
 type OwnerFilter = 'mine' | 'thatcher' | 'trepp' | 'all'
+
+// Status (stage) filter for the queue — grouped the way the book is usually
+// talked about. "All statuses" is the default (no filtering).
+type StatusFilter = 'all' | 'active' | 'trial' | 'onboarding' | 'at_risk' | 'paused'
+const STATUS_GROUPS: Record<Exclude<StatusFilter, 'all'>, Set<string>> = {
+  active: new Set(['active_client', 'won_back']),
+  trial: new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon']),
+  onboarding: new Set(['onboarding', 'onboarding_stage_2']),
+  at_risk: new Set(['churn_risk', 'overdue', 'payment_issue']),
+  paused: new Set(['paused']),
+}
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: 'All statuses' },
+  { key: 'active', label: 'Active' },
+  { key: 'trial', label: 'Trial' },
+  { key: 'onboarding', label: 'Onboarding' },
+  { key: 'at_risk', label: 'At Risk' },
+  { key: 'paused', label: 'Paused' },
+]
+function matchesStatus(stage: string, f: StatusFilter): boolean {
+  return f === 'all' || STATUS_GROUPS[f].has(stage)
+}
 
 // Human labels for the payment-due badge on call cards
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -347,6 +369,58 @@ function BoardCard({ client, meta, onClick }: { client: Client; meta: React.Reac
   )
 }
 
+// ─── Status filter dropdown ───────────────────────────────────────────────────
+
+function StatusDropdown({ value, onChange }: { value: StatusFilter; onChange: (v: StatusFilter) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+  const current = STATUS_FILTERS.find(s => s.key === value) ?? STATUS_FILTERS[0]
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        title="Filter by status"
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+          value !== 'all'
+            ? 'border-primary/40 bg-primary/10 text-primary'
+            : 'border-border/40 text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <Filter className="w-3 h-3" />
+        <span>{current.label}</span>
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 w-40 bg-card border border-border rounded-xl shadow-xl overflow-hidden py-1">
+          {STATUS_FILTERS.map(s => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => { onChange(s.key); setOpen(false) }}
+              className={cn(
+                'w-full text-left px-3 py-1.5 text-xs transition-colors',
+                s.key === value ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function CallsPageInner() {
@@ -364,6 +438,7 @@ function CallsPageInner() {
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('mine')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   // Multi-select (bulk owner/flag assignment)
   const [selectMode, setSelectMode] = useState(false)
@@ -477,6 +552,7 @@ function CallsPageInner() {
     // hidden unless they have a follow-up/are onboarding; churned & lost are further
     // gated behind the "Churned" toggle.
     const pool = allClients.filter(c => {
+      if (!matchesStatus(c.stage, statusFilter)) return false // status filter
       if (c.stage === 'do_not_contact') return false // never surface — do not contact
       if (c.close_call_booked || c.callback || c.stalled_onboarding || c.follow_up) return false
       if (c.next_followup_date || c.stage === 'onboarding' || c.stage === 'onboarding_stage_2') return true
@@ -533,7 +609,7 @@ function CallsPageInner() {
       if (byBin !== 0) return byBin
       return (b.priority_score ?? 0) - (a.priority_score ?? 0)
     })
-  }, [allClients, ownerFilter, sortMode, showChurned])
+  }, [allClients, ownerFilter, sortMode, showChurned, statusFilter])
 
   // Calendar shows all clients with followup dates
   const calendarClients = useMemo(() => allClients.filter(c => c.next_followup_date), [allClients])
@@ -546,7 +622,7 @@ function CallsPageInner() {
   // The Call Backs bin: every callback-flagged client (owner-filtered + sorted the
   // same way), regardless of follow-up date — a flat "deferred" list.
   const binClients = useCallback((flag: 'callback' | 'stalled_onboarding' | 'follow_up') => {
-    let filtered = allClients.filter(c => c[flag] && !c.close_call_booked && c.stage !== 'do_not_contact')
+    let filtered = allClients.filter(c => c[flag] && !c.close_call_booked && c.stage !== 'do_not_contact' && matchesStatus(c.stage, statusFilter))
     if (ownerFilter === 'mine') filtered = filtered.filter(c => !c.thatcher_needed && !c.trepp_needed && !c.va_needed)
     else if (ownerFilter === 'thatcher') filtered = filtered.filter(c => c.thatcher_needed)
     else if (ownerFilter === 'trepp') filtered = filtered.filter(c => c.trepp_needed || c.va_needed)
@@ -555,7 +631,7 @@ function CallsPageInner() {
       if (byBin !== 0) return byBin
       return (b.priority_score ?? 0) - (a.priority_score ?? 0)
     })
-  }, [allClients, ownerFilter])
+  }, [allClients, ownerFilter, statusFilter])
   const callbackClients = useMemo(() => binClients('callback'), [binClients])
   const stalledClients = useMemo(() => binClients('stalled_onboarding'), [binClients])
   const ghostClients = useMemo(() => binClients('follow_up'), [binClients])
@@ -822,6 +898,9 @@ function CallsPageInner() {
           </div>
 
           <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+            {/* Status filter — Active / Trial / Onboarding / At Risk / Paused */}
+            <StatusDropdown value={statusFilter} onChange={setStatusFilter} />
+
             {/* Churned toggle — dead clients are hidden by default */}
             {!inBin && (
               <button
