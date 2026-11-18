@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3, Filter } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3, Filter, Check } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -40,24 +40,40 @@ type OwnerFilter = 'mine' | 'thatcher' | 'trepp' | 'all'
 
 // Status (stage) filter for the queue — grouped the way the book is usually
 // talked about. "All statuses" is the default (no filtering).
-type StatusFilter = 'all' | 'active' | 'trial' | 'onboarding' | 'at_risk' | 'paused'
-const STATUS_GROUPS: Record<Exclude<StatusFilter, 'all'>, Set<string>> = {
+type StatusKey = 'active' | 'trial' | 'onboarding' | 'at_risk' | 'paused'
+const STATUS_GROUPS: Record<StatusKey, Set<string>> = {
   active: new Set(['active_client', 'won_back']),
   trial: new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon']),
   onboarding: new Set(['onboarding', 'onboarding_stage_2']),
   at_risk: new Set(['churn_risk', 'overdue', 'payment_issue']),
   paused: new Set(['paused']),
 }
-const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'all', label: 'All statuses' },
+const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
   { key: 'active', label: 'Active' },
   { key: 'trial', label: 'Trial' },
   { key: 'onboarding', label: 'Onboarding' },
   { key: 'at_risk', label: 'At Risk' },
   { key: 'paused', label: 'Paused' },
 ]
-function matchesStatus(stage: string, f: StatusFilter): boolean {
-  return f === 'all' || STATUS_GROUPS[f].has(stage)
+// Multi-select: an empty selection means "all statuses" (no filtering);
+// otherwise a client matches if its stage falls in ANY of the picked groups.
+function matchesStatus(stage: string, selected: StatusKey[]): boolean {
+  return selected.length === 0 || selected.some(k => STATUS_GROUPS[k].has(stage))
+}
+
+// Persist the picked statuses so the filter survives reloads / navigation.
+const STATUS_FILTER_KEY = 'cza-calls-status-filter'
+function loadStatusFilter(): StatusKey[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(STATUS_FILTER_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((k): k is StatusKey => k in STATUS_GROUPS)
+  } catch {
+    return []
+  }
 }
 
 // Human labels for the payment-due badge on call cards
@@ -371,7 +387,7 @@ function BoardCard({ client, meta, onClick }: { client: Client; meta: React.Reac
 
 // ─── Status filter dropdown ───────────────────────────────────────────────────
 
-function StatusDropdown({ value, onChange }: { value: StatusFilter; onChange: (v: StatusFilter) => void }) {
+function StatusDropdown({ value, onChange }: { value: StatusKey[]; onChange: (v: StatusKey[]) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -382,7 +398,15 @@ function StatusDropdown({ value, onChange }: { value: StatusFilter; onChange: (v
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
-  const current = STATUS_FILTERS.find(s => s.key === value) ?? STATUS_FILTERS[0]
+  const active = value.length > 0
+  const toggle = (key: StatusKey) =>
+    onChange(value.includes(key) ? value.filter(k => k !== key) : [...value, key])
+  // Label: none → "All statuses"; one → that label; many → "N statuses".
+  const label = value.length === 0
+    ? 'All statuses'
+    : value.length === 1
+      ? (STATUS_FILTERS.find(s => s.key === value[0])?.label ?? '1 status')
+      : `${value.length} statuses`
   return (
     <div ref={ref} className="relative">
       <button
@@ -391,30 +415,51 @@ function StatusDropdown({ value, onChange }: { value: StatusFilter; onChange: (v
         title="Filter by status"
         className={cn(
           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-          value !== 'all'
+          active
             ? 'border-primary/40 bg-primary/10 text-primary'
             : 'border-border/40 text-muted-foreground hover:text-foreground'
         )}
       >
         <Filter className="w-3 h-3" />
-        <span>{current.label}</span>
+        <span>{label}</span>
         <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-40 bg-card border border-border rounded-xl shadow-xl overflow-hidden py-1">
-          {STATUS_FILTERS.map(s => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => { onChange(s.key); setOpen(false) }}
-              className={cn(
-                'w-full text-left px-3 py-1.5 text-xs transition-colors',
-                s.key === value ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-              )}
-            >
-              {s.label}
-            </button>
-          ))}
+        <div className="absolute right-0 top-full mt-1 z-20 w-44 bg-card border border-border rounded-xl shadow-xl overflow-hidden py-1">
+          {STATUS_FILTERS.map(s => {
+            const checked = value.includes(s.key)
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => toggle(s.key)}
+                className={cn(
+                  'w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs transition-colors',
+                  checked ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                )}
+              >
+                <span className={cn(
+                  'flex items-center justify-center w-4 h-4 rounded border shrink-0',
+                  checked ? 'bg-primary border-primary text-primary-foreground' : 'border-border/60'
+                )}>
+                  {checked && <Check className="w-3 h-3" />}
+                </span>
+                <span>{s.label}</span>
+              </button>
+            )
+          })}
+          {active && (
+            <>
+              <div className="my-1 border-t border-border/40" />
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+              >
+                Clear (all statuses)
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -438,7 +483,13 @@ function CallsPageInner() {
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('mine')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusKey[]>([])
+  // Hydrate the saved selection on mount (client-only, so SSR stays stable).
+  useEffect(() => { setStatusFilter(loadStatusFilter()) }, [])
+  // Persist every change so the filter sticks across reloads and navigation.
+  useEffect(() => {
+    try { window.localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify(statusFilter)) } catch { /* ignore */ }
+  }, [statusFilter])
 
   // Multi-select (bulk owner/flag assignment)
   const [selectMode, setSelectMode] = useState(false)
