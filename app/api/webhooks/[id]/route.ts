@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { callerIsAdmin } from '@/lib/auth-server'
+import { isValidEvent } from '@/lib/webhooks'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     update.url = url
   }
   if (typeof body.description === 'string') update.description = body.description.trim() || null
+  if (body.event !== undefined && isValidEvent(body.event)) update.event = body.event
   if (body.enabled !== undefined) update.enabled = !!body.enabled
   if (typeof body.secret === 'string') update.secret = body.secret.trim() || null
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Webhook, Plus, Trash2, Send, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { WEBHOOK_EVENTS } from '@/lib/webhook-events'
 
 interface Endpoint {
   id: string
@@ -14,6 +15,14 @@ interface Endpoint {
   last_status: number | null
   last_delivered_at: string | null
   last_error: string | null
+}
+
+const EVENT_META: Record<string, { label: string; short: string; tone: string }> = {
+  'payment.ltv': { label: 'All payments · LTV', short: 'LTV', tone: 'text-primary bg-primary/10 border-primary/30' },
+  'payment.cash_30d': { label: 'First 30 days · Cash collection', short: '30-day', tone: 'text-sky-300 bg-sky-500/10 border-sky-500/30' },
+}
+function eventShort(event: string) {
+  return EVENT_META[event]?.short ?? event
 }
 
 function StatusBadge({ ep }: { ep: Endpoint }) {
@@ -43,7 +52,7 @@ export function WebhookSettings() {
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testingId, setTestingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ url: '', description: '', secret: '' })
+  const [form, setForm] = useState({ url: '', description: '', secret: '', event: 'payment.ltv' })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,11 +78,11 @@ export function WebhookSettings() {
       const res = await fetch('/api/webhooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, description: form.description, secret: form.secret }),
+        body: JSON.stringify({ url, description: form.description, secret: form.secret, event: form.event }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed')
       toast.success('Webhook added')
-      setForm({ url: '', description: '', secret: '' })
+      setForm({ url: '', description: '', secret: '', event: 'payment.ltv' })
       setAdding(false)
       load()
     } catch (err) {
@@ -139,14 +148,30 @@ export function WebhookSettings() {
         )}
       </div>
       <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-        POST a structured JSON payload to an external URL whenever a client has a new successful payment
-        (<code className="text-foreground/80">payment.succeeded</code>). Use it with Zapier, Make, or any
-        custom endpoint. Add a signing secret to verify requests via the{' '}
+        POST a structured JSON payload to an external URL when a client has a successful payment — built for
+        attribution software. Pick <code className="text-foreground/80">All payments · LTV</code> to track
+        lifetime value, or <code className="text-foreground/80">First 30 days · Cash collection</code> to fire
+        only within 30 days of the client&apos;s first payment. Add a signing secret to verify requests via the{' '}
         <code className="text-foreground/80">X-CZA-Signature</code> header (HMAC-SHA256).
       </p>
 
       {adding && (
         <form onSubmit={add} className="mb-5 p-4 rounded-xl border border-border/60 bg-secondary/20 space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Event *</label>
+            <select
+              value={form.event}
+              onChange={e => setForm(f => ({ ...f, event: e.target.value }))}
+              className="w-full h-10 px-3 rounded-xl bg-secondary/50 border border-border/50 text-sm text-foreground outline-none focus:border-primary/50"
+            >
+              {WEBHOOK_EVENTS.map(ev => (
+                <option key={ev.key} value={ev.key}>{ev.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground/70">
+              {WEBHOOK_EVENTS.find(ev => ev.key === form.event)?.description}
+            </p>
+          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Endpoint URL *</label>
             <input
@@ -179,7 +204,7 @@ export function WebhookSettings() {
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
-              onClick={() => { setAdding(false); setForm({ url: '', description: '', secret: '' }) }}
+              onClick={() => { setAdding(false); setForm({ url: '', description: '', secret: '', event: 'payment.ltv' }) }}
               className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
@@ -228,6 +253,15 @@ export function WebhookSettings() {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    title={EVENT_META[ep.event]?.label ?? ep.event}
+                    className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase tracking-wide',
+                      EVENT_META[ep.event]?.tone ?? 'text-muted-foreground bg-secondary border-border',
+                    )}
+                  >
+                    {eventShort(ep.event)}
+                  </span>
                   <span className="text-sm font-medium text-foreground truncate">
                     {ep.description || ep.url}
                   </span>

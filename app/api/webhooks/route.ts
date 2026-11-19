@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { callerIsAdmin } from '@/lib/auth-server'
+import { isValidEvent } from '@/lib/webhooks'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,9 +32,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'A valid http(s) URL is required' }, { status: 400 })
   }
 
+  const event = isValidEvent(body.event) ? body.event : 'payment.ltv'
+
   const supabase = await createClient()
   const insert = {
-    event: 'payment.succeeded',
+    event,
     url,
     secret: typeof body.secret === 'string' && body.secret.trim() ? body.secret.trim() : null,
     description: typeof body.description === 'string' && body.description.trim() ? body.description.trim() : null,
