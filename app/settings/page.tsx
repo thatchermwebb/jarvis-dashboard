@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { THEMES, themeSwatch } from '@/lib/themes'
 import { isAdmin } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
+import { WebhookSettings } from '@/components/settings/WebhookSettings'
 import type { JarvisMemory } from '@/types'
 
 const ACCENT_PRESETS = [
@@ -540,6 +541,9 @@ export default function SettingsPage() {
 
           {/* Import Existing Clients */}
           <ImportExistingClients />
+
+          {/* Outbound Webhooks */}
+          <WebhookSettings />
 
           {/* Phase 2 */}
           <div className="bg-card border border-border rounded-2xl p-6">

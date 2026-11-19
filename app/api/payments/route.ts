@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAffiliateScope, callerCanAccessClient } from '@/lib/auth-server'
+import { PAID_STATUSES, dispatchPaymentSucceeded } from '@/lib/webhooks'
+
+export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -44,5 +47,16 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase.from('payments').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // A payment logged as already paid → fire the outbound webhook (best-effort).
+  if (PAID_STATUSES.has(data.status)) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id, name, business_name, email, phone, market_location, stage, monthly_retainer')
+      .eq('id', data.client_id)
+      .maybeSingle()
+    await dispatchPaymentSucceeded(supabase, data, client)
+  }
+
   return NextResponse.json(data, { status: 201 })
 }

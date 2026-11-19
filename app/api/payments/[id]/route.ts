@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { callerCanAccessClient } from '@/lib/auth-server'
+import { PAID_STATUSES, dispatchPaymentSucceeded } from '@/lib/webhooks'
+
+export const runtime = 'nodejs'
 
 /** 403 unless the caller may write to the client this payment belongs to. */
 async function guardPayment(supabase: Awaited<ReturnType<typeof createClient>>, id: string): Promise<boolean> {
@@ -13,6 +16,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   if (!(await guardPayment(supabase, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
+
+  // Remember whether this payment was ALREADY paid, so the webhook fires only on
+  // the transition into a paid state (not on every edit of an already-paid row).
+  const { data: before } = await supabase.from('payments').select('status').eq('id', id).maybeSingle()
+  const wasPaid = before ? PAID_STATUSES.has(before.status) : false
 
   // Marking a payment paid: "late" is authoritatively decided by paid_date vs
   // due_date, NOT by which bucket the row was displayed in. paid_date must come
@@ -44,6 +52,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Newly successful payment → fire the outbound webhook (best-effort).
+  if (!wasPaid && PAID_STATUSES.has(data.status)) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id, name, business_name, email, phone, market_location, stage, monthly_retainer')
+      .eq('id', data.client_id)
+      .maybeSingle()
+    await dispatchPaymentSucceeded(supabase, data, client)
+  }
+
   return NextResponse.json(data)
 }
 
