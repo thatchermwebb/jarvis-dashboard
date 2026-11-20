@@ -32,6 +32,8 @@ export interface WebhookPayment {
   amount: number
   currency: string
   payment_type: string | null
+  /** Revenue-share rate for rev_share payments (e.g. 15 = 15%); null otherwise. */
+  rev_share_percent: number | null
   status: string
   description: string | null
   due_date: string | null
@@ -103,6 +105,7 @@ export function buildPaymentEvent(
         amount: Number(payment.amount) || 0,
         currency: 'usd',
         payment_type: toStr(payment.payment_type),
+        rev_share_percent: toNum(payment.rev_share_percent),
         status: String(payment.status),
         description: toStr(payment.description),
         due_date: toDay(payment.due_date),

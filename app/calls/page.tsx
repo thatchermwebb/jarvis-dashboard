@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3, Filter, Check } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Trash2, ChevronLeft, ChevronRight, LayoutList, CalendarDays, ArrowUpDown, History, X, CheckSquare, Columns3, Filter, Check, Search } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -40,20 +40,42 @@ type OwnerFilter = 'mine' | 'thatcher' | 'trepp' | 'all'
 
 // Status (stage) filter for the queue — grouped the way the book is usually
 // talked about. "All statuses" is the default (no filtering).
-type StatusKey = 'active' | 'trial' | 'onboarding' | 'at_risk' | 'paused'
+// Mirrors the Clients list taxonomy + colors so every client status is
+// selectable here and the dots match the rest of the app.
+type StatusKey =
+  | 'active'
+  | 'trial_complete'
+  | 'trial_active'
+  | 'trial_pending'
+  | 'onboarding'
+  | 'onboarding_2'
+  | 'overdue'
+  | 'paused'
+  | 'churned'
+  | 'dnc'
 const STATUS_GROUPS: Record<StatusKey, Set<string>> = {
   active: new Set(['active_client', 'won_back']),
-  trial: new Set(['free_trial', 'free_trial_pending', 'trial_ending_soon']),
-  onboarding: new Set(['onboarding', 'onboarding_stage_2']),
-  at_risk: new Set(['churn_risk', 'overdue', 'payment_issue']),
+  trial_complete: new Set(['trial_concluded']),
+  trial_active: new Set(['free_trial', 'trial_ending_soon']),
+  trial_pending: new Set(['free_trial_pending']),
+  onboarding: new Set(['onboarding']),
+  onboarding_2: new Set(['onboarding_stage_2']),
+  overdue: new Set(['overdue', 'payment_issue', 'churn_risk']),
   paused: new Set(['paused']),
+  churned: new Set(['churned', 'free_trial_lost']),
+  dnc: new Set(['do_not_contact']),
 }
-const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
-  { key: 'active', label: 'Active' },
-  { key: 'trial', label: 'Trial' },
-  { key: 'onboarding', label: 'Onboarding' },
-  { key: 'at_risk', label: 'At Risk' },
-  { key: 'paused', label: 'Paused' },
+const STATUS_FILTERS: { key: StatusKey; label: string; dot: string }[] = [
+  { key: 'active',         label: 'Active',                dot: 'bg-emerald-500' },
+  { key: 'trial_complete', label: 'Free Trial (Complete)', dot: 'bg-teal-500'    },
+  { key: 'trial_active',   label: 'Free Trial (Active)',   dot: 'bg-violet-500'  },
+  { key: 'trial_pending',  label: 'Free Trial (Pending)',  dot: 'bg-amber-500'   },
+  { key: 'onboarding',     label: 'Onboarding',            dot: 'bg-blue-500'    },
+  { key: 'onboarding_2',   label: 'Onboarding Stage 2',    dot: 'bg-indigo-500'  },
+  { key: 'overdue',        label: 'Overdue',               dot: 'bg-red-500'     },
+  { key: 'paused',         label: 'Paused',                dot: 'bg-slate-500'   },
+  { key: 'churned',        label: 'Churned / Lost',        dot: 'bg-muted-foreground' },
+  { key: 'dnc',            label: 'Do Not Contact',        dot: 'bg-zinc-500'    },
 ]
 // Multi-select: an empty selection means "all statuses" (no filtering);
 // otherwise a client matches if its stage falls in ANY of the picked groups.
@@ -426,7 +448,7 @@ function StatusDropdown({ value, onChange }: { value: StatusKey[]; onChange: (v:
         <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-44 bg-card border border-border rounded-xl shadow-xl overflow-hidden py-1">
+        <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-card border border-border rounded-xl shadow-xl overflow-hidden py-1">
           {STATUS_FILTERS.map(s => {
             const checked = value.includes(s.key)
             return (
@@ -445,6 +467,7 @@ function StatusDropdown({ value, onChange }: { value: StatusKey[]; onChange: (v:
                 )}>
                   {checked && <Check className="w-3 h-3" />}
                 </span>
+                <span className={cn('w-2 h-2 rounded-full shrink-0', s.dot)} />
                 <span>{s.label}</span>
               </button>
             )
@@ -482,6 +505,8 @@ function CallsPageInner() {
   const inBin = bin !== 'queue'
   const [showChurned, setShowChurned] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(filterClientId ? 'log' : 'queue')
+  // Keyword search for the History/log view (client name, business, or summary).
+  const [logSearch, setLogSearch] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('mine')
   const [statusFilter, setStatusFilter] = useState<StatusKey[]>([])
@@ -1152,8 +1177,37 @@ function CallsPageInner() {
       )}
 
       {/* ── LOG / HISTORY VIEW ────────────────────────────────────────────── */}
-      {viewMode === 'log' && (
+      {viewMode === 'log' && (() => {
+        const q = logSearch.trim().toLowerCase()
+        const visibleLogs = q
+          ? logs.filter(l =>
+              (l.client?.name ?? '').toLowerCase().includes(q) ||
+              (l.client?.business_name ?? '').toLowerCase().includes(q) ||
+              richTextToPlain(l.summary ?? '').toLowerCase().includes(q)
+            )
+          : logs
+        return (
         <div className="space-y-2">
+          {/* Keyword search — filter the history by client, business, or summary */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              value={logSearch}
+              onChange={e => setLogSearch(e.target.value)}
+              placeholder="Search history by client, business, or summary…"
+              className="w-full h-9 pl-9 pr-9 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 transition-colors"
+            />
+            {logSearch && (
+              <button
+                type="button"
+                onClick={() => setLogSearch('')}
+                title="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           {loadingLog ? (
             [...Array(5)].map((_, i) => (
               <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />
@@ -1162,8 +1216,12 @@ function CallsPageInner() {
             <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground text-sm">
               No contacts logged yet. Use &quot;Log Call&quot; to record a contact.
             </div>
+          ) : visibleLogs.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground text-sm">
+              No history matches &quot;{logSearch}&quot;.
+            </div>
           ) : (
-            logs.map((log) => {
+            visibleLogs.map((log) => {
               const cfg = OUTCOME_CONFIG[log.outcome] ?? { label: log.outcome, color: 'text-muted-foreground' }
               const isExpanded = expandedLog === log.id
               const clientName = log.client?.name ?? 'Unknown'
@@ -1273,7 +1331,8 @@ function CallsPageInner() {
             })
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* Dialogs */}
       <LogCallDialog
