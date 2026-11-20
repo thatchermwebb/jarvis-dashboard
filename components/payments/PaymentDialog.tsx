@@ -20,6 +20,7 @@ const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
   { value: 'remaining_balance', label: 'Remaining Balance' },
   { value: 'partial_payment',   label: 'Partial Payment' },
   { value: 'one_time',          label: 'One-Time' },
+  { value: 'rev_share',         label: 'Rev-Share' },
 ]
 
 const STATUSES: { value: PaymentEntryStatus; label: string; color: string }[] = [
@@ -358,6 +359,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
     payment_type: 'retainer_monthly' as PaymentType,
     description: '',
     amount: '',
+    rev_share_percent: '',
     due_date: '',
     paid_date: '',
     status: 'pending' as PaymentEntryStatus,
@@ -386,6 +388,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
           payment_type: payment.payment_type,
           description: payment.description ?? '',
           amount: String(payment.amount),
+          rev_share_percent: payment.rev_share_percent != null ? String(payment.rev_share_percent) : '',
           due_date: payment.due_date,
           paid_date: payment.paid_date ?? '',
           status: payment.status,
@@ -403,7 +406,7 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
         }))
         setPlan(p => ({ ...p, client_id: prefill.client_id ?? '' }))
       } else {
-        setForm({ client_id: '', payment_type: 'retainer_monthly', description: '', amount: '', due_date: '', paid_date: '', status: 'pending', source: '', notes: '' })
+        setForm({ client_id: '', payment_type: 'retainer_monthly', description: '', amount: '', rev_share_percent: '', due_date: '', paid_date: '', status: 'pending', source: '', notes: '' })
         setPlan({ client_id: '', label: '', amount: '', frequency: 'monthly', start_date: '', end_date: '', notes: '' })
       }
     }
@@ -422,6 +425,11 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
         payment_type: form.payment_type,
         description: form.description || undefined,
         amount: Number(form.amount),
+        // Store the % only on rev-share payments; clear it on any other type
+        // (null, so switching an existing payment away from rev-share wipes it).
+        rev_share_percent: form.payment_type === 'rev_share' && form.rev_share_percent !== ''
+          ? Number(form.rev_share_percent)
+          : null,
         due_date: form.due_date,
         status: form.status,
         source: form.source || undefined,
@@ -507,6 +515,27 @@ export function PaymentDialog({ open, onClose, onSaved, payment, prefill }: Prop
                 <DatePicker value={form.due_date} onChange={v => set('due_date', v)} />
               </div>
             </div>
+            {form.payment_type === 'rev_share' && (
+              <div className="space-y-1.5">
+                <label className={labelClass}>Rev-Share %</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={form.rev_share_percent}
+                    onChange={e => set('rev_share_percent', e.target.value)}
+                    placeholder="15"
+                    className={cn(fieldClass, 'pr-8')}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">%</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground/60">
+                  The revenue-share rate for this payment. Amount above is the actual dollars collected.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className={labelClass}>Status</label>

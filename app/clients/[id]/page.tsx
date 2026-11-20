@@ -94,6 +94,7 @@ const PAYMENT_TYPE_LABEL: Record<string, string> = {
   remaining_balance: 'Remaining Balance',
   one_time: 'One-Time',
   partial_payment: 'Partial Payment',
+  rev_share: 'Rev-Share',
 }
 
 function Field({ label, value, mono = false }: { label: string; value?: string | number | null; mono?: boolean }) {

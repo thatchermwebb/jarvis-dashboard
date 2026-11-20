@@ -374,6 +374,7 @@ export type PaymentType =
   | 'remaining_balance'
   | 'one_time'
   | 'partial_payment'
+  | 'rev_share'
 
 export interface Payment {
   id: string
@@ -384,6 +385,8 @@ export interface Payment {
   payment_type: PaymentType
   description?: string
   amount: number
+  /** For rev_share payments: the revenue-share percentage (e.g. 15 = 15%). */
+  rev_share_percent?: number | null
   due_date: string
   paid_date?: string
   status: PaymentEntryStatus
@@ -399,6 +402,8 @@ export interface PaymentSchedule {
   label?: string
   payment_type: PaymentType
   amount: number
+  /** For rev_share plans: the revenue-share percentage (e.g. 15 = 15%). */
+  rev_share_percent?: number | null
   frequency: PaymentFrequency
   start_date: string
   end_date?: string

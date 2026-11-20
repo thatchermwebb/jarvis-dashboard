@@ -22,6 +22,7 @@ const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
   { value: 'deposit', label: 'Deposit' },
   { value: 'remaining_balance', label: 'Remaining Balance' },
   { value: 'one_time', label: 'One-Time' },
+  { value: 'rev_share', label: 'Rev-Share' },
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -279,7 +280,10 @@ function PaymentRow({ payment: p, onMark, onDelete, onEdit }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-foreground">{formatCurrency(p.amount)}</span>
-          <span className="text-xs text-muted-foreground">{typeLabel(p.payment_type)}</span>
+          <span className="text-xs text-muted-foreground">
+            {typeLabel(p.payment_type)}
+            {p.payment_type === 'rev_share' && p.rev_share_percent != null && ` (${p.rev_share_percent}%)`}
+          </span>
           <Badge variant="outline" className={cn('text-[10px] px-1.5', cfg.color)}>{cfg.label}</Badge>
         </div>
         <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
@@ -311,7 +315,7 @@ function AddPaymentDialog({ open, onClose, clientId, clientName, onSaved }: {
   open: boolean; onClose: () => void; clientId: string; clientName?: string; onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ payment_type: 'retainer_monthly' as PaymentType, amount: '', due_date: '', notes: '' })
+  const [form, setForm] = useState({ payment_type: 'retainer_monthly' as PaymentType, amount: '', rev_share_percent: '', due_date: '', notes: '' })
 
   function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })) }
 
@@ -323,13 +327,19 @@ function AddPaymentDialog({ open, onClose, clientId, clientName, onSaved }: {
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: Number(form.amount), client_id: clientId, status: 'pending' }),
+        body: JSON.stringify({
+          ...form,
+          amount: Number(form.amount),
+          rev_share_percent: form.payment_type === 'rev_share' && form.rev_share_percent !== '' ? Number(form.rev_share_percent) : null,
+          client_id: clientId,
+          status: 'pending',
+        }),
       })
       if (!res.ok) throw new Error()
       toast.success('Payment added')
       onSaved()
       onClose()
-      setForm({ payment_type: 'retainer_monthly', amount: '', due_date: '', notes: '' })
+      setForm({ payment_type: 'retainer_monthly', amount: '', rev_share_percent: '', due_date: '', notes: '' })
     } catch { toast.error('Failed') } finally { setSaving(false) }
   }
 
@@ -355,6 +365,12 @@ function AddPaymentDialog({ open, onClose, clientId, clientName, onSaved }: {
               <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="bg-secondary/50" />
             </div>
           </div>
+          {form.payment_type === 'rev_share' && (
+            <div className="space-y-1.5">
+              <Label>Rev-Share %</Label>
+              <Input type="number" step="0.01" min="0" max="100" value={form.rev_share_percent} onChange={(e) => set('rev_share_percent', e.target.value)} placeholder="15" className="bg-secondary/50" />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Notes</Label>
             <Input value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional note..." className="bg-secondary/50" />
@@ -374,6 +390,7 @@ function EditPaymentDialog({ payment, onClose, onSaved }: { payment: Payment; on
   const [form, setForm] = useState({
     payment_type: payment.payment_type,
     amount: String(payment.amount),
+    rev_share_percent: payment.rev_share_percent != null ? String(payment.rev_share_percent) : '',
     due_date: payment.due_date,
     paid_date: payment.paid_date ?? '',
     status: payment.status,
@@ -389,7 +406,12 @@ function EditPaymentDialog({ payment, onClose, onSaved }: { payment: Payment; on
       const res = await fetch(`/api/payments/${payment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: Number(form.amount), paid_date: form.paid_date || null }),
+        body: JSON.stringify({
+          ...form,
+          amount: Number(form.amount),
+          rev_share_percent: form.payment_type === 'rev_share' && form.rev_share_percent !== '' ? Number(form.rev_share_percent) : null,
+          paid_date: form.paid_date || null,
+        }),
       })
       if (!res.ok) throw new Error()
       toast.success('Payment updated')
@@ -431,6 +453,12 @@ function EditPaymentDialog({ payment, onClose, onSaved }: { payment: Payment; on
               <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="bg-secondary/50" />
             </div>
           </div>
+          {form.payment_type === 'rev_share' && (
+            <div className="space-y-1.5">
+              <Label>Rev-Share %</Label>
+              <Input type="number" step="0.01" min="0" max="100" value={form.rev_share_percent} onChange={(e) => set('rev_share_percent', e.target.value)} placeholder="15" className="bg-secondary/50" />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Paid Date</Label>
             <Input type="date" value={form.paid_date} onChange={(e) => set('paid_date', e.target.value)} className="bg-secondary/50" />

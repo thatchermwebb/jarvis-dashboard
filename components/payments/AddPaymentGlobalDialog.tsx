@@ -16,6 +16,7 @@ const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
   { value: 'deposit', label: 'Deposit' },
   { value: 'remaining_balance', label: 'Remaining Balance' },
   { value: 'one_time', label: 'One-Time' },
+  { value: 'rev_share', label: 'Rev-Share' },
 ]
 
 export function AddPaymentGlobalDialog({ open, onClose, onSaved }: {
@@ -25,7 +26,7 @@ export function AddPaymentGlobalDialog({ open, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     client_id: '', payment_type: 'retainer_monthly' as PaymentType,
-    amount: '', due_date: '', notes: '',
+    amount: '', rev_share_percent: '', due_date: '', notes: '',
   })
 
   useEffect(() => {
@@ -42,12 +43,17 @@ export function AddPaymentGlobalDialog({ open, onClose, onSaved }: {
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: Number(form.amount), status: 'pending' }),
+        body: JSON.stringify({
+          ...form,
+          amount: Number(form.amount),
+          rev_share_percent: form.payment_type === 'rev_share' && form.rev_share_percent !== '' ? Number(form.rev_share_percent) : null,
+          status: 'pending',
+        }),
       })
       if (!res.ok) throw new Error()
       toast.success('Payment added')
       onSaved(); onClose()
-      setForm({ client_id: '', payment_type: 'retainer_monthly', amount: '', due_date: '', notes: '' })
+      setForm({ client_id: '', payment_type: 'retainer_monthly', amount: '', rev_share_percent: '', due_date: '', notes: '' })
     } catch { toast.error('Failed') } finally { setSaving(false) }
   }
 
@@ -80,6 +86,12 @@ export function AddPaymentGlobalDialog({ open, onClose, onSaved }: {
               <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="bg-secondary/50" />
             </div>
           </div>
+          {form.payment_type === 'rev_share' && (
+            <div className="space-y-1.5">
+              <Label>Rev-Share %</Label>
+              <Input type="number" step="0.01" min="0" max="100" value={form.rev_share_percent} onChange={(e) => set('rev_share_percent', e.target.value)} placeholder="15" className="bg-secondary/50" />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Notes</Label>
             <Input value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional..." className="bg-secondary/50" />

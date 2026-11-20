@@ -36,6 +36,7 @@ const TYPE_LABELS: Record<string, string> = {
   remaining_balance: 'Remaining Balance',
   partial_payment:   'Partial Payment',
   one_time:          'One-Time',
+  rev_share:         'Rev-Share',
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -58,7 +59,10 @@ function addDays(dateStr: string, days: number) {
 }
 
 function paymentLabel(p: Payment) {
-  return p.description || TYPE_LABELS[p.payment_type] || p.payment_type
+  if (p.description) return p.description
+  const base = TYPE_LABELS[p.payment_type] || p.payment_type
+  if (p.payment_type === 'rev_share' && p.rev_share_percent != null) return `${base} (${p.rev_share_percent}%)`
+  return base
 }
 
 
